@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Confirmation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #4CAF50;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #ff6b35;
+            margin-bottom: 10px;
+        }
+        .success-icon {
+            font-size: 64px;
+            color: #4CAF50;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-top: 10px;
+        }
+        .content {
+            margin: 25px 0;
+        }
+        .payment-summary {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 20px 0;
+        }
+        .payment-amount {
+            font-size: 36px;
+            font-weight: bold;
+            color: #2e7d32;
+            text-align: center;
+            margin: 15px 0;
+        }
+        .payment-detail {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #a5d6a7;
+        }
+        .payment-detail:last-child {
+            border-bottom: none;
+        }
+        .label {
+            font-weight: bold;
+            color: #2e7d32;
+        }
+        .value {
+            color: #1b5e20;
+        }
+        .view-button {
+            display: inline-block;
+            background-color: #ff6b35;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .view-button:hover {
+            background-color: #e55a2b;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo" th:text="${appName}">Afrochow</div>
+            <center>
+                <div class="success-icon">✓</div>
+            </center>
+        </div>
+
+        <center>
+            <h1>Payment Successful!</h1>
+        </center>
+
+        <div class="content">
+            <p>Hi <span th:text="${customerName}">there</span>,</p>
+
+            <p>Your payment has been successfully processed.</p>
+
+            <div class="payment-summary">
+                <h3 style="margin-top: 0; color: #2e7d32; text-align: center;">Payment Details</h3>
+
+                <div class="payment-amount" th:text="${amount}">$45.99</div>
+
+                <div class="payment-detail">
+                    <span class="label">Payment ID:</span>
+                    <span class="value" th:text="${paymentPublicId}">PAY-12345</span>
+                </div>
+
+                <div class="payment-detail">
+                    <span class="label">Order ID:</span>
+                    <span class="value" th:text="${orderPublicId}">ORD-12345</span>
+                </div>
+
+                <div class="payment-detail">
+                    <span class="label">Payment Time:</span>
+                    <span class="value" th:text="${paymentTime}">Nov 27, 2025 19:30</span>
+                </div>
+            </div>
+
+            <div style="background-color: #e8f5e9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <strong>✓ What's Next?</strong>
+                <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                    <li>Your order is being prepared</li>
+                    <li>You'll receive updates on delivery</li>
+                    <li>Receipt has been sent to your email</li>
+                </ul>
+            </div>
+
+            <center>
+                <a th:href="|${appUrl}/orders|" class="view-button">View Order</a>
+            </center>
+
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0; font-size: 13px;">
+                <strong>🔒 Security Note:</strong> If you did not make this payment, please contact us immediately.
+            </div>
+
+            <p style="margin-top: 25px;">Thank you for your payment!</p>
+        </div>
+
+        <div class="footer">
+            <p>
+                <strong th:text="${appName}">Afrochow</strong><br>
+                Bringing African flavors to your doorstep
+            </p>
+            <p style="font-size: 11px; color: #999; margin-top: 15px;">
+                Payment confirmation from <span th:text="${appUrl}">afrochow.com</span>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
