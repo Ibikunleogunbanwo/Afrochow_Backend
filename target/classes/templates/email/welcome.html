@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="|Welcome to ${appName}|">Welcome to Afrochow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Header with animated gradient */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 50px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+        }
+
+        .logo-container {
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: 900;
+            color: #ffffff;
+            margin-bottom: 8px;
+            letter-spacing: -1.5px;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .tagline {
+            color: rgba(255,255,255,0.95);
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 0.8px;
+        }
+
+        /* Welcome badge */
+        .welcome-badge {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            display: inline-block;
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin: -25px auto 0;
+            position: relative;
+            z-index: 2;
+            box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
+        }
+
+        /* Content section */
+        .content {
+            padding: 50px 40px;
+        }
+
+        .greeting {
+            font-size: 32px;
+            font-weight: 800;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .greeting-emoji {
+            font-size: 40px;
+            display: inline-block;
+            animation: wave 1.5s ease-in-out infinite;
+        }
+
+        @keyframes wave {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(20deg); }
+            75% { transform: rotate(-20deg); }
+        }
+
+        .intro {
+            font-size: 17px;
+            color: #555555;
+            text-align: center;
+            margin-bottom: 35px;
+            line-height: 1.8;
+        }
+
+        .success-message {
+            background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%);
+            border-left: 5px solid #4caf50;
+            padding: 20px 25px;
+            border-radius: 12px;
+            margin: 30px 0;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.2);
+        }
+
+        .success-message p {
+            color: #2d5016;
+            font-weight: 600;
+            font-size: 15px;
+            margin: 0;
+        }
+
+        /* Role-specific features */
+        .features-section {
+            margin: 40px 0;
+        }
+
+        .features-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 25px;
+            text-align: center;
+            position: relative;
+            padding-bottom: 15px;
+        }
+
+        .features-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 4px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+
+        .features-grid {
+            display: grid;
+            gap: 15px;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 4px solid #667eea;
+            padding: 18px 20px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .feature-text {
+            color: #495057;
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        /* CTA Button */
+        .cta-section {
+            text-align: center;
+            margin: 45px 0;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px 50px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 16px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        /* Info boxes */
+        .info-box {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border-left: 4px solid #ff9800;
+            padding: 20px 25px;
+            border-radius: 12px;
+            margin: 30px 0;
+        }
+
+        .info-box-title {
+            font-weight: 700;
+            color: #e65100;
+            font-size: 15px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .info-box-title::before {
+            content: "💡";
+            margin-right: 10px;
+            font-size: 20px;
+        }
+
+        .info-box-text {
+            color: #e65100;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        /* Support section */
+        .support-box {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            margin: 35px 0;
+            border: 2px solid #2196f3;
+        }
+
+        .support-box-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1565c0;
+            margin-bottom: 10px;
+        }
+
+        .support-box-text {
+            color: #1976d2;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        /* Footer */
+        .footer {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            padding: 40px 30px;
+            text-align: center;
+            color: #ecf0f1;
+        }
+
+        .footer-brand {
+            font-weight: 800;
+            font-size: 24px;
+            color: #ffffff;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .footer-tagline {
+            color: rgba(255,255,255,0.85);
+            font-size: 15px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .footer-divider {
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 20px auto;
+            border-radius: 2px;
+        }
+
+        .footer-legal {
+            font-size: 13px;
+            color: rgba(255,255,255,0.7);
+            line-height: 1.7;
+        }
+
+        .social-links {
+            margin: 25px 0 15px;
+        }
+
+        .social-link {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            margin: 0 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            line-height: 40px;
+            text-align: center;
+            color: white;
+            text-decoration: none;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+
+        /* Responsive design */
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .email-container {
+                border-radius: 12px;
+            }
+
+            .header {
+                padding: 40px 20px;
+            }
+
+            .logo {
+                font-size: 36px;
+            }
+
+            .content {
+                padding: 35px 25px;
+            }
+
+            .greeting {
+                font-size: 26px;
+            }
+
+            .features-grid {
+                gap: 12px;
+            }
+
+            .feature-card {
+                padding: 15px;
+            }
+
+            .cta-button {
+                padding: 16px 40px;
+                font-size: 15px;
+            }
+
+            .footer {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="email-container">
+    <!-- Header -->
+    <div class="header">
+        <div class="logo-container">
+            <div class="logo" th:text="${appName}">Afrochow</div>
+            <p class="tagline">Authentic African Food Delivered</p>
+        </div>
+    </div>
+
+    <!-- Welcome Badge -->
+    <div style="text-align: center;">
+        <div class="welcome-badge">Welcome Aboard! 🎊</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <h1 class="greeting">
+            Hi <span th:text="${firstName}">there</span>!
+            <span class="greeting-emoji">👋</span>
+        </h1>
+
+        <p class="intro">
+            We're absolutely thrilled to have you join the <strong th:text="${appName}">Afrochow</strong> family!
+            Your journey to discovering amazing African cuisine starts now.
+        </p>
+
+        <div class="success-message">
+            <p>✅ Your account has been successfully created and is ready to use!</p>
+        </div>
+
+        <!-- Features Section -->
+        <div class="features-section">
+            <h2 class="features-title">Here's What You Can Do</h2>
+
+            <!-- Customer Features -->
+            <div class="features-grid" th:if="${role == 'CUSTOMER'}">
+                <div class="feature-card">
+                    <div class="feature-icon">🍽️</div>
+                    <div class="feature-text">Browse authentic African restaurants near you</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🛒</div>
+                    <div class="feature-text">Order your favorite African dishes with ease</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📍</div>
+                    <div class="feature-text">Track your orders in real-time</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⭐</div>
+                    <div class="feature-text">Leave reviews and support local businesses</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">❤️</div>
+                    <div class="feature-text">Save your favorite restaurants for quick access</div>
+                </div>
+            </div>
+
+            <!-- Vendor Features -->
+            <div class="features-grid" th:if="${role == 'VENDOR'}">
+                <div class="feature-card">
+                    <div class="feature-icon">🏪</div>
+                    <div class="feature-text">Set up and manage your restaurant profile</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📋</div>
+                    <div class="feature-text">Create and update your delicious menu</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📦</div>
+                    <div class="feature-text">Receive and manage customer orders</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-text">Track sales and view detailed analytics</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💬</div>
+                    <div class="feature-text">Connect and communicate with customers</div>
+                </div>
+            </div>
+
+            <!-- Admin Features -->
+            <div class="features-grid" th:if="${role == 'ADMIN'}">
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <div class="feature-text">Manage all platform users and vendors</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <div class="feature-text">Monitor comprehensive platform analytics</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎫</div>
+                    <div class="feature-text">Handle support requests efficiently</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🗂️</div>
+                    <div class="feature-text">Manage categories and content</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💳</div>
+                    <div class="feature-text">Oversee all platform transactions</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA Button -->
+        <div class="cta-section">
+            <a th:href="${appUrl}" class="cta-button">Start Exploring Now →</a>
+        </div>
+
+        <!-- Quick Tip -->
+        <div class="info-box">
+            <div class="info-box-title">Quick Tip</div>
+            <div class="info-box-text">
+                Make sure to complete your profile to get the most out of your <span th:text="${appName}">Afrochow</span> experience.
+                A complete profile helps us serve you better!
+            </div>
+        </div>
+
+        <!-- Support -->
+        <div class="support-box">
+            <div class="support-box-title">Need Help? We're Here! 🤝</div>
+            <div class="support-box-text">
+                If you have any questions or need assistance getting started,
+                our friendly support team is just a message away. We're here to help you succeed!
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-brand" th:text="${appName}">Afrochow</div>
+        <div class="footer-tagline">Bringing African Flavors to Your Doorstep</div>
+
+        <div class="footer-divider"></div>
+
+        <div class="social-links">
+            <a href="#" class="social-link">📘</a>
+            <a href="#" class="social-link">🐦</a>
+            <a href="#" class="social-link">📸</a>
+        </div>
+
+        <div class="footer-legal">
+            You're receiving this email because you created an account at
+            <span th:text="${appUrl}">afrochow.com</span><br>
+            © 2024 <span th:text="${appName}">Afrochow</span>. All rights reserved.
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Status Update</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #2196F3;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #ff6b35;
+            margin-bottom: 10px;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-top: 20px;
+        }
+        .content {
+            margin: 25px 0;
+        }
+        .status-change {
+            background: linear-gradient(to right, #f8f9fa, #e3f2fd);
+            border-left: 5px solid #2196F3;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 5px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            margin: 5px;
+        }
+        .old-status {
+            background-color: #e0e0e0;
+            color: #616161;
+            text-decoration: line-through;
+        }
+        .new-status {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .track-button {
+            display: inline-block;
+            background-color: #2196F3;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .track-button:hover {
+            background-color: #1976D2;
+        }
+        .order-id {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo" th:text="${appName}">Afrochow</div>
+            <p style="color: #666; margin: 0;">Order Status Update</p>
+        </div>
+
+        <h1>Order Status Updated</h1>
+
+        <div class="content">
+            <p>Hi <span th:text="${customerName}">there</span>,</p>
+
+            <p>We have an update on your order:</p>
+
+            <div class="order-id">
+                Order #<span th:text="${orderPublicId}">ORD-12345</span>
+            </div>
+
+            <div class="status-change">
+                <center>
+                    <p style="margin: 0 0 15px 0; font-size: 16px;">Status Changed:</p>
+                    <div>
+                        <span class="status-badge old-status" th:text="${oldStatus}">PENDING</span>
+                        <span style="font-size: 24px; color: #2196F3;">→</span>
+                        <span class="status-badge new-status" th:text="${newStatus}">CONFIRMED</span>
+                    </div>
+                </center>
+            </div>
+
+            <div style="background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <div th:switch="${newStatus}">
+                    <div th:case="'CONFIRMED'">
+                        <strong>✓ Order Confirmed</strong>
+                        <p style="margin: 5px 0 0 0;">The restaurant has confirmed your order and is preparing your food.</p>
+                    </div>
+                    <div th:case="'PREPARING'">
+                        <strong>👨‍🍳 Order Being Prepared</strong>
+                        <p style="margin: 5px 0 0 0;">Your food is being freshly prepared with care.</p>
+                    </div>
+                    <div th:case="'READY'">
+                        <strong>📦 Order Ready</strong>
+                        <p style="margin: 5px 0 0 0;">Your order is ready and will be on its way soon!</p>
+                    </div>
+                    <div th:case="'DELIVERING'">
+                        <strong>🚗 Out for Delivery</strong>
+                        <p style="margin: 5px 0 0 0;">Your order is on its way to you. It should arrive within 15-20 minutes.</p>
+                    </div>
+                    <div th:case="'DELIVERED'">
+                        <strong>✓ Delivered</strong>
+                        <p style="margin: 5px 0 0 0;">Your order has been delivered. Enjoy your meal!</p>
+                    </div>
+                    <div th:case="'CANCELLED'">
+                        <strong>✗ Order Cancelled</strong>
+                        <p style="margin: 5px 0 0 0;">This order has been cancelled. You will receive a full refund.</p>
+                    </div>
+                    <div th:case="*">
+                        <strong>Order Updated</strong>
+                        <p style="margin: 5px 0 0 0;">Your order status has been updated.</p>
+                    </div>
+                </div>
+            </div>
+
+            <center>
+                <a th:href="${orderTrackingUrl}" class="track-button">Track Order</a>
+            </center>
+
+            <p style="margin-top: 25px;">Thank you for using <span th:text="${appName}">Afrochow</span>!</p>
+        </div>
+
+        <div class="footer">
+            <p>
+                <strong th:text="${appName}">Afrochow</strong><br>
+                Bringing African flavors to your doorstep
+            </p>
+            <p style="font-size: 11px; color: #999; margin-top: 15px;">
+                Order update from <span th:text="${appUrl}">afrochow.com</span>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

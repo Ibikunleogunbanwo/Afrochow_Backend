@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Order Received</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #ff9800;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #ff6b35;
+            margin-bottom: 10px;
+        }
+        .alert-icon {
+            font-size: 64px;
+            color: #ff9800;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-top: 10px;
+        }
+        .content {
+            margin: 25px 0;
+        }
+        .order-alert {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border: 3px solid #ff9800;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .order-detail {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .order-detail:last-child {
+            border-bottom: none;
+        }
+        .label {
+            font-weight: bold;
+            color: #666;
+        }
+        .value {
+            color: #2c3e50;
+        }
+        .amount {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4CAF50;
+            text-align: center;
+            margin: 15px 0;
+        }
+        .action-button {
+            display: inline-block;
+            background-color: #ff6b35;
+            color: white;
+            padding: 15px 40px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 15px 5px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .action-button:hover {
+            background-color: #e55a2b;
+        }
+        .secondary-button {
+            background-color: #2196F3;
+        }
+        .secondary-button:hover {
+            background-color: #1976D2;
+        }
+        .urgent-notice {
+            background-color: #ffebee;
+            border-left: 5px solid #f44336;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo" th:text="${appName}">Afrochow</div>
+            <center>
+                <div class="alert-icon">🔔</div>
+            </center>
+        </div>
+
+        <center>
+            <h1>New Order Received!</h1>
+        </center>
+
+        <div class="content">
+            <p>Hi <span th:text="${vendorName}">there</span>,</p>
+
+            <div class="order-alert">
+                <h2 style="margin: 0; color: #e65100;">You have a new order!</h2>
+                <p style="margin: 10px 0 0 0; font-size: 14px;">Please confirm and start preparing</p>
+            </div>
+
+            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <div class="order-detail">
+                    <span class="label">Order Number:</span>
+                    <span class="value" th:text="${orderPublicId}">#ORD-12345</span>
+                </div>
+
+                <div class="order-detail">
+                    <span class="label">Customer:</span>
+                    <span class="value" th:text="${customerName}">John Doe</span>
+                </div>
+
+                <div class="order-detail">
+                    <span class="label">Order Value:</span>
+                    <span class="value amount" th:text="${totalAmount}">$45.99</span>
+                </div>
+            </div>
+
+            <div class="urgent-notice">
+                <strong>⏰ Action Required</strong>
+                <p style="margin: 10px 0 0 0;">
+                    Please log in to your vendor dashboard to view order details and confirm the order.
+                    Fast confirmation leads to happy customers!
+                </p>
+            </div>
+
+            <center>
+                <a th:href="${orderManagementUrl}" class="action-button">View Order Details</a>
+                <a th:href="${orderManagementUrl}" class="action-button secondary-button">Confirm Order</a>
+            </center>
+
+            <div style="background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; font-size: 14px;">
+                <strong>📋 Next Steps:</strong>
+                <ol style="margin: 10px 0 0 0; padding-left: 20px;">
+                    <li>Review the order details</li>
+                    <li>Confirm the order</li>
+                    <li>Prepare the food items</li>
+                    <li>Update the status when ready</li>
+                </ol>
+            </div>
+
+            <p style="margin-top: 25px;">Thank you for being part of <span th:text="${appName}">Afrochow</span>!</p>
+        </div>
+
+        <div class="footer">
+            <p>
+                <strong th:text="${appName}">Afrochow</strong><br>
+                Bringing African flavors to your doorstep
+            </p>
+            <p style="font-size: 11px; color: #999; margin-top: 15px;">
+                Vendor notification from <span th:text="${appUrl}">afrochow.com</span>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

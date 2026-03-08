@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #fafbfc;
+            padding: 30px 15px;
+        }
+
+        .email-container {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Minimal Header */
+        .header {
+            background: #ffffff;
+            padding: 40px 40px 20px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .brand-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-right: 15px;
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.25);
+        }
+
+        .brand-name {
+            font-size: 26px;
+            font-weight: 800;
+            color: #1a1a1a;
+            letter-spacing: -0.5px;
+        }
+
+        .header-title {
+            text-align: center;
+            font-size: 15px;
+            color: #666;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        /* Content Section */
+        .content {
+            padding: 50px 40px;
+        }
+
+        .greeting {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 16px;
+            line-height: 1.2;
+        }
+
+        .message {
+            font-size: 17px;
+            color: #4a4a4a;
+            line-height: 1.7;
+            margin-bottom: 40px;
+        }
+
+        /* Code Box - Clean Minimal Design */
+        .code-container {
+            background: #f8f9fb;
+            border: 2px dashed #667eea;
+            border-radius: 16px;
+            padding: 40px 30px;
+            text-align: center;
+            margin: 40px 0;
+        }
+
+        .code-label {
+            font-size: 13px;
+            color: #667eea;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .code-box {
+            background: #ffffff;
+            border: 3px solid #667eea;
+            border-radius: 12px;
+            padding: 24px 20px;
+            margin: 20px auto;
+            max-width: 360px;
+        }
+
+        .verification-code {
+            font-size: 44px;
+            font-weight: 900;
+            color: #667eea;
+            letter-spacing: 14px;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            user-select: all;
+            line-height: 1;
+        }
+
+        .code-instruction {
+            font-size: 14px;
+            color: #666;
+            margin-top: 20px;
+            font-weight: 500;
+        }
+
+        /* Simple Steps */
+        .steps-section {
+            margin: 45px 0;
+        }
+
+        .steps-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 18px;
+            padding: 18px;
+            background: #f8f9fb;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .step-number {
+            min-width: 32px;
+            height: 32px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 15px;
+            margin-right: 16px;
+        }
+
+        .step-text {
+            flex: 1;
+            font-size: 15px;
+            color: #4a4a4a;
+            font-weight: 500;
+            line-height: 1.6;
+            padding-top: 5px;
+        }
+
+        /* Info Cards */
+        .info-card {
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 24px 0;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .info-icon {
+            font-size: 24px;
+            margin-right: 14px;
+            line-height: 1;
+        }
+
+        .info-content {
+            flex: 1;
+        }
+
+        .info-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .info-text {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Timer Card */
+        .timer-card {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+        }
+
+        .timer-card .info-title {
+            color: #e65100;
+        }
+
+        .timer-card .info-text {
+            color: #f57c00;
+        }
+
+        /* Security Card */
+        .security-card {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+
+        .security-card .info-title {
+            color: #2e7d32;
+        }
+
+        .security-card .info-text {
+            color: #388e3c;
+        }
+
+        /* Help Box */
+        .help-box {
+            background: #f0f4ff;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .help-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .help-text {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        /* Footer */
+        .footer {
+            background: #f8f9fb;
+            padding: 35px 40px;
+            text-align: center;
+            border-top: 1px solid #e8e8e8;
+        }
+
+        .footer-brand {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .footer-tagline {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .footer-links {
+            margin: 20px 0;
+        }
+
+        .footer-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 13px;
+            margin: 0 12px;
+            font-weight: 600;
+        }
+
+        .footer-legal {
+            font-size: 12px;
+            color: #999;
+            line-height: 1.7;
+            margin-top: 20px;
+        }
+
+        /* Responsive */
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 15px 10px;
+            }
+
+            .email-container {
+                border-radius: 20px;
+            }
+
+            .header {
+                padding: 30px 25px 15px;
+            }
+
+            .brand-icon {
+                width: 48px;
+                height: 48px;
+                font-size: 24px;
+            }
+
+            .brand-name {
+                font-size: 22px;
+            }
+
+            .content {
+                padding: 40px 25px;
+            }
+
+            .greeting {
+                font-size: 26px;
+            }
+
+            .message {
+                font-size: 16px;
+            }
+
+            .code-container {
+                padding: 30px 20px;
+            }
+
+            .verification-code {
+                font-size: 36px;
+                letter-spacing: 10px;
+            }
+
+            .footer {
+                padding: 30px 25px;
+            }
+
+            .footer-link {
+                display: block;
+                margin: 8px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="email-container">
+    <!-- Header -->
+    <div class="header">
+        <div class="brand">
+            <div class="brand-icon">🍽️</div>
+            <div class="brand-name" th:text="${appName}">Afrochow</div>
+        </div>
+        <div class="header-title">Email Verification</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content">
+        <!-- Greeting -->
+        <h1 class="greeting">
+            Hey <span th:text="${firstName}">there</span>! 👋
+        </h1>
+
+        <p class="message">
+            Thanks for signing up! We're thrilled to have you join our community.
+            Before we get started, we need to verify your email address.
+        </p>
+
+        <!-- Verification Code -->
+        <div class="code-container">
+            <div class="code-label">Your Verification Code</div>
+            <div class="code-box">
+                <div class="verification-code" th:text="${verificationCode}">ABC123</div>
+            </div>
+            <div class="code-instruction">
+                Click the code to select it, then copy and paste
+            </div>
+        </div>
+
+        <!-- Steps -->
+        <div class="steps-section">
+            <h2 class="steps-title">Quick Setup (3 Steps)</h2>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-text">
+                    Copy the verification code shown above
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-text">
+                    Return to <span th:text="${appName}">Afrochow</span> and paste it on the verification page
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-text">
+                    Click verify and you're all set! Time to explore 🎉
+                </div>
+            </div>
+        </div>
+
+        <!-- Timer Warning -->
+        <div class="info-card timer-card">
+            <div class="info-icon">⏰</div>
+            <div class="info-content">
+                <div class="info-title">Code Valid For Limited Time</div>
+                <div class="info-text">
+                    Your code expires in <strong th:text="${expirationMinutes}">1440</strong> minutes
+                    (about <strong th:text="${expirationMinutes / 60}">24</strong> hours).
+                    Verify soon to activate your account.
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Notice -->
+        <div class="info-card security-card">
+            <div class="info-icon">🔒</div>
+            <div class="info-content">
+                <div class="info-title">Security First</div>
+                <div class="info-text">
+                    Didn't sign up? No worries! You can safely ignore this email.
+                    Your address may have been entered by mistake, and no account was created.
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Section -->
+        <div class="help-box">
+            <div class="help-title">Need Help? We're Here! 💬</div>
+            <div class="help-text">
+                Having trouble with verification? Contact our support team and
+                we'll get you sorted out quickly.
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-brand" th:text="${appName}">Afrochow</div>
+        <div class="footer-tagline">Authentic African Food Delivered</div>
+
+        <div class="footer-links">
+            <a href="#" class="footer-link">Help Center</a>
+            <a href="#" class="footer-link">Contact Support</a>
+            <a href="#" class="footer-link">Terms</a>
+        </div>
+
+        <div class="footer-legal">
+            You're receiving this email because you signed up at
+            <span th:text="${appUrl}">afrochow.com</span><br>
+            © 2024 <span th:text="${appName}">Afrochow</span>. All rights reserved.<br>
+            This is an automated message. Please do not reply directly to this email.
+        </div>
+    </div>
+</div>
+</body>
+</html>
