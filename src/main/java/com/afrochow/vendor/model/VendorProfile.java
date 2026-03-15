@@ -12,14 +12,17 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.afrochow.common.enums.Province;
 
 @Entity
 @Table(name = "vendor_profile", indexes = {
@@ -71,14 +74,15 @@ public class VendorProfile {
 
     private LocalDateTime verifiedAt;
 
+    // ========== TIMEZONE ==========
+    @Column(length = 50)
+    @Builder.Default
+    private String timezone = "America/Edmonton";
+
     // ========== OPERATING HOURS (JSON) ==========
-    // Stores weekly schedule as JSON
-    // Format: {"Monday": {"isOpen": true, "openTime": "09:00", "closeTime": "22:00"}, ...}
-    // Using TEXT for maximum MySQL compatibility (works on 5.5, 5.6, 5.7, 8.0+)
     @Column(columnDefinition = "TEXT")
     private String operatingHoursJson;
 
-    // Helper to get/set operating hours as Map
     @Transient
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -94,7 +98,6 @@ public class VendorProfile {
             return getDefaultOperatingHours();
         }
     }
-
 
     @Transient
     public void setOperatingHours(Map<String, DayHours> operatingHours) {
@@ -112,7 +115,7 @@ public class VendorProfile {
 
         for (String day : days) {
             DayHours hours = new DayHours();
-            hours.setIsOpen(!day.equals("sunday")); // Default closed on Sunday
+            hours.setIsOpen(!day.equals("sunday"));
             hours.setOpenTime("09:00");
             hours.setCloseTime("22:00");
             defaultHours.put(day, hours);
@@ -132,7 +135,7 @@ public class VendorProfile {
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer preparationTime = 30; // in minutes
+    private Integer preparationTime = 30;
 
     // ========== DELIVERY SETTINGS ==========
     @Column(precision = 10, scale = 2)
@@ -182,6 +185,7 @@ public class VendorProfile {
     private List<Review> reviews = new ArrayList<>();
 
     // ========== HELPER METHODS ==========
+
     @Transient
     public String getPublicVendorId() {
         return user != null ? user.getPublicUserId() : null;
@@ -199,7 +203,43 @@ public class VendorProfile {
     }
 
     /**
-     * Check if vendor is currently open based on operating hours
+     * Resolve vendor's timezone — uses stored timezone or falls back to Mountain Time
+     */
+    @Transient
+    private ZoneId getVendorZone() {
+        try {
+            return ZoneId.of(timezone != null ? timezone : "America/Edmonton");
+        } catch (Exception e) {
+            return ZoneId.of("America/Edmonton");
+        }
+    }
+
+    /**
+     * Auto-detect timezone from province — call this during vendor registration
+     */
+    public static String getTimezoneFromProvince(Province province) {
+        if (province == null) return "America/Edmonton";
+
+        return switch (province) {
+            case BC -> "America/Vancouver";
+            case AB -> "America/Edmonton";
+            case SK -> "America/Regina";
+            case MB -> "America/Winnipeg";
+            case ON -> "America/Toronto";
+            case QC -> "America/Montreal";
+            case NB -> "America/Moncton";
+            case NS -> "America/Halifax";
+            case PE -> "America/Halifax";
+            case NL -> "America/St_Johns";
+            case NT -> "America/Yellowknife";
+            case NU -> "America/Rankin_Inlet";
+            case YT -> "America/Whitehorse";
+            default -> "America/Edmonton";
+        };
+    }
+
+    /**
+     * Check if vendor is currently open based on operating hours and vendor timezone
      */
     @Transient
     public boolean isOpenNow() {
@@ -208,21 +248,19 @@ public class VendorProfile {
         Map<String, DayHours> hours = getOperatingHours();
         if (hours == null || hours.isEmpty()) return false;
 
-        // Get current day and time
-        DayOfWeek today = DayOfWeek.from(LocalDateTime.now());
+        ZoneId vendorZone = getVendorZone();
+        DayOfWeek today = DayOfWeek.from(LocalDateTime.now(vendorZone));
         String dayKey = today.name().toLowerCase();
-        LocalTime now = LocalTime.now();
+        LocalTime now = LocalTime.now(vendorZone);
 
         DayHours todayHours = hours.get(dayKey);
-        if (todayHours == null || !todayHours.getIsOpen()) {
-            return false;
-        }
+        if (todayHours == null || !todayHours.getIsOpen()) return false;
 
         try {
             LocalTime openTime = LocalTime.parse(todayHours.getOpenTime());
             LocalTime closeTime = LocalTime.parse(todayHours.getCloseTime());
 
-
+            // Handle overnight hours (e.g. 22:00 - 02:00)
             if (closeTime.isBefore(openTime)) {
                 return now.isAfter(openTime) || now.isBefore(closeTime);
             }
@@ -234,20 +272,19 @@ public class VendorProfile {
     }
 
     /**
-     * Get today's operating hours as formatted string
+     * Get today's operating hours as formatted string using vendor timezone
      */
     @Transient
     public String getTodayHoursFormatted() {
         Map<String, DayHours> hours = getOperatingHours();
         if (hours == null || hours.isEmpty()) return "Hours not set";
 
-        DayOfWeek today = DayOfWeek.from(LocalDateTime.now());
+        ZoneId vendorZone = getVendorZone();
+        DayOfWeek today = DayOfWeek.from(LocalDateTime.now(vendorZone));
         String dayKey = today.name().toLowerCase();
 
         DayHours todayHours = hours.get(dayKey);
-        if (todayHours == null || !todayHours.getIsOpen()) {
-            return "Closed today";
-        }
+        if (todayHours == null || !todayHours.getIsOpen()) return "Closed today";
 
         return String.format("Open %s - %s",
                 todayHours.getOpenTime(),
@@ -299,6 +336,7 @@ public class VendorProfile {
     }
 
     // ========== VALIDATION HELPERS ==========
+
     @Transient
     public boolean canReceiveOrders() {
         return isActive && isVerified && hasOperatingDays() && hasActiveProducts();
@@ -309,15 +347,14 @@ public class VendorProfile {
         return isVerified && taxId != null && !taxId.isEmpty();
     }
 
-
-
     // ========== INNER CLASS FOR DAY HOURS ==========
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class DayHours {
         private Boolean isOpen;
-        private String openTime;   // Format: "HH:MM"
-        private String closeTime;  // Format: "HH:MM"
+        private String openTime;
+        private String closeTime;
     }
 }

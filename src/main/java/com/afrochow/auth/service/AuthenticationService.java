@@ -763,6 +763,8 @@ public class AuthenticationService {
                     .defaultAddress(request.getAddress().getDefaultAddress())
                     .build();
 
+            String timezone = VendorProfile.getTimezoneFromProvince(request.getAddress().getProvince());
+
             // Convert operating hours
             Map<String, VendorProfile.DayHours> operatingHours =
                     convertOperatingHours(request.getOperatingHours());
@@ -799,6 +801,7 @@ public class AuthenticationService {
                     .estimatedDeliveryMinutes(request.getEstimatedDeliveryMinutes())
                     .maxDeliveryDistanceKm(request.getMaxDeliveryDistanceKm())
                     .address(address)
+                    .timezone(timezone)
                     .build();
 
             vendorProfile.setOperatingHours(operatingHours);
