@@ -55,7 +55,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
-    @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:4200}")
+    @Value("${cors.allowed-origins:http://localhost:3000,http://10.0.0.149:3000,http://localhost:4200}")
     private String allowedOrigins;
 
     @Value("${security.bcrypt.strength:12}")
