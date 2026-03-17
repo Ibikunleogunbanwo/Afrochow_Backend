@@ -191,7 +191,7 @@ public class AuthenticationService {
                         accessToken,
                         jwtTokenProvider.getAccessTokenExpirationSeconds(),
                         true,
-                        "Lax"
+                        "None"
                 );
 
                 CookieUtils.addHttpOnlyCookie(
@@ -200,7 +200,7 @@ public class AuthenticationService {
                         refreshToken,
                         refreshTokenService.getRefreshTokenExpirationSeconds(),
                         true,
-                        "Lax"
+                        "None"
                 );
 
                 // ---------- logging & audit ----------
@@ -258,7 +258,7 @@ public class AuthenticationService {
                     newAccessToken,
                     jwtTokenProvider.getAccessTokenExpirationSeconds(),
                     true,
-                    "Lax"
+                    "None"
             );
 
             CookieUtils.addHttpOnlyCookie(
@@ -267,7 +267,7 @@ public class AuthenticationService {
                     newRefreshToken,
                     refreshTokenService.getRefreshTokenExpirationSeconds(),
                     true,
-                    "Lax"
+                    "None"
             );
 
             log.info("Token refreshed for user: {} from IP: {}", user.getPublicUserId(), clientIp);
@@ -304,8 +304,8 @@ public class AuthenticationService {
                 }
             }
 
-            CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE, "", 0, true, "Lax");
-            CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE, "", 0, true, "Lax");
+            CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE, "", 0, true, "None");
+            CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE, "", 0, true, "None");
             log.info("User logged out (cookies cleared)");
         }
 
@@ -328,9 +328,9 @@ public class AuthenticationService {
             log.info("User {} logged out from all devices (IP: {})", username, clientIp);
 
             // Clear current device cookies
-            CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE, "", 0, true, "Lax");
-            CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE, "", 0, true, "Lax");
-            log.info("Current device cookies cleared (IP: {})", clientIp);
+            CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE, "", 0, true, "None");
+            CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE, "", 0, true, "None");
+
         }
 
 
