@@ -4,8 +4,11 @@ import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.category.model.Category;
 import com.afrochow.category.repository.CategoryRepository;
+import com.afrochow.common.enums.PaymentMethod;
 import com.afrochow.common.enums.Role;
 import com.afrochow.common.enums.Province;
+import com.afrochow.customer.model.CustomerProfile;
+import com.afrochow.customer.repository.CustomerProfileRepository;
 import com.afrochow.product.model.Product;
 import com.afrochow.product.repository.ProductRepository;
 import com.afrochow.review.model.Review;
@@ -44,6 +47,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
     private final ReviewRepository reviewRepository;
     private final CategoryRepository categoryRepository;
     private final AddressRepository addressRepository;
+    private final CustomerProfileRepository customerProfileRepository;
     private final PasswordEncoder passwordEncoder;
 
     // Configuration constants
@@ -189,12 +193,12 @@ public class CompleteFinalSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        if (vendorProfileRepository.count() > 0) {
-            log.info("Database already seeded with vendor data, skipping seeder...");
+        if (vendorProfileRepository.count() > 0 && customerProfileRepository.count() > 0) {
+            log.info("Database already seeded, skipping seeder...");
             return;
         }
 
-        log.info("Starting complete final vendor seeder...");
+        log.info("Starting complete final seeder...");
 
         // Create categories
         createAllCategories();
@@ -202,8 +206,12 @@ public class CompleteFinalSeeder implements CommandLineRunner {
         // Create vendors
         seedVendorData();
 
-        log.info("Complete final vendor seeder completed successfully!");
-        log.info("Summary: {} vendors created", vendorProfileRepository.count());
+        // Create dedicated customer profiles
+        seedCustomerData();
+
+        log.info("Seeder completed successfully!");
+        log.info("Summary: {} vendors, {} customers created",
+                vendorProfileRepository.count(), customerProfileRepository.count());
     }
 
     private void createAllCategories() {
@@ -236,9 +244,9 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                 try {
                     VendorConfiguration config = vendors.get(i);
                     createCompleteVendor(config, categoryName, vendorIndex, i);
-                    vendorIndex++;
                     log.info("Created vendor: {} with business license: {}", config.name,
                             BUSINESS_LICENSES[vendorIndex % BUSINESS_LICENSES.length]);
+                    vendorIndex++;
                 } catch (Exception e) {
                     log.error("Error creating vendor {}: {}", vendors.get(i).name, e.getMessage(), e);
                 }
@@ -553,12 +561,79 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                             .password(passwordEncoder.encode("password123"))
                             .firstName(userName.split(" ")[0])
                             .lastName(userName.split(" ").length > 1 ? userName.split(" ")[1] : "User")
-                            .phone(generateCanadianPhoneNumber(2000 + vendorIndex * 10 + reviewIndex)) // Offset by 2000 for reviewers
+                            .phone(generateCanadianPhoneNumber(2000 + vendorIndex * 10 + reviewIndex))
                             .role(Role.CUSTOMER)
                             .emailVerified(true)
                             .isActive(true)
                             .build();
-                    return userRepository.save(user);
+                    User savedUser = userRepository.save(user);
+                    createCustomerProfileForUser(savedUser, PaymentMethod.CREDIT_CARD, 0, null, null);
+                    return savedUser;
                 });
+    }
+
+    private void seedCustomerData() {
+        String[][] customers = {
+            {"Adaeze", "Okafor",   "adaeze.okafor@gmail.com",   "+14032001001", "Leave at the door",            "CREDIT_CARD"},
+            {"Emeka",  "Nwosu",    "emeka.nwosu@gmail.com",     "+15872001002", "Ring doorbell twice",          "DEBIT_CARD"},
+            {"Ngozi",  "Eze",      "ngozi.eze@gmail.com",       "+18252001003", "Call on arrival",              "PAYPAL"},
+            {"Chidi",  "Obi",      "chidi.obi@gmail.com",       "+14032001004", "No special instructions",      "STRIPE"},
+            {"Amina",  "Diallo",   "amina.diallo@gmail.com",    "+15872001005", "Leave at reception",           "CASH_ON_DELIVERY"},
+            {"Kofi",   "Mensah",   "kofi.mensah@gmail.com",     "+18252001006", "Text when nearby",             "APPLE_PAY"},
+            {"Fatima", "Balogun",  "fatima.balogun@gmail.com",  "+14032001007", "Contactless delivery please",  "GOOGLE_PAY"},
+            {"Tunde",  "Adeyemi",  "tunde.adeyemi@gmail.com",   "+15872001008", "Leave with security",          "CREDIT_CARD"},
+            {"Chisom", "Igwe",     "chisom.igwe@gmail.com",     "+18252001009", "Ring bell and wait",           "DEBIT_CARD"},
+            {"Bola",   "Afolabi",  "bola.afolabi@gmail.com",    "+14032001010", "Side entrance preferred",      "CREDIT_CARD"}
+        };
+
+        for (int i = 0; i < customers.length; i++) {
+            String[] c = customers[i];
+            String email = c[2];
+
+            if (userRepository.findByEmail(email).isPresent()) {
+                continue;
+            }
+
+            User user = User.builder()
+                    .email(email)
+                    .password(passwordEncoder.encode(DEFAULT_PASSWORD))
+                    .firstName(c[0])
+                    .lastName(c[1])
+                    .phone(c[3])
+                    .role(Role.CUSTOMER)
+                    .emailVerified(true)
+                    .isActive(true)
+                    .build();
+
+            user = userRepository.save(user);
+
+            PaymentMethod paymentMethod = PaymentMethod.valueOf(c[5]);
+            int loyaltyPoints = (i + 1) * 50;
+            Address address = createRealisticAddress(i);
+            createCustomerProfileForUser(user, paymentMethod, loyaltyPoints, c[4], address);
+
+            log.info("Created customer profile for: {} {}", c[0], c[1]);
+        }
+    }
+
+    private CustomerProfile createCustomerProfileForUser(User user, PaymentMethod paymentMethod,
+                                                         int loyaltyPoints, String deliveryInstructions,
+                                                         Address address) {
+        CustomerProfile profile = CustomerProfile.builder()
+                .user(user)
+                .defaultDeliveryInstructions(deliveryInstructions)
+                .paymentMethod(paymentMethod)
+                .loyaltyPoints(loyaltyPoints)
+                .build();
+
+        profile = customerProfileRepository.save(profile);
+
+        if (address != null) {
+            address.setCustomerProfile(profile);
+            address.setDefaultAddress(true);
+            addressRepository.save(address);
+        }
+
+        return profile;
     }
 }
