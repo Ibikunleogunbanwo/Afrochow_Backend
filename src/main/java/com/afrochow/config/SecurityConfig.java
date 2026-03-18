@@ -21,7 +21,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
@@ -41,9 +41,6 @@ import java.util.List;
  * - Comprehensive security headers
  * - CORS configuration
  * - BCrypt password encoding
- *
- * @author Afrochow Team
- * @version 1.0
  */
 @Configuration
 @EnableWebSecurity
@@ -65,29 +62,11 @@ public class SecurityConfig {
        AUTHENTICATION BEANS
        ========================================================== */
 
-    /**
-     * Password encoder bean using BCrypt hashing algorithm.
-     * Strength is configurable via application.properties:
-     * - Development: 10 rounds (faster)
-     * - Production: 12+ rounds (more secure)
-     *
-     * This MUST be the same encoder used everywhere:
-     * - User registration
-     * - Password changes
-     * - Authentication
-     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(bcryptStrength);
     }
 
-    /**
-     * Authentication provider that uses:
-     * - CustomUserDetailsService to load user from database
-     * - PasswordEncoder to verify passwords
-     *
-     * This is the "brain" that validates credentials during login.
-     */
     @Bean
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider(customUserDetailsService);
@@ -95,33 +74,20 @@ public class SecurityConfig {
         return provider;
     }
 
-    /**
-     * Authentication manager for handling authentication requests.
-     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
 
-
-
     /* ==========================================================
        SECURITY FILTER CHAIN
        ========================================================== */
 
-    /**
-     * Main security configuration defining:
-     * - URL access rules
-     * - Security headers
-     * - CORS settings
-     * - JWT filter chain
-     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Disable CSRF - we're using JWT tokens (stateless)
+                // Disable CSRF - using JWT tokens (stateless)
                 .csrf(AbstractHttpConfigurer::disable)
-
 
                 // Enable CORS with custom configuration
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -131,17 +97,12 @@ public class SecurityConfig {
 
                 // Configure URL-based authorization rules
                 .authorizeHttpRequests(auth -> auth
-                        // ============================================
-                        // ADMIN ENDPOINTS - Require ADMIN role
-                        // ============================================
+
+                        // ADMIN ENDPOINTS
                         .requestMatchers("/auth/register/admin").hasRole("ADMIN")
                         .requestMatchers("/admin/**", "/api/v1/admin/**").hasRole("ADMIN")
 
-                        // ============================================
-                        // PUBLIC ENDPOINTS - No authentication required
-                        // ============================================
-
-                        // Authentication endpoints
+                        // PUBLIC ENDPOINTS
                         .requestMatchers(
                                 "/auth/register/customer",
                                 "/auth/register/vendor",
@@ -158,7 +119,6 @@ public class SecurityConfig {
                                 "/v1/public/**"
                         ).permitAll()
 
-
                         // API Documentation
                         .requestMatchers(
                                 "/v3/api-docs/**",
@@ -168,18 +128,16 @@ public class SecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
 
-
                         // Health & Monitoring
                         .requestMatchers(
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
 
-
                         // Public static resources
                         .requestMatchers("/public/**").permitAll()
 
-                        // Platform Statistics - Public endpoint
+                        // Platform Statistics
                         .requestMatchers("/stats/**").permitAll()
 
                         // Images - GET is public, POST requires authentication
@@ -198,41 +156,28 @@ public class SecurityConfig {
                                 "/api/v1/reviews/**"
                         ).permitAll()
 
-                        // ============================================
-                        // CUSTOMER ENDPOINTS - Require CUSTOMER role
-                        // ============================================
+                        // CUSTOMER ENDPOINTS
                         .requestMatchers("/customer/**", "/api/v1/customer/**").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.POST, "/customer/profile/image").hasRole("CUSTOMER")
 
-                        // ============================================
-                        // VENDOR ENDPOINTS - Require VENDOR role
-                        // ============================================
+                        // VENDOR ENDPOINTS
                         .requestMatchers("/vendor/**", "/api/v1/vendor/**").hasRole("VENDOR")
 
-                        // ============================================
-                        // ORDER ENDPOINTS - Role-based access
-                        // ============================================
-                        // Create orders: CUSTOMER or VENDOR
+                        // ORDER ENDPOINTS
                         .requestMatchers(HttpMethod.POST, "/orders/**", "/api/v1/orders/**")
                         .hasAnyRole("CUSTOMER", "VENDOR")
-
-                        // View orders: CUSTOMER, VENDOR, or ADMIN
                         .requestMatchers(HttpMethod.GET, "/orders/**", "/api/v1/orders/**")
                         .hasAnyRole("CUSTOMER", "VENDOR", "ADMIN")
-
-                        // Update/Delete orders: CUSTOMER or ADMIN
                         .requestMatchers(HttpMethod.PUT, "/orders/**", "/api/v1/orders/**")
                         .hasAnyRole("CUSTOMER", "ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/orders/**", "/api/v1/orders/**")
                         .hasRole("ADMIN")
 
-                        // ============================================
-                        // DEFAULT - All other requests require authentication
-                        // ============================================
+                        // DEFAULT - all other requests require authentication
                         .anyRequest().authenticated()
                 )
 
-                // Configure exception handling
+                // Exception handling
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                 )
@@ -245,8 +190,10 @@ public class SecurityConfig {
                 // Register authentication provider
                 .authenticationProvider(authenticationProvider())
 
-                // Add JWT filter before Spring Security's username/password filter
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                // Place JWT filter just before AnonymousAuthenticationFilter so it runs
+                // after the security context is set up but before anonymous token is applied.
+                // This ensures our authenticated user is never overwritten by the anonymous placeholder.
+                .addFilterBefore(jwtAuthenticationFilter, AnonymousAuthenticationFilter.class);
 
         return http.build();
     }
@@ -255,28 +202,14 @@ public class SecurityConfig {
        SECURITY HEADERS CONFIGURATION
        ========================================================== */
 
-    /**
-     * Configure comprehensive security headers to protect against common attacks:
-     * - HSTS: Force HTTPS
-     * - CSP: Prevent XSS
-     * - X-Frame-Options: Prevent clickjacking
-     * - X-Content-Type-Options: Prevent MIME sniffing
-     * - Referrer-Policy: Control referrer information
-     * - Permissions-Policy: Restrict browser features
-     */
     private void configureSecurityHeaders(
             org.springframework.security.config.annotation.web.configurers.HeadersConfigurer<HttpSecurity> headers) {
         headers
-                // HTTP Strict Transport Security (HSTS)
-                // Forces browser to use HTTPS for 1 year
                 .httpStrictTransportSecurity(hsts -> hsts
                         .maxAgeInSeconds(31536000)
                         .includeSubDomains(true)
                         .preload(true)
                 )
-
-                // Content Security Policy (CSP)
-                // Prevents XSS by controlling resource loading
                 .contentSecurityPolicy(csp -> csp
                         .policyDirectives(
                                 "default-src 'self'; " +
@@ -290,86 +223,40 @@ public class SecurityConfig {
                                         "form-action 'self'"
                         )
                 )
-
-                // Referrer Policy
-                // Controls how much referrer information is sent
                 .referrerPolicy(referrer -> referrer
                         .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)
                 )
-
-                // X-Frame-Options
-                // Prevents clickjacking by denying iframe embedding
                 .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
-
-                // X-Content-Type-Options
-                // Prevents MIME type sniffing
                 .contentTypeOptions(org.springframework.security.config.Customizer.withDefaults())
-
-                // X-XSS-Protection
-                // Legacy XSS protection for older browsers
                 .xssProtection(xss -> xss
                         .headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK)
                 )
-
-                // Permissions Policy
-                // Restricts browser features
                 .addHeaderWriter(new StaticHeadersWriter(
                         "Permissions-Policy",
                         "geolocation=(self), microphone=(), camera=(), payment=(), " +
                                 "usb=(), magnetometer=(), accelerometer=(), gyroscope=()"
                 ))
-
-                // X-Permitted-Cross-Domain-Policies
-                // Prevents Adobe Flash/PDF from loading data
                 .addHeaderWriter(new StaticHeadersWriter(
                         "X-Permitted-Cross-Domain-Policies",
                         "none"
                 ));
     }
 
-
-
-
     /* ==========================================================
        CORS CONFIGURATION
        ========================================================== */
 
-    /**
-     * CORS configuration for cross-origin requests.
-     *
-     * Configuration via application.properties:
-     *
-     * Development (application-dev.properties):
-     *   cors.allowed-origins=http://localhost:3000,http://localhost:4200
-     *
-     * Production (application-prod.properties):
-     *   cors.allowed-origins=https://afrochow.com,https://www.afrochow.com
-     *
-     * Security considerations:
-     * - Never use wildcards (*) with credentials
-     * - Explicitly list all allowed origins
-     * - Restrict to necessary HTTP methods
-     * - Limit exposed and allowed headers
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Parse and validate allowed origins
         List<String> origins = parseAllowedOrigins(allowedOrigins);
         configuration.setAllowedOrigins(origins);
 
-        // Allow necessary HTTP methods
         configuration.setAllowedMethods(Arrays.asList(
-                "GET",
-                "POST",
-                "PUT",
-                "PATCH",
-                "DELETE",
-                "OPTIONS"
+                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
         ));
 
-        // Restrict allowed headers to necessary ones
         configuration.setAllowedHeaders(Arrays.asList(
                 "Authorization",
                 "Content-Type",
@@ -378,7 +265,6 @@ public class SecurityConfig {
                 "Origin"
         ));
 
-        // Expose headers that clients need to read
         configuration.setExposedHeaders(Arrays.asList(
                 "Authorization",
                 "Set-Cookie",
@@ -387,10 +273,7 @@ public class SecurityConfig {
                 "X-Current-Page"
         ));
 
-        // Allow credentials (cookies, authorization headers)
         configuration.setAllowCredentials(true);
-
-        // Cache preflight requests for 1 hour
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -399,10 +282,6 @@ public class SecurityConfig {
         return source;
     }
 
-    /**
-     * Parse allowed origins from comma-separated string.
-     * Filters out empty values and trims whitespace.
-     */
     private List<String> parseAllowedOrigins(String allowedOriginsString) {
         return Arrays.stream(allowedOriginsString.split(","))
                 .map(String::trim)
