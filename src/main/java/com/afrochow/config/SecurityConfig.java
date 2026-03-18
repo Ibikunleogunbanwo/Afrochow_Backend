@@ -125,9 +125,6 @@ public class SecurityConfig {
                 // Enable CORS with custom configuration
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // CRITICAL FIX: Disable SecurityContext persistence for stateless JWT
-                .securityContext(AbstractHttpConfigurer::disable)
-
                 // Configure comprehensive security headers
                 .headers(this::configureSecurityHeaders)
 
@@ -286,7 +283,7 @@ public class SecurityConfig {
                                         "style-src 'self' 'unsafe-inline'; " +
                                         "img-src 'self' data: https:; " +
                                         "font-src 'self' data:; " +
-                                        "connect-src 'self' https://afrochow-frontend-new.vercel.app/; " +
+                                        "connect-src 'self' https://afrochow-backendnew-production.up.railway.app; " +
                                         "frame-ancestors 'none'; " +
                                         "base-uri 'self'; " +
                                         "form-action 'self'"
