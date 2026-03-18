@@ -10,7 +10,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -30,6 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
+    // Public endpoints that bypass JWT authentication
     private static final List<String> PUBLIC_PATHS = List.of(
             "/api/auth/login",
             "/api/auth/register",
@@ -82,6 +85,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
+    // ------------------- COOKIE EXTRACTION -------------------
+
     private String extractTokenFromCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) return null;
@@ -94,6 +99,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         return null;
     }
+
+    // ------------------- AUTHENTICATION LOGIC -------------------
 
     private void authenticateUser(String jwtToken, HttpServletRequest request) {
         JwtTokenProvider.UserInfo userInfo = tokenProvider.extractUserInfo(jwtToken);
@@ -152,8 +159,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 "Role mismatch for user: " + userInfo.username());
     }
 
+    /**
+     * Returns true only if the request already has a REAL authenticated user.
+     * Ignores Spring's anonymous placeholder token, which is always present
+     * before authentication and would otherwise cause this filter to skip
+     * JWT validation entirely.
+     */
     private boolean isAlreadyAuthenticated() {
-        return SecurityContextHolder.getContext().getAuthentication() != null;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null &&
+                auth.isAuthenticated() &&
+                !(auth instanceof AnonymousAuthenticationToken);
     }
 
     @Override
