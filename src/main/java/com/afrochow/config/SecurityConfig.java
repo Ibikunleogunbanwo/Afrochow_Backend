@@ -122,6 +122,8 @@ public class SecurityConfig {
                 // Disable CSRF - we're using JWT tokens (stateless)
                 .csrf(AbstractHttpConfigurer::disable)
 
+                .securityContext(AbstractHttpConfigurer::disable)
+
                 // Enable CORS with custom configuration
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
