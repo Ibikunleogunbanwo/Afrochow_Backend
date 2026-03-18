@@ -286,7 +286,7 @@ public class SecurityConfig {
                                         "style-src 'self' 'unsafe-inline'; " +
                                         "img-src 'self' data: https:; " +
                                         "font-src 'self' data:; " +
-                                        "connect-src 'self'; " +
+                                        "connect-src 'self' https://afrochow-frontend-new.vercel.app/; " +
                                         "frame-ancestors 'none'; " +
                                         "base-uri 'self'; " +
                                         "form-action 'self'"
@@ -383,6 +383,7 @@ public class SecurityConfig {
         // Expose headers that clients need to read
         configuration.setExposedHeaders(Arrays.asList(
                 "Authorization",
+                "Set-Cookie",
                 "X-Total-Count",
                 "X-Total-Pages",
                 "X-Current-Page"
