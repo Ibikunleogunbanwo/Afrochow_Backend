@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -32,7 +33,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
-    // Public endpoints that bypass JWT authentication
     private static final List<String> PUBLIC_PATHS = List.of(
             "/api/auth/login",
             "/api/auth/register",
@@ -119,7 +119,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        // Create a brand new SecurityContext so SecurityContextHolderFilter
+        // (Spring Security 6+) cannot clear it before AnonymousAuthenticationFilter runs.
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
 
         logger.debug("Authenticated user '{}' via cookie JWT", userInfo.username());
     }
