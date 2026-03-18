@@ -20,10 +20,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import static com.afrochow.security.Utils.CookieConstants.ACCESS_TOKEN_COOKIE;
 
@@ -32,7 +30,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
-    // Public endpoints that bypass JWT authentication
     private static final List<String> PUBLIC_PATHS = List.of(
             "/api/auth/login",
             "/api/auth/register",
@@ -60,34 +57,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String uri = request.getRequestURI();
-
-        // ── SAFARI DEBUG ──────────────────────────────────────────
-        logger.warn("SAFARI_DEBUG ▶ {} {}", request.getMethod(), uri);
-        logger.warn("SAFARI_DEBUG ▶ Origin:     {}", request.getHeader("Origin"));
-        logger.warn("SAFARI_DEBUG ▶ User-Agent: {}", request.getHeader("User-Agent"));
-
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null || cookies.length == 0) {
-            logger.warn("SAFARI_DEBUG ▶ NO COOKIES received");
-        } else {
-            String cookieSummary = Arrays.stream(cookies)
-                    .map(c -> {
-                        String val = c.getValue();
-                        String preview = val != null && val.length() > 10
-                                ? val.substring(0, 10) + "..."
-                                : val;
-                        return c.getName() + "=" + preview;
-                    })
-                    .collect(Collectors.joining(", "));
-            logger.warn("SAFARI_DEBUG ▶ Cookies: [{}]", cookieSummary);
-
-            boolean hasAccessToken = Arrays.stream(cookies)
-                    .anyMatch(c -> ACCESS_TOKEN_COOKIE.equals(c.getName()));
-            logger.warn("SAFARI_DEBUG ▶ Has '{}' cookie: {}", ACCESS_TOKEN_COOKIE, hasAccessToken);
-        }
-        // ── END SAFARI DEBUG ──────────────────────────────────────
-
         try {
             if (!isAlreadyAuthenticated()) {
                 String jwtToken = extractTokenFromCookie(request);
@@ -95,38 +64,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (StringUtils.hasText(jwtToken)) {
                     logger.debug("Extracted JWT token from cookie '{}'", ACCESS_TOKEN_COOKIE);
 
-                    boolean valid = tokenProvider.isValidToken(jwtToken);
-                    boolean expired = tokenProvider.isTokenExpired(jwtToken);
-                    logger.warn("SAFARI_DEBUG ▶ Token valid: {}, expired: {}", valid, expired);
-
-                    if (valid && !expired) {
+                    if (tokenProvider.isValidToken(jwtToken) && !tokenProvider.isTokenExpired(jwtToken)) {
                         authenticateUser(jwtToken, request);
-                        logger.warn("SAFARI_DEBUG ▶ Authentication SUCCESS for {}", uri);
-                    } else {
-                        logger.warn("SAFARI_DEBUG ▶ Token rejected — valid={} expired={}", valid, expired);
                     }
-                } else {
-                    logger.warn("SAFARI_DEBUG ▶ No JWT token found in cookies for {}", uri);
                 }
-            } else {
-                logger.warn("SAFARI_DEBUG ▶ Already authenticated, skipping filter for {}", uri);
             }
 
         } catch (JwtExpiredTokenException e) {
-            logger.warn("SAFARI_DEBUG ▶ JwtExpiredTokenException: {}", e.getMessage());
             handleExpiredToken(e);
         } catch (JwtAuthenticationException e) {
-            logger.warn("SAFARI_DEBUG ▶ JwtAuthenticationException: {} ({})", e.getMessage(), e.getErrorCode());
             handleAuthenticationFailure(e);
         } catch (Exception e) {
-            logger.error("SAFARI_DEBUG ▶ Unexpected error: {}", e.getMessage(), e);
+            logger.error("Unexpected authentication error: {}", e.getMessage(), e);
             SecurityContextHolder.clearContext();
         } finally {
             filterChain.doFilter(request, response);
         }
     }
 
-    // ------------------- COOKIE EXTRACTION -------------------
     private String extractTokenFromCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) return null;
@@ -140,7 +95,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 
-    // ------------------- AUTHENTICATION LOGIC -------------------
     private void authenticateUser(String jwtToken, HttpServletRequest request) {
         JwtTokenProvider.UserInfo userInfo = tokenProvider.extractUserInfo(jwtToken);
 
