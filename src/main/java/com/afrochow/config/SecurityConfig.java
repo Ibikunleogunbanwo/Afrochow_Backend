@@ -5,6 +5,7 @@ import com.afrochow.security.JwtAuthenticationFilter;
 import com.afrochow.security.JwtAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -79,6 +80,30 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
+    /**
+     * Prevents Spring Boot from auto-registering JwtAuthenticationFilter
+     * as a standalone servlet filter OUTSIDE the Spring Security filter chain.
+     *
+     * Without this, the filter runs twice:
+     *  1. Before FilterChainProxy (too early — SecurityContext not ready)
+     *  2. Inside the security chain (correct position)
+     *
+     * The first run sets authentication, then FilterChainProxy re-secures
+     * the request clearing the context, then AnonymousAuthenticationFilter
+     * overwrites with anonymous — causing 401 on every protected endpoint.
+     *
+     * Setting enabled=false ensures the filter ONLY runs inside the
+     * security chain where it is registered via addFilterBefore().
+     */
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(
+            JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration =
+                new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
     /* ==========================================================
        SECURITY FILTER CHAIN
        ========================================================== */
@@ -140,7 +165,7 @@ public class SecurityConfig {
                         // Platform Statistics
                         .requestMatchers("/stats/**").permitAll()
 
-                        // Images - GET is public, POST requires authentication
+                        // Images - GET is public
                         .requestMatchers(HttpMethod.GET, "/api/images/**", "/images/**").permitAll()
 
                         // Public product browsing (GET only)
@@ -190,9 +215,8 @@ public class SecurityConfig {
                 // Register authentication provider
                 .authenticationProvider(authenticationProvider())
 
-                // Place JWT filter just before AnonymousAuthenticationFilter so it runs
-                // after the security context is set up but before anonymous token is applied.
-                // This ensures our authenticated user is never overwritten by the anonymous placeholder.
+                // Place JWT filter just before AnonymousAuthenticationFilter so our
+                // authenticated user is never overwritten by the anonymous placeholder.
                 .addFilterBefore(jwtAuthenticationFilter, AnonymousAuthenticationFilter.class);
 
         return http.build();
