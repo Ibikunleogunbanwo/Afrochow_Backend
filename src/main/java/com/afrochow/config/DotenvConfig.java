@@ -15,7 +15,7 @@ public class DotenvConfig implements ApplicationContextInitializer<ConfigurableA
     private static final Set<String> SENSITIVE_KEYS = Set.of(
             "DB_PASSWORD", "PROD_DB_PASSWORD", "APP_JWT_SECRET",
             "APP_JWT_ENCRYPTION_KEY", "SPRING_MAIL_PASSWORD",
-            "DEV_GMAIL_PASSWORD", "PROD_SENDGRID_PASSWORD"
+            "DEV_GMAIL_PASSWORD", "PROD_SENDGRID_PASSWORD", "SMTP_PASSWORD"
     );
 
     @Override
@@ -40,7 +40,7 @@ public class DotenvConfig implements ApplicationContextInitializer<ConfigurableA
 
             // Basic Info
             System.out.println("✅ .env file loaded successfully");
-            System.out.println("🌍 Active Profile: " + dotenv.get("SPRING_PROFILE", "dev"));
+            System.out.println("🌍 Active Profile: " + dotenv.get("SPRING_PROFILES_ACTIVE", "default"));
             System.out.println("💾 Database: " + dotenv.get("DB_NAME", "not-set"));
             System.out.println("🔌 Port: " + dotenv.get("DB_PORT", "3306"));
             System.out.println("📧 Email enabled: " + dotenv.get("SPRING_MAIL_ENABLED", "false"));
@@ -65,8 +65,8 @@ public class DotenvConfig implements ApplicationContextInitializer<ConfigurableA
     }
 
     private boolean isDebugMode(Dotenv dotenv) {
-        String profile = dotenv.get("SPRING_PROFILE", "dev");
-        return "dev".equalsIgnoreCase(profile);
+        String profile = dotenv.get("SPRING_PROFILES_ACTIVE", "default");
+        return !"prod".equalsIgnoreCase(profile);
     }
 
     private void printDebugInfo(Dotenv dotenv) {
