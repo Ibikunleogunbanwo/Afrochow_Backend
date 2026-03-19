@@ -204,8 +204,8 @@ public class AuthenticationService {
                 );
 
                 // ---------- logging & audit ----------
+                // loginSucceeded() internally calls securityEventService.logLoginSuccess() — no need to call it again
                 loginAttemptService.loginSucceeded(user.getEmail(), httpRequest);
-                securityEventService.logLoginSuccess(user.getEmail(), httpRequest);
 
                 return buildLoginResponse(user);
 
