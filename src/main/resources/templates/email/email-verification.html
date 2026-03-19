@@ -457,15 +457,15 @@
         <div class="footer-tagline">Authentic African Food Delivered</div>
 
         <div class="footer-links">
-            <a href="#" class="footer-link">Help Center</a>
-            <a href="#" class="footer-link">Contact Support</a>
-            <a href="#" class="footer-link">Terms</a>
+            <a th:href="${appUrl} + '/help'" class="footer-link">Help Center</a>
+            <a th:href="${appUrl} + '/contact'" class="footer-link">Contact Support</a>
+            <a th:href="${appUrl} + '/terms'" class="footer-link">Terms</a>
         </div>
 
         <div class="footer-legal">
             You're receiving this email because you signed up at
             <span th:text="${appUrl}">afrochow.com</span><br>
-            © 2024 <span th:text="${appName}">Afrochow</span>. All rights reserved.<br>
+            © 2025 <span th:text="${appName}">Afrochow</span>. All rights reserved.<br>
             This is an automated message. Please do not reply directly to this email.
         </div>
     </div>
