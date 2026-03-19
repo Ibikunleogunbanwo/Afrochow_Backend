@@ -1,46 +1,45 @@
 package com.afrochow.email;
 
+import com.resend.Resend;
+import com.resend.services.emails.model.CreateEmailOptions;
 import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.MailException;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
- * Service for sending email notifications
+ * Service for sending email notifications via Resend HTTP API.
+ *
  * SECURITY:
- * - Uses JavaMailSender with TLS encryption
+ * - Uses Resend HTTP API (HTTPS/443) — not SMTP — to work on Railway
  * - Email addresses validated before sending
- * - Credentials stored in environment variables
- * - Rate limiting should be implemented for production
+ * - API key stored in environment variables
+ * - Rate limiting applied per endpoint
  *
  * FEATURES:
  * - HTML emails with Thymeleaf templates
- * - Password reset emails
- * - Order confirmation emails
- * - Welcome emails for new users
- * - Notification emails
+ * - Email verification, password reset, welcome emails
+ * - Order confirmation and status update emails
+ * - Vendor new order notifications
+ * - Payment confirmation and failure emails
  */
 @Service
 public class EmailService {
 
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
 
-    private final JavaMailSender mailSender;
+    private final Resend resend;
     private final TemplateEngine templateEngine;
 
-    @Value("${spring.mail.from:${spring.mail.username}}")
+    @Value("${resend.from:onboarding@resend.dev}")
     private String fromEmail;
 
     @Value("${spring.mail.from-name:Afrochow}")
@@ -53,7 +52,7 @@ public class EmailService {
     private String appUrl;
 
     @Getter
-    @Value("${spring.mail.enabled:false}")
+    @Value("${spring.mail.enabled:true}")
     private boolean emailEnabled;
 
     @Value("${app.email.verification.expiration-minutes:1440}")
@@ -61,8 +60,8 @@ public class EmailService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm");
 
-    public EmailService(JavaMailSender mailSender, TemplateEngine templateEngine) {
-        this.mailSender = mailSender;
+    public EmailService(Resend resend, TemplateEngine templateEngine) {
+        this.resend = resend;
         this.templateEngine = templateEngine;
     }
 
@@ -105,7 +104,7 @@ public class EmailService {
      * - Token expires after configured time
      * - Link includes token in URL parameter
      */
-    public void sendPasswordResetEmail(String email, String firstName, String resetLink){
+    public void sendPasswordResetEmail(String email, String firstName, String resetLink) {
         if (!emailEnabled) {
             logger.info("Email disabled. Would send password reset email to: {}", email);
             return;
@@ -124,7 +123,7 @@ public class EmailService {
             String htmlContent = processTemplate("password-reset", context);
 
             sendHtmlEmail(email, subject, htmlContent);
-            logger.info("Password reset email sent to: {} with link: {}", email,resetLink);
+            logger.info("Password reset email sent to: {} with link: {}", email, resetLink);
 
         } catch (Exception e) {
             logger.error("Failed to send password reset email", e);
@@ -171,11 +170,10 @@ public class EmailService {
      * - Code is single-use
      * - Code expires after configured time
      * - 6-digit numeric code for easy entry
-     * - No verification link for added security
      *
-     * @param toEmail User's email address
-     * @param verificationCode 6-digit verification code
-     * @param firstName User's first name for personalization
+     * @param toEmail            User's email address
+     * @param verificationCode   6-digit verification code
+     * @param firstName          User's first name for personalization
      */
     public void sendEmailVerificationEmail(String toEmail, String verificationCode, String firstName) {
         if (!emailEnabled) {
@@ -446,8 +444,6 @@ public class EmailService {
         if (email == null || email.trim().isEmpty()) {
             throw new IllegalArgumentException("Email address cannot be null or empty");
         }
-
-        // Basic email validation
         String emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
         if (!email.matches(emailRegex)) {
             throw new IllegalArgumentException("Invalid email address format: " + email);
@@ -455,36 +451,23 @@ public class EmailService {
     }
 
     /**
-     * Send HTML email using JavaMailSender
+     * Send HTML email via Resend HTTP API (port 443 — works on Railway)
      */
-    private void sendHtmlEmail(String to, String subject, String htmlContent)
-            throws MessagingException, MailException {
+    private void sendHtmlEmail(String to, String subject, String htmlContent) throws Exception {
+        String fromField = String.format("%s <%s>", fromName, fromEmail);
 
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        CreateEmailOptions params = CreateEmailOptions.builder()
+                .from(fromField)
+                .to(List.of(to))
+                .subject(subject)
+                .html(htmlContent)
+                .build();
 
-        try {
-            helper.setFrom(fromEmail, fromName);
-        } catch (Exception e) {
-            helper.setFrom(fromEmail);
-        }
-
-        helper.setTo(to);
-        helper.setSubject(subject);
-        helper.setText(htmlContent, true);
-
-        mailSender.send(message);
+        resend.emails().send(params);
     }
 
     /**
-     * Process Thymeleaf template with context
-     */
-    private String processTemplate(String templateName, Context context) {
-        return templateEngine.process("email/" + templateName, context);
-    }
-
-    /**
-     * Send plain text email (fallback)
+     * Send plain text email via Resend HTTP API
      */
     public void sendPlainTextEmail(String to, String subject, String text) {
         if (!emailEnabled) {
@@ -494,20 +477,27 @@ public class EmailService {
 
         try {
             validateEmail(to);
+            String fromField = String.format("%s <%s>", fromName, fromEmail);
 
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            CreateEmailOptions params = CreateEmailOptions.builder()
+                    .from(fromField)
+                    .to(List.of(to))
+                    .subject(subject)
+                    .text(text)
+                    .build();
 
-            helper.setFrom(fromEmail);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(text, false); // false = plain text
-
-            mailSender.send(message);
+            resend.emails().send(params);
             logger.info("Plain text email sent to: {}", to);
 
         } catch (Exception e) {
             logger.error("Failed to send plain text email to: {}", to, e);
         }
+    }
+
+    /**
+     * Process Thymeleaf template with context
+     */
+    private String processTemplate(String templateName, Context context) {
+        return templateEngine.process("email/" + templateName, context);
     }
 }
