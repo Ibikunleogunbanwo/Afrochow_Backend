@@ -100,6 +100,10 @@ public class CustomerProfileService {
             }
         });
 
+        // Update CustomerProfile fields
+        Optional.ofNullable(dto.getDefaultDeliveryInstructions()).ifPresent(profile::setDefaultDeliveryInstructions);
+        Optional.ofNullable(dto.getPaymentMethod()).ifPresent(profile::setPaymentMethod);
+
         // Save entities
         userRepository.save(user);
         customerProfileRepository.save(profile);
