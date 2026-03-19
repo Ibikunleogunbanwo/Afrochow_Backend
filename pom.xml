@@ -71,10 +71,11 @@
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 
-		<!-- Email -->
+		<!-- Email — Resend HTTP API (replaces JavaMailSender/SMTP to avoid Railway port 587 blocking) -->
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-mail</artifactId>
+			<groupId>com.resend</groupId>
+			<artifactId>resend-java</artifactId>
+			<version>3.1.0</version>
 		</dependency>
 
 		<!-- Thymeleaf for Email Templates -->
