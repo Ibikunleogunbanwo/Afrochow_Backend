@@ -944,6 +944,11 @@ public class AuthenticationService {
         /**
          * Create and send email verification token.
          * Revokes any existing tokens first for safety.
+         *
+         * NOTE: Email sending failures are caught here intentionally.
+         * The user account and token are already persisted, so a failed
+         * SMTP delivery should NOT roll back the registration.
+         * The user can request a resend via POST /auth/resend-verification.
          */
         private void createAndSendEmailVerificationToken(User user) {
             // Revoke any existing verification tokens (safety measure)
@@ -956,14 +961,21 @@ public class AuthenticationService {
             );
             emailVerificationTokenRepository.save(verificationToken);
 
-            // Send verification email
-            emailService.sendEmailVerificationEmail(
-                    user.getEmail(),
-                    verificationToken.getToken(),
-                    user.getFirstName()
-            );
-
-            log.info("Email verification token created and sent to: {}", user.getPublicUserId());
+            // Attempt to send verification email — failure is non-fatal
+            try {
+                emailService.sendEmailVerificationEmail(
+                        user.getEmail(),
+                        verificationToken.getToken(),
+                        user.getFirstName()
+                );
+                log.info("Email verification token created and sent to: {}", user.getPublicUserId());
+            } catch (Exception e) {
+                // SMTP failure must not roll back the user registration.
+                // The token is saved; user can request a resend.
+                log.error("SMTP failure — verification email NOT delivered to {} (userId={}). " +
+                          "Check SMTP credentials and Railway logs. User can resend via /auth/resend-verification. Error: {}",
+                          user.getEmail(), user.getPublicUserId(), e.getMessage());
+            }
         }
 
         /**

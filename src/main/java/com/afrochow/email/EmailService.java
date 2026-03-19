@@ -202,7 +202,8 @@ public class EmailService {
             logger.info("Email verification email sent to: {}", toEmail);
 
         } catch (Exception e) {
-            logger.error("Failed to send email verification email to: {}", toEmail, e);
+            logger.error("Failed to send email verification email to: {} — {}", toEmail, e.getMessage(), e);
+            throw new RuntimeException("Failed to send verification email. Please try again or contact support.", e);
         }
     }
 
