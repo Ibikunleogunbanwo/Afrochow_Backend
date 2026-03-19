@@ -279,6 +279,7 @@ com/afrochow/auth/dto/ResendVerificationDto.class
 com/afrochow/favorite/dto/FavoriteRequestDto.class
 com/afrochow/vendor/model/VendorProfile$2.class
 com/afrochow/common/exceptions/UserNameAlreadyExistsException.class
+com/afrochow/config/ResendConfig.class
 com/afrochow/order/dto/OrderUpdateRequestDto$OrderUpdateRequestDtoBuilder.class
 com/afrochow/security/model/RefreshToken.class
 com/afrochow/security/Services/SecurityEventService.class
