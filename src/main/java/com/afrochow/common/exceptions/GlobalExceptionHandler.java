@@ -6,6 +6,7 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.security.SignatureException;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -300,6 +301,14 @@ public class GlobalExceptionHandler {
             ResourceNotFoundException ex, WebRequest request) {
         logger.warn("Resource not found: {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleEntityNotFound(
+            EntityNotFoundException ex, WebRequest request) {
+        logger.warn("Entity not found: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.NOT_FOUND,
+                ex.getMessage() != null ? ex.getMessage() : "The requested resource was not found", request);
     }
 
     @ExceptionHandler(OrderNotFoundException.class)
