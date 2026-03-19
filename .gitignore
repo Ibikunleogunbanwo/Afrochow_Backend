@@ -1,0 +1,42 @@
+# ==============================================================================
+# AFROCHOW - GIT IGNORE
+# ==============================================================================
+
+# ===== SECRETS — NEVER COMMIT =====
+.env
+.env.*
+*.env
+!.env.example
+
+# ===== MAVEN BUILD OUTPUT =====
+target/
+*.jar
+*.war
+*.ear
+
+# ===== IDE FILES =====
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# ===== OS FILES =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== LOGS =====
+*.log
+logs/
+
+# ===== SPRING BOOT =====
+spring.log
+
+# ===== UPLOADS (local dev only) =====
+uploads/
+
+# ===== COMPILED CLASSES =====
+*.class
