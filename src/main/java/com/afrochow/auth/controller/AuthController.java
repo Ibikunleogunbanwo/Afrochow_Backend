@@ -264,7 +264,6 @@ public class AuthController {
     /* ==========================================================
        TOKEN MANAGEMENT ENDPOINTS
        ========================================================== */
-
     /**
      * Refresh JWT access token using refresh token.
      *
@@ -276,7 +275,7 @@ public class AuthController {
      * </ul>
      *
      * @param httpResponse Token refresh request containing refresh token
-     * @param httpRequest HTTP request for audit logging
+     * @param httpRequest  HTTP request for audit logging
      * @return New access token and new refresh token
      */
     @PostMapping("/refresh")
@@ -285,11 +284,18 @@ public class AuthController {
             description = "Get new access token using refresh token stored in HttpOnly cookie. Old refresh token will be rotated."
     )
     public ResponseEntity<ApiResponse<TokenRefreshResponseDto>> refreshToken(
-            @CookieValue(name = CookieConstants.REFRESH_TOKEN_COOKIE, required = true) String refreshToken,
+            @CookieValue(name = CookieConstants.REFRESH_TOKEN_COOKIE, required = false) String refreshToken,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        TokenRefreshResponseDto response = authenticationService.refreshTokenFromCookie(refreshToken, httpRequest, httpResponse);
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("No refresh token present — please log in again", String.valueOf(HttpStatus.UNAUTHORIZED.value())));
+        }
+
+        TokenRefreshResponseDto response = authenticationService.refreshTokenFromCookie(
+                refreshToken, httpRequest, httpResponse
+        );
         return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", response));
     }
 
