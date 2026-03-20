@@ -32,9 +32,5 @@ public class CustomerProfileRequestDto extends BaseRegistrationRequest {
     @NotNull(message = "Address is required")
     private AddressRequestDto address;
 
-    // Cross-field validation
-    @AssertTrue(message = "Passwords do not match")
-    public boolean isPasswordMatching() {
-        return getPassword() != null && getPassword().equals(getConfirmPassword());
-    }
+    // Cross-field validation handled in BaseRegistrationRequest#isPasswordMatching()
 }

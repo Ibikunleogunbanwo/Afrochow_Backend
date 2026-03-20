@@ -123,6 +123,21 @@ public class User {
 
 
 
+    // ===== PHONE NORMALIZATION =====
+    // Strips formatting and country code — always stored as 10 digits e.g. 4161234567
+    public void setPhone(String phone) {
+        if (phone == null) {
+            this.phone = null;
+            return;
+        }
+        String digits = phone.replaceAll("[^0-9]", "");
+        // Remove leading country code "1" if 11 digits (e.g. +14161234567 → 4161234567)
+        if (digits.length() == 11 && digits.startsWith("1")) {
+            digits = digits.substring(1);
+        }
+        this.phone = digits;
+    }
+
     // ===== HELPER METHODS =====
     @Transient
     public String getFullName() {
