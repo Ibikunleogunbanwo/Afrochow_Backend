@@ -29,16 +29,11 @@ public class VendorProfileUpdateRequestDto {
     private String logoUrl;
     private String bannerUrl;
 
-    // Business Verification (Admin-only fields - should be ignored for regular vendors)
+    // Business Verification
     private String businessLicenseUrl;
 
     @Size(max = 50, message = "Tax ID must not exceed 50 characters")
     private String taxId;
-
-    // Note: isVerified should typically only be updated by admins
-    private Boolean isVerified;
-
-    private Boolean isActive;
 
     // Operating Hours - Full Weekly Schedule
     @Valid

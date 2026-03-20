@@ -75,9 +75,6 @@ public class VendorProfileService {
         updateIfNotNull(request.getBusinessLicenseUrl(), vendorProfile::setBusinessLicenseUrl);
         updateIfNotNull(request.getTaxId(), vendorProfile::setTaxId);
 
-        // Update status (consider restricting isVerified to admin-only)
-        updateIfNotNull(request.getIsActive(), vendorProfile::setIsActive);
-
         // Update operating hours
         if (request.getOperatingHours() != null) {
             Map<String, VendorProfile.DayHours> entityHours =

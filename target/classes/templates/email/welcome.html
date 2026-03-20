@@ -101,13 +101,6 @@
         .greeting-emoji {
             font-size: 40px;
             display: inline-block;
-            animation: wave 1.5s ease-in-out infinite;
-        }
-
-        @keyframes wave {
-            0%, 100% { transform: rotate(0deg); }
-            25% { transform: rotate(20deg); }
-            75% { transform: rotate(-20deg); }
         }
 
         .intro {
@@ -162,18 +155,16 @@
         }
 
         .features-grid {
-            display: grid;
-            gap: 15px;
+            display: block;
         }
 
         .feature-card {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            background: #f8f9fa;
             border-left: 4px solid #667eea;
             padding: 18px 20px;
             border-radius: 10px;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
+            display: block;
+            margin-bottom: 12px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
@@ -198,7 +189,7 @@
 
         .cta-button {
             display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #667eea;
             color: white;
             padding: 18px 50px;
             text-decoration: none;
@@ -206,8 +197,6 @@
             font-weight: 700;
             font-size: 16px;
             letter-spacing: 0.5px;
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
-            transition: all 0.3s ease;
             text-transform: uppercase;
         }
 
@@ -301,10 +290,6 @@
             line-height: 1.7;
         }
 
-        .social-links {
-            margin: 25px 0 15px;
-        }
-
         .social-link {
             display: inline-block;
             width: 40px;
@@ -317,7 +302,6 @@
             color: white;
             text-decoration: none;
             font-size: 18px;
-            transition: all 0.3s ease;
         }
 
         /* Responsive design */
@@ -504,16 +488,10 @@
 
         <div class="footer-divider"></div>
 
-        <div class="social-links">
-            <a href="#" class="social-link">📘</a>
-            <a href="#" class="social-link">🐦</a>
-            <a href="#" class="social-link">📸</a>
-        </div>
-
         <div class="footer-legal">
             You're receiving this email because you created an account at
             <span th:text="${appUrl}">afrochow.com</span><br>
-            © 2024 <span th:text="${appName}">Afrochow</span>. All rights reserved.
+            © 2025 <span th:text="${appName}">Afrochow</span>. All rights reserved.
         </div>
     </div>
 </div>
