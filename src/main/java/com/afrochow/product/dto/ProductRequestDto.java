@@ -31,10 +31,12 @@ public class ProductRequestDto {
 
     @NotNull(message = "Preparation time is required")
     @Min(value = 1, message = "Preparation time must be at least 1 minute")
+    @Max(value = 180, message = "Preparation time must not exceed 180 minutes")
     @Builder.Default
     private Integer preparationTimeMinutes = 45;
 
     @Min(value = 0, message = "Calories cannot be negative")
+    @Max(value = 9999, message = "Calories must not exceed 9999")
     private Integer calories;
 
     private Boolean isVegetarian;
