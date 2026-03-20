@@ -38,8 +38,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/auth/register",
             "/api/auth/refresh",
             "/api/public/",
-            "/api/images/upload/registration",
-            "/api/images/vendor_image_registration",
+            "/api/images",                   // DELETE /api/images?imageUrl=...
+            "/api/images/",                  // GET /api/images/category/filename
             "/swagger-ui/",
             "/v3/api-docs",
             "/error",
@@ -52,8 +52,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/auth/verify-email",
             "/auth/resend-verification",
             "/public/",
-            "/images/upload/registration",
-            "/images/vendor_image_registration",
+            "/images",                       // DELETE /images?imageUrl=...
+            "/images/",                      // GET /images/category/filename
             "/swagger-ui/",
             "/v3/api-docs",
             "/error"
@@ -110,7 +110,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return cookie.getValue();
             }
         }
-
         return null;
     }
 
@@ -133,8 +132,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-        // Create a brand new SecurityContext so SecurityContextHolderFilter
-        // (Spring Security 6+) cannot clear it before AnonymousAuthenticationFilter runs.
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
@@ -190,10 +187,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 !(auth instanceof AnonymousAuthenticationToken);
     }
 
+    /**
+     * Skip JWT processing entirely for public paths.
+     * Uses startsWith so /api/images/ covers /api/images/VendorProfileImage/abc.png etc.
+     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        return PUBLIC_PATHS.stream().anyMatch(path::startsWith);
+        boolean isPublic = PUBLIC_PATHS.stream().anyMatch(path::startsWith);
+        if (isPublic) {
+            logger.debug("Skipping JWT filter for public path: {}", path);
+        }
+        return isPublic;
     }
 
     private void handleExpiredToken(JwtExpiredTokenException e) {

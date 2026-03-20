@@ -111,7 +111,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Disable CSRF - using JWT tokens (stateless)
+                // Disable CSRF — using JWT tokens (stateless)
                 .csrf(AbstractHttpConfigurer::disable)
 
                 // Enable CORS with custom configuration
@@ -120,19 +120,34 @@ public class SecurityConfig {
                 // Configure comprehensive security headers
                 .headers(this::configureSecurityHeaders)
 
-                // Configure URL-based authorization rules
                 .authorizeHttpRequests(auth -> auth
 
-                        // ADMIN ENDPOINTS
+                        // ── IMAGES — declared first, explicit per-method ──
+                        // Must be at the top so Spring Security matches these
+                        // before any authenticated() catch-all rules below.
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/images/**",
+                                "/images/**"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/images/upload/registration",
+                                "/api/images/vendor_image_registration",
+                                "/images/upload/registration",
+                                "/images/vendor_image_registration"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.DELETE,
+                                "/api/images",
+                                "/images"
+                        ).permitAll()
+
+                        // ── ADMIN ─────────────────────────────────────────
                         .requestMatchers("/auth/register/admin").hasRole("ADMIN")
                         .requestMatchers("/admin/**", "/api/v1/admin/**").hasRole("ADMIN")
 
-                        // PUBLIC ENDPOINTS
+                        // ── PUBLIC ────────────────────────────────────────
                         .requestMatchers(
                                 "/auth/register/customer",
                                 "/auth/register/vendor",
-                                "/images/upload/registration",
-                                "/images/vendor_image_registration",
                                 "/auth/login",
                                 "/auth/refresh",
                                 "/auth/logout",
@@ -141,10 +156,11 @@ public class SecurityConfig {
                                 "/auth/reset-password",
                                 "/auth/verify-email",
                                 "/auth/resend-verification",
-                                "/v1/public/**"
+                                "/v1/public/**",
+                                "/public/**"
                         ).permitAll()
 
-                        // API Documentation
+                        // ── API DOCS ──────────────────────────────────────
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
@@ -153,22 +169,16 @@ public class SecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
 
-                        // Health & Monitoring
+                        // ── HEALTH & MONITORING ───────────────────────────
                         .requestMatchers(
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
 
-                        // Public static resources
-                        .requestMatchers("/public/**").permitAll()
-
-                        // Platform Statistics
+                        // ── PLATFORM STATS ────────────────────────────────
                         .requestMatchers("/stats/**").permitAll()
 
-                        // Images - GET is public
-                        .requestMatchers(HttpMethod.GET, "/api/images/**", "/images/**").permitAll()
-
-                        // Public product browsing (GET only)
+                        // ── PUBLIC BROWSING (GET only) ────────────────────
                         .requestMatchers(HttpMethod.GET,
                                 "/products/**",
                                 "/vendors/**",
@@ -181,14 +191,14 @@ public class SecurityConfig {
                                 "/api/v1/reviews/**"
                         ).permitAll()
 
-                        // CUSTOMER ENDPOINTS
+                        // ── CUSTOMER ──────────────────────────────────────
                         .requestMatchers("/customer/**", "/api/v1/customer/**").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.POST, "/customer/profile/image").hasRole("CUSTOMER")
 
-                        // VENDOR ENDPOINTS
+                        // ── VENDOR ────────────────────────────────────────
                         .requestMatchers("/vendor/**", "/api/v1/vendor/**").hasRole("VENDOR")
 
-                        // ORDER ENDPOINTS
+                        // ── ORDERS ────────────────────────────────────────
                         .requestMatchers(HttpMethod.POST, "/orders/**", "/api/v1/orders/**")
                         .hasAnyRole("CUSTOMER", "VENDOR")
                         .requestMatchers(HttpMethod.GET, "/orders/**", "/api/v1/orders/**")
@@ -198,7 +208,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/orders/**", "/api/v1/orders/**")
                         .hasRole("ADMIN")
 
-                        // DEFAULT - all other requests require authentication
+                        // ── DEFAULT — must be last ────────────────────────
                         .anyRequest().authenticated()
                 )
 
