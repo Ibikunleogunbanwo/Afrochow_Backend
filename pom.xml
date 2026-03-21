@@ -15,7 +15,7 @@
 	<artifactId>afrochow</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Afrochow</name>
-	<description>Afrochow Application for African food Services</description>
+	<description>Afrochow Application for African food and Groceries Services</description>
 
 	<properties>
 		<!-- Java 21 required for Spring Boot 4 -->
@@ -205,6 +205,11 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<profiles>
+						<profile>dev</profile>
+					</profiles>
+				</configuration>
 			</plugin>
 
 		</plugins>

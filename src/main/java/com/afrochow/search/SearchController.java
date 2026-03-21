@@ -240,12 +240,23 @@ public class SearchController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        // Cap max page size at 100
+
         int pageSize = Math.min(size, 100);
 
         ApiResponse.PageResponse<ProductResponseDto> paginatedProducts = searchService.advancedProductSearch(
                 query, city, categoryId, minPrice, maxPrice, isVegetarian, isVegan, isGlutenFree, page, pageSize);
         return ResponseEntity.ok(ApiResponse.success("Products retrieved successfully", paginatedProducts));
+    }
+
+    @GetMapping("/products/near-coordinates")
+    @Operation(summary = "Get products near coordinates",
+            description = "Find products from vendors within radiusKm of the given lat/lng")
+    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getProductsNearCoordinates(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "25") double radiusKm) {
+        List<ProductResponseDto> products = searchService.getProductsNearCoordinates(lat, lng, radiusKm);
+        return ResponseEntity.ok(ApiResponse.success("Products near coordinates retrieved", products));
     }
 
     // ========== CATEGORY SEARCH ==========

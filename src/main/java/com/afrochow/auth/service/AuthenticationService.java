@@ -1,6 +1,7 @@
 package com.afrochow.auth.service;
 
 import com.afrochow.address.model.Address;
+import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.admin.dto.AdminProfileRequestDto;
 import com.afrochow.admin.dto.AdminProfileResponseDto;
 import com.afrochow.admin.model.AdminProfile;
@@ -24,6 +25,7 @@ import com.afrochow.security.JwtTokenProvider;
 import com.afrochow.security.Services.*;
 import com.afrochow.security.Utils.CookieConstants;
 import com.afrochow.security.Utils.CookieUtils;
+import com.afrochow.security.Utils.GeocodingService;
 import com.afrochow.security.Utils.SecurityUtils;
 import com.afrochow.security.dto.TokenRefreshResponseDto;
 import com.afrochow.security.model.CustomUserDetails;
@@ -78,6 +80,8 @@ public class AuthenticationService {
     private final AdminProfileRepository        adminProfileRepository;
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final PasswordEncoder               passwordEncoder;
+    private final GeocodingService geocodingService;
+    private final AddressRepository addressRepository;
 
     @Value("${security.password-reset.expiration-minutes:60}")
     private long passwordResetExpirationMinutes;
@@ -565,9 +569,11 @@ public class AuthenticationService {
     }
 
     private void createVendorProfile(User user, VendorProfileRequestDto request) {
+
         if (user.getVendorProfile() != null) {
             throw new IllegalStateException("User already has a vendor profile");
         }
+
         if (request.getAddress() == null) {
             throw new IllegalArgumentException("Address is required");
         }
@@ -581,16 +587,31 @@ public class AuthenticationService {
                 .defaultAddress(request.getAddress().getDefaultAddress())
                 .build();
 
+        // Geocode address
+        String formatted = address.getFormattedAddress();
+        double[] coords = geocodingService.geocode(formatted);
+
+        if (coords != null) {
+            address.setLatitude(coords[0]);
+            address.setLongitude(coords[1]);
+        }
+
+        addressRepository.save(address);
+
         String timezone = VendorProfile.getTimezoneFromProvince(request.getAddress().getProvince());
 
-        Map<String, VendorProfile.DayHours> operatingHours = convertOperatingHours(request.getOperatingHours());
+        Map<String, VendorProfile.DayHours> operatingHours =
+                convertOperatingHours(request.getOperatingHours());
 
         operatingHours.values().forEach(d -> {
             if (Boolean.TRUE.equals(d.getIsOpen())) {
                 LocalTime open  = LocalTime.parse(d.getOpenTime());
                 LocalTime close = LocalTime.parse(d.getCloseTime());
+
                 if (!close.isAfter(open)) {
-                    throw new IllegalArgumentException("Closing time must be after opening time for all open days");
+                    throw new IllegalArgumentException(
+                            "Closing time must be after opening time for all open days"
+                    );
                 }
             }
         });
@@ -618,7 +639,9 @@ public class AuthenticationService {
                 .build();
 
         vendorProfile.setOperatingHours(operatingHours);
+
         user.setVendorProfile(vendorProfile);
+
         vendorProfileRepository.save(vendorProfile);
     }
 
