@@ -44,6 +44,11 @@ public class Address {
     @Builder.Default
     private String country = "Canada";
 
+    @Column
+    private Double latitude;
+
+    @Column
+    private Double longitude;
     @Builder.Default
     private Boolean defaultAddress = false;
 

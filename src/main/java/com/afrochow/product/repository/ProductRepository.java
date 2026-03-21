@@ -181,6 +181,37 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("isGlutenFree") Boolean isGlutenFree
     );
 
+    /**
+     * Haversine formula in JPQL — finds products from vendors within
+     * :radiusKm of the given coordinates.
+     * 6371 = Earth's radius in km.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        JOIN p.vendor v
+        JOIN v.address a
+        WHERE p.available = true
+          AND v.isVerified = true
+          AND v.isActive = true
+          AND a.latitude IS NOT NULL
+          AND a.longitude IS NOT NULL
+          AND (6371 * ACOS(
+                COS(RADIANS(:lat)) * COS(RADIANS(a.latitude)) *
+                COS(RADIANS(a.longitude) - RADIANS(:lng)) +
+                SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
+              )) <= :radiusKm
+        ORDER BY (6371 * ACOS(
+                COS(RADIANS(:lat)) * COS(RADIANS(a.latitude)) *
+                COS(RADIANS(a.longitude) - RADIANS(:lng)) +
+                SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
+              )) ASC
+        """)
+    List<Product> findProductsNearCoordinates(
+            @Param("lat")      double lat,
+            @Param("lng")      double lng,
+            @Param("radiusKm") double radiusKm
+    );
+
     // ========== COUNTS ==========
 
     Long countByVendor(VendorProfile vendor);
