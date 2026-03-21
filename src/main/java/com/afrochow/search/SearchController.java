@@ -54,6 +54,15 @@ public class SearchController {
         return ResponseEntity.ok(vendors);
     }
 
+    @GetMapping("/vendors/by-product")
+    @Operation(summary = "Get vendors by product name",
+            description = "Find verified vendors that carry products matching the search query")
+    public ResponseEntity<List<VendorProfileResponseDto>> getVendorsByProductName(
+            @RequestParam String query) {
+        List<VendorProfileResponseDto> vendors = searchService.getVendorsByProductName(query);
+        return ResponseEntity.ok(vendors);
+    }
+
     @GetMapping("/vendors/city/{city}")
     @Operation(summary = "Get vendors by city", description = "Get all active vendors in a specific city")
     public ResponseEntity<List<VendorProfileResponseDto>> getVendorsByCity(@PathVariable String city) {

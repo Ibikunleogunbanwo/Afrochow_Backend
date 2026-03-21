@@ -20,7 +20,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Service for managing vendor profiles
@@ -41,16 +40,6 @@ public class VendorProfileService {
     @Transactional(readOnly = true)
     public VendorProfileResponseDto getProfile(Long userId) {
         VendorProfile vendorProfile = getVendorProfileByUserId(userId);
-        return vendorMapper.toResponseDto(vendorProfile);
-    }
-
-    /**
-     * Get vendor profile by public vendor ID (public endpoint)
-     */
-    @Transactional(readOnly = true)
-    public VendorProfileResponseDto getVendorByPublicId(String publicVendorId) {
-        VendorProfile vendorProfile = vendorProfileRepository.findByPublicVendorId(publicVendorId)
-                .orElseThrow(() -> new EntityNotFoundException("Vendor not found with ID: " + publicVendorId));
         return vendorMapper.toResponseDto(vendorProfile);
     }
 
@@ -123,7 +112,7 @@ public class VendorProfileService {
     }
 
     /**
-     * Upload vendor logo
+     * Upload vendor logo or banner image
      */
     @Transactional
     public VendorProfileResponseDto uploadImage(String username, MultipartFile file, String type) throws IOException {
@@ -162,13 +151,12 @@ public class VendorProfileService {
         return vendorMapper.toResponseDto(vendorProfile);
     }
 
-
-
-
-
     // ========== HELPER METHODS ==========
+
     /**
-     * Get vendor profile by user ID with validation
+     * Get vendor profile by user ID with validation.
+     * publicVendorId is @Transient on VendorProfile — use findByUser_PublicUserId
+     * from the repository for public ID lookups (handled in SearchService).
      */
     private VendorProfile getVendorProfileByUserId(Long userId) {
         User user = userRepository.findById(userId)

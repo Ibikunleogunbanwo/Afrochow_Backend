@@ -1,4 +1,5 @@
 package com.afrochow.product.repository;
+
 import com.afrochow.product.model.Product;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.category.model.Category;
@@ -15,30 +16,38 @@ import java.util.List;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
+    // ========== FIND BY ID ==========
+
     Optional<Product> findByPublicProductId(String publicProductId);
 
+    // ========== FIND BY VENDOR ==========
 
     List<Product> findByVendor(VendorProfile vendor);
 
     List<Product> findByVendorAndAvailable(VendorProfile vendor, Boolean available);
 
+    // ========== FIND BY CATEGORY ==========
 
     List<Product> findByCategory(Category category);
 
     List<Product> findByCategoryAndAvailable(Category category, Boolean available);
 
+    // ========== SEARCH BY NAME / DESCRIPTION ==========
 
     List<Product> findByNameContainingIgnoreCaseAndAvailable(String name, Boolean available);
 
     List<Product> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
             String name, String description);
 
+    // ========== FIND BY AVAILABILITY ==========
 
     List<Product> findByAvailable(Boolean available);
 
+    // ========== FIND BY PRICE RANGE ==========
 
     List<Product> findByPriceBetweenAndAvailable(BigDecimal minPrice, BigDecimal maxPrice, Boolean available);
 
+    // ========== FIND BY DIETARY ==========
 
     List<Product> findByIsVegetarianAndAvailable(Boolean isVegetarian, Boolean available);
 
@@ -46,23 +55,50 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findByIsGlutenFreeAndAvailable(Boolean isGlutenFree, Boolean available);
 
+    // ========== POPULAR PRODUCTS ==========
 
-    @Query("SELECT p FROM Product p ORDER BY SIZE(p.orderLines) DESC")
+    /**
+     * Products sorted by order count from active and verified vendors only.
+     */
+    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true AND p.vendor.isActive = true ORDER BY SIZE(p.orderLines) DESC")
     List<Product> findPopularProducts();
 
+    // ========== TOP RATED PRODUCTS ==========
 
-    @Query("SELECT p FROM Product p WHERE p.available = true AND SIZE(p.reviews) > 0 ORDER BY SIZE(p.reviews) DESC")
+    /**
+     * Products with at least one review, from active and verified vendors only,
+     * sorted by review count descending.
+     */
+    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true AND p.vendor.isActive = true AND SIZE(p.reviews) > 0 ORDER BY SIZE(p.reviews) DESC")
     List<Product> findTopRatedProducts();
 
-    @Query("SELECT p FROM Product p WHERE p.available = true AND " +
-           "(p.category.name = 'African Kitchen' OR p.category.name = 'African Soups') " +
-           "ORDER BY SIZE(p.orderLines) DESC")
+    // ========== CHEF SPECIALS ==========
+
+    /**
+     * Top products from African Kitchen or African Soups categories,
+     * from active and verified vendors only, sorted by order count.
+     */
+    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true AND p.vendor.isActive = true AND " +
+            "(p.category.name = 'African Kitchen' OR p.category.name = 'African Soups') " +
+            "ORDER BY SIZE(p.orderLines) DESC")
     List<Product> findChefSpecials();
 
-    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true " +
-           "ORDER BY SIZE(p.orderLines) DESC, SIZE(p.reviews) DESC")
+    // ========== FEATURED PRODUCTS ==========
+
+    /**
+     * Top products from active and verified vendors only,
+     * sorted by order count then review count.
+     */
+    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true AND p.vendor.isActive = true " +
+            "ORDER BY SIZE(p.orderLines) DESC, SIZE(p.reviews) DESC")
     List<Product> findFeaturedProducts();
 
+    // ========== PRODUCTS BY BEST RESTAURANTS NEAR ME ==========
+
+    /**
+     * Top products from active vendors in a specific city,
+     * sorted by review count and order count.
+     */
     @Query("""
                 SELECT p FROM Product p
                 JOIN p.vendor v
@@ -71,6 +107,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                 LEFT JOIN p.orderLines ol
                 WHERE p.available = true
                   AND v.isActive = true
+                  AND v.isVerified = true
                   AND a.city = :city
                 GROUP BY p.productId
                 ORDER BY COUNT(DISTINCT r.reviewId) DESC,
@@ -78,21 +115,38 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                 """)
     List<Product> findProductsByBestRestaurantsInCity(@Param("city") String city);
 
+    // ========== MOST POPULAR PRODUCTS THIS MONTH ==========
 
+    /**
+     * Top products by order count within a time window,
+     * from active and verified vendors only.
+     */
     @Query("SELECT p FROM Product p JOIN p.orderLines ol JOIN ol.order o " +
-           "WHERE p.available = true " +
-           "AND o.orderTime >= :startOfMonth " +
-           "GROUP BY p " +
-           "ORDER BY COUNT(ol) DESC")
-    List<Product> findMostPopularProductsThisMonth(LocalDateTime startOfMonth);
+            "WHERE p.available = true " +
+            "AND p.vendor.isVerified = true " +
+            "AND p.vendor.isActive = true " +
+            "AND o.orderTime >= :startOfMonth " +
+            "GROUP BY p " +
+            "ORDER BY COUNT(ol) DESC")
+    List<Product> findMostPopularProductsThisMonth(@Param("startOfMonth") LocalDateTime startOfMonth);
 
+    /**
+     * Top products by order count within a time window filtered by city,
+     * from active and verified vendors only.
+     */
     @Query("SELECT p FROM Product p JOIN p.orderLines ol JOIN ol.order o " +
-           "WHERE p.available = true " +
-           "AND o.orderTime >= :startOfMonth " +
-           "AND p.vendor.address.city = :city " +
-           "GROUP BY p " +
-           "ORDER BY COUNT(ol) DESC")
-    List<Product> findMostPopularProductsThisMonthByCity(LocalDateTime startOfMonth, String city);
+            "WHERE p.available = true " +
+            "AND p.vendor.isVerified = true " +
+            "AND p.vendor.isActive = true " +
+            "AND o.orderTime >= :startOfMonth " +
+            "AND p.vendor.address.city = :city " +
+            "GROUP BY p " +
+            "ORDER BY COUNT(ol) DESC")
+    List<Product> findMostPopularProductsThisMonthByCity(
+            @Param("startOfMonth") LocalDateTime startOfMonth,
+            @Param("city") String city);
+
+    // ========== COUNTS ==========
 
     Long countByVendor(VendorProfile vendor);
 

@@ -29,12 +29,16 @@ import com.afrochow.common.enums.Province;
         @Index(name = "idx_is_verified", columnList = "isVerified"),
         @Index(name = "idx_cuisine_type", columnList = "cuisineType")
 })
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = {"user", "products", "orders", "reviews"})
 public class VendorProfile {
 
+    @EqualsAndHashCode.Include
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -202,9 +206,6 @@ public class VendorProfile {
         return reviews != null ? reviews.size() : 0;
     }
 
-    /**
-     * Resolve vendor's timezone — uses stored timezone or falls back to Mountain Time
-     */
     @Transient
     private ZoneId getVendorZone() {
         try {
@@ -214,9 +215,6 @@ public class VendorProfile {
         }
     }
 
-    /**
-     * Auto-detect timezone from province — call this during vendor registration
-     */
     public static String getTimezoneFromProvince(Province province) {
         if (province == null) return "America/Edmonton";
 
@@ -238,9 +236,6 @@ public class VendorProfile {
         };
     }
 
-    /**
-     * Check if vendor is currently open based on operating hours and vendor timezone
-     */
     @Transient
     public boolean isOpenNow() {
         if (!isActive) return false;
@@ -260,7 +255,6 @@ public class VendorProfile {
             LocalTime openTime = LocalTime.parse(todayHours.getOpenTime());
             LocalTime closeTime = LocalTime.parse(todayHours.getCloseTime());
 
-            // Handle overnight hours (e.g. 22:00 - 02:00)
             if (closeTime.isBefore(openTime)) {
                 return now.isAfter(openTime) || now.isBefore(closeTime);
             }
@@ -271,9 +265,6 @@ public class VendorProfile {
         }
     }
 
-    /**
-     * Get today's operating hours as formatted string using vendor timezone
-     */
     @Transient
     public String getTodayHoursFormatted() {
         Map<String, DayHours> hours = getOperatingHours();
@@ -291,9 +282,6 @@ public class VendorProfile {
                 todayHours.getCloseTime());
     }
 
-    /**
-     * Check if vendor has at least one day open
-     */
     @Transient
     public boolean hasOperatingDays() {
         Map<String, DayHours> hours = getOperatingHours();
@@ -349,9 +337,12 @@ public class VendorProfile {
 
     // ========== INNER CLASS FOR DAY HOURS ==========
 
-    @Data
+    @Getter
+    @Setter
     @NoArgsConstructor
     @AllArgsConstructor
+    @EqualsAndHashCode
+    @ToString
     public static class DayHours {
         private Boolean isOpen;
         private String openTime;
