@@ -1,7 +1,9 @@
 package com.afrochow.vendor.repository;
 
 import com.afrochow.vendor.model.VendorProfile;
-import com.afrochow.user.model.User;
+import com.afrochow.common.enums.Province;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,13 +17,17 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     // ========== FIND BY USER ==========
 
-    Optional<VendorProfile> findByUser(User user);
-
     Optional<VendorProfile> findByUser_UserId(Long userId);
 
     Optional<VendorProfile> findByUser_PublicUserId(String publicUserId);
 
-    Optional<VendorProfile> findByPublicVendorId(String publicVendorId);
+    Optional<VendorProfile> findByUser_Username(String username);
+
+    // ========== FIND BY PUBLIC VENDOR ID ==========
+    // Alias used by AdminVendorManagementController
+    default Optional<VendorProfile> findByPublicVendorId(String publicVendorId) {
+        return findByUser_PublicUserId(publicVendorId);
+    }
 
     // ========== SEARCH BY NAME ==========
 
@@ -43,35 +49,43 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     // ========== FIND OPEN VENDORS ==========
 
-    /**
-     * Find all active vendors (filtering by open status must be done in-memory)
-     * Note: isOpenNow() is a @Transient method that cannot be used in queries
-     */
-    @Query("SELECT v FROM VendorProfile v WHERE v.isActive = true")
+    @Query("SELECT v FROM VendorProfile v WHERE v.isActive = true AND v.isVerified = true")
     List<VendorProfile> findOpenVendors();
 
     // ========== TOP RATED VENDORS ==========
 
-    @Query("SELECT v FROM VendorProfile v WHERE v.isActive = true ORDER BY SIZE(v.reviews) DESC")
-    List<VendorProfile> findTopRatedVendors();
+    @Query("""
+            SELECT v FROM VendorProfile v
+            WHERE v.isActive = true
+              AND v.isVerified = true
+              AND (SELECT COUNT(r) FROM Review r WHERE r.vendor = v AND r.isVisible = true) >= :minReviews
+            ORDER BY (SELECT COALESCE(AVG(CAST(r.rating AS double)), 0.0) FROM Review r WHERE r.vendor = v AND r.isVisible = true) DESC
+            """)
+    Page<VendorProfile> findTopRatedVendors(@Param("minReviews") int minReviews, Pageable pageable);
 
     // ========== FIND BY LOCATION ==========
 
-    @Query("SELECT v FROM VendorProfile v WHERE v.address.city = :city AND v.isActive = true")
+    @Query("SELECT v FROM VendorProfile v JOIN v.address a WHERE a.city = :city AND v.isActive = true AND v.isVerified = true")
     List<VendorProfile> findByCity(@Param("city") String city);
+
+    @Query("SELECT v FROM VendorProfile v JOIN v.address a WHERE a.province = :province AND v.isActive = true AND v.isVerified = true")
+    List<VendorProfile> findByProvince(@Param("province") Province province);
 
     // ========== COUNTS ==========
 
-    long countByIsActive(boolean active);
+    @Query("SELECT COUNT(v) FROM VendorProfile v WHERE v.isActive = true")
+    long countActiveVendors();
 
-    long countByIsActiveTrue();
+    // Alias used by StatsService
+    default long countByIsActiveTrue() {
+        return countActiveVendors();
+    }
 
-    long countByIsVerifiedTrueAndIsActiveTrue();
+    @Query("SELECT COUNT(v) FROM VendorProfile v WHERE v.isActive = true AND v.isVerified = true")
+    long countActiveAndVerifiedVendors();
 
-    Long countBy();
-
-    @Query("SELECT v FROM VendorProfile v JOIN FETCH v.user u WHERE u.username = :username")
-    Optional<VendorProfile> findByUser_Username(@Param("username") String username);
-
-    Long countByIsVerified(Boolean isVerified);
+    // Alias used by StatsService
+    default long countByIsVerifiedTrueAndIsActiveTrue() {
+        return countActiveAndVerifiedVendors();
+    }
 }
