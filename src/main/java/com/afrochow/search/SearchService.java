@@ -555,6 +555,16 @@ public class SearchService {
                 .toList();
     }
 
+    // SearchService.java
+    @Transactional(readOnly = true)
+    public List<ProductResponseDto> getProductsNearCoordinates(double lat, double lng, double radiusKm) {
+        return productRepository.findProductsNearCoordinates(lat, lng, radiusKm)
+                .stream()
+                .limit(12)
+                .map(this::toProductResponseDto)
+                .toList();
+    }
+
     // ========== INNER CLASSES ==========
 
     @lombok.Data

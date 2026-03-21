@@ -173,6 +173,7 @@ com/afrochow/vendor/dto/VendorProfileRequestDto$DayHoursDto.class
 com/afrochow/category/dto/CategoryResponseDto$CategoryResponseDtoBuilder.class
 com/afrochow/analytics/AnalyticsService$VendorAnalytics.class
 com/afrochow/customer/dto/CustomerDashboardDto$CustomerDashboardDtoBuilder.class
+com/afrochow/security/Utils/GeocodingService.class
 com/afrochow/payment/model/Payment.class
 com/afrochow/order/dto/OrderSummaryResponseDto.class
 com/afrochow/review/dto/ReviewRequestDto.class
