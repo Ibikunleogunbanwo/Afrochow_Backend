@@ -1,4 +1,5 @@
 package com.afrochow.user.model;
+
 import com.afrochow.admin.model.AdminProfile;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.review.model.Review;
@@ -23,12 +24,16 @@ import java.util.UUID;
         @Index(name = "idx_public_user_id", columnList = "publicUserId"),
         @Index(name = "idx_phone", columnList = "phone")
 })
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(exclude = {"customerProfile", "vendorProfile", "adminProfile", "reviews"})
 public class User {
 
+    @EqualsAndHashCode.Include
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long userId;
@@ -121,17 +126,13 @@ public class User {
         return combined.substring(0, Math.min(combined.length(), 50));
     }
 
-
-
     // ===== PHONE NORMALIZATION =====
-    // Strips formatting and country code — always stored as 10 digits e.g. 4161234567
     public void setPhone(String phone) {
         if (phone == null) {
             this.phone = null;
             return;
         }
         String digits = phone.replaceAll("[^0-9]", "");
-        // Remove leading country code "1" if 11 digits (e.g. +14161234567 → 4161234567)
         if (digits.length() == 11 && digits.startsWith("1")) {
             digits = digits.substring(1);
         }

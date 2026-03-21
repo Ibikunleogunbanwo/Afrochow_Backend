@@ -13,6 +13,7 @@ import com.afrochow.vendor.VendorMapper;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,43 +54,62 @@ public class SearchService {
     @Transactional(readOnly = true)
     public VendorProfileResponseDto getVendorByPublicId(String publicUserId) {
         VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(publicUserId)
-                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Vendor not found with ID: " + publicUserId));
-
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
+                        "Vendor not found with ID: " + publicUserId));
         return vendorMapper.toResponseDto(vendor);
     }
 
     /**
-     * Search for vendors by name or cuisine type
+     * Search for vendors by name or cuisine type.
+     * Only returns active and verified vendors.
      */
     @Transactional(readOnly = true)
     public List<VendorProfileResponseDto> searchVendors(String query) {
         List<VendorProfile> vendors = vendorProfileRepository.findByRestaurantNameContainingIgnoreCase(query);
-
-        // Also search by cuisine type and merge results
         List<VendorProfile> byCuisine = vendorProfileRepository.findByCuisineTypeContainingIgnoreCase(query);
 
-        // Merge and remove duplicates
         vendors.addAll(byCuisine);
         return vendors.stream()
                 .distinct()
-                .filter(VendorProfile::getIsActive)
+                .filter(v -> v.getIsActive() && v.getIsVerified())
                 .map(vendorMapper::toResponseDto)
                 .toList();
     }
 
     /**
-     * Get vendors by cuisine type
+     * Find vendors by product name — returns distinct verified+active vendors
+     * that carry at least one available product matching the query.
+     */
+    @Transactional(readOnly = true)
+    public List<VendorProfileResponseDto> getVendorsByProductName(String query) {
+        return productRepository
+                .findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query)
+                .stream()
+                .filter(p -> p.getAvailable()
+                        && p.getVendor() != null
+                        && p.getVendor().getIsActive()
+                        && p.getVendor().getIsVerified())
+                .map(Product::getVendor)
+                .distinct()
+                .map(vendorMapper::toResponseDto)
+                .toList();
+    }
+
+    /**
+     * Get vendors by cuisine type.
+     * Only returns active and verified vendors.
      */
     @Transactional(readOnly = true)
     public List<VendorProfileResponseDto> getVendorsByCuisine(String cuisineType) {
         return vendorProfileRepository.findByCuisineTypeIgnoreCase(cuisineType).stream()
-                .filter(VendorProfile::getIsActive)
+                .filter(v -> v.getIsActive() && v.getIsVerified())
                 .map(vendorMapper::toResponseDto)
                 .toList();
     }
 
     /**
-     * Get vendors by city
+     * Get vendors by city.
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<VendorProfileResponseDto> getVendorsByCity(String city) {
@@ -99,29 +119,32 @@ public class SearchService {
     }
 
     /**
-     * Get currently open vendors
-     * Note: Open status is calculated from operating hours, so filtering is done in-memory
+     * Get currently open vendors.
+     * isOpenNow() is @Transient — filtering must be done in-memory after DB fetch.
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<VendorProfileResponseDto> getOpenVendors() {
         return vendorProfileRepository.findOpenVendors().stream()
-                .filter(VendorProfile::isOpenNow)  // Filter in-memory based on current time
+                .filter(VendorProfile::isOpenNow)
                 .map(vendorMapper::toResponseDto)
                 .toList();
     }
 
     /**
-     * Get top-rated vendors
+     * Get top-rated vendors.
+     * Repository query already filters by isActive and isVerified,
+     * and requires a minimum of 5 visible reviews.
      */
     @Transactional(readOnly = true)
     public List<VendorProfileResponseDto> getTopRatedVendors() {
-        return vendorProfileRepository.findTopRatedVendors().stream()
+        return vendorProfileRepository.findTopRatedVendors(5, PageRequest.of(0, 30)).stream()
                 .map(vendorMapper::toResponseDto)
                 .toList();
     }
 
     /**
-     * Get verified and active vendors
+     * Get verified and active vendors.
      */
     @Transactional(readOnly = true)
     public List<VendorProfileResponseDto> getVerifiedVendors() {
@@ -132,36 +155,31 @@ public class SearchService {
 
     /**
      * Get popular cuisines with vendor count, total orders, average rating,
-     * sample vendors and products for frontend display
+     * sample vendors and products for frontend display.
+     * Only includes active vendors.
      */
     @Transactional(readOnly = true)
     public List<PopularCuisineDto> getPopularCuisines() {
-        // Get all active vendors
         List<VendorProfile> allVendors = vendorProfileRepository.findByIsActive(true);
 
-        // Group by cuisine type and calculate statistics
         Map<String, List<VendorProfile>> cuisineGroups = allVendors.stream()
                 .filter(v -> v.getCuisineType() != null && !v.getCuisineType().isBlank())
                 .collect(Collectors.groupingBy(VendorProfile::getCuisineType));
 
-        // Build PopularCuisineDto for each cuisine
         return cuisineGroups.entrySet().stream()
                 .map(entry -> {
                     String cuisineType = entry.getKey();
                     List<VendorProfile> vendors = entry.getValue();
 
-                    // Calculate total orders across all vendors for this cuisine
                     Long totalOrders = vendors.stream()
                             .mapToLong(VendorProfile::getTotalOrdersCompleted)
                             .sum();
 
-                    // Calculate average rating across all vendors for this cuisine
                     double averageRating = vendors.stream()
                             .mapToDouble(VendorProfile::getAverageRating)
                             .average()
                             .orElse(0.0);
 
-                    // Get top 3 vendors by total orders
                     List<PopularCuisineDto.VendorSummary> sampleVendors = vendors.stream()
                             .sorted(Comparator.comparingInt(VendorProfile::getTotalOrdersCompleted).reversed())
                             .limit(3)
@@ -175,7 +193,6 @@ public class SearchService {
                                     .build())
                             .toList();
 
-                    // Get sample products from vendors (max 6 products)
                     List<PopularCuisineDto.ProductSummary> sampleProducts = vendors.stream()
                             .flatMap(v -> v.getProducts().stream())
                             .filter(Product::getAvailable)
@@ -192,7 +209,6 @@ public class SearchService {
                                     .build())
                             .toList();
 
-                    // Get representative image (from first vendor with logo or first product with image)
                     String imageUrl = vendors.stream()
                             .map(VendorProfile::getLogoUrl)
                             .filter(url -> url != null && !url.isBlank())
@@ -207,7 +223,7 @@ public class SearchService {
                             .cuisineType(cuisineType)
                             .vendorCount((long) vendors.size())
                             .totalOrders(totalOrders)
-                            .averageRating(Math.round(averageRating * 10.0) / 10.0) // Round to 1 decimal
+                            .averageRating(Math.round(averageRating * 10.0) / 10.0)
                             .sampleVendors(sampleVendors)
                             .sampleProducts(sampleProducts)
                             .imageUrl(imageUrl)
@@ -220,29 +236,36 @@ public class SearchService {
     // ========== PRODUCT SEARCH ==========
 
     /**
-     * Search for products by name or description
+     * Search for products by name or description.
+     * Only returns available products from active and verified vendors.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> searchProducts(String query) {
         return productRepository
                 .findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query).stream()
                 .filter(Product::getAvailable)
+                .filter(p -> p.getVendor() != null
+                        && p.getVendor().getIsVerified()
+                        && p.getVendor().getIsActive())
                 .map(this::toProductResponseDto)
                 .toList();
     }
 
     /**
-     * Search for available products by name
+     * Search for available products by name.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> searchProductsByName(String name) {
         return productRepository.findByNameContainingIgnoreCaseAndAvailable(name, true).stream()
+                .filter(p -> p.getVendor() != null
+                        && p.getVendor().getIsVerified()
+                        && p.getVendor().getIsActive())
                 .map(this::toProductResponseDto)
                 .toList();
     }
 
     /**
-     * Get products by category
+     * Get products by category.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getProductsByCategory(Long categoryId) {
@@ -250,52 +273,68 @@ public class SearchService {
                 .orElseThrow(() -> new IllegalArgumentException("Category not found"));
 
         return productRepository.findByCategoryAndAvailable(category, true).stream()
+                .filter(p -> p.getVendor() != null
+                        && p.getVendor().getIsVerified()
+                        && p.getVendor().getIsActive())
                 .map(this::toProductResponseDto)
                 .toList();
     }
 
     /**
-     * Get products by price range
+     * Get products by price range.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
         return productRepository.findByPriceBetweenAndAvailable(minPrice, maxPrice, true).stream()
+                .filter(p -> p.getVendor() != null
+                        && p.getVendor().getIsVerified()
+                        && p.getVendor().getIsActive())
                 .map(this::toProductResponseDto)
                 .toList();
     }
 
     /**
-     * Get vegetarian products
+     * Get vegetarian products.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getVegetarianProducts() {
         return productRepository.findByIsVegetarianAndAvailable(true, true).stream()
+                .filter(p -> p.getVendor() != null
+                        && p.getVendor().getIsVerified()
+                        && p.getVendor().getIsActive())
                 .map(this::toProductResponseDto)
                 .toList();
     }
 
     /**
-     * Get vegan products
+     * Get vegan products.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getVeganProducts() {
         return productRepository.findByIsVeganAndAvailable(true, true).stream()
+                .filter(p -> p.getVendor() != null
+                        && p.getVendor().getIsVerified()
+                        && p.getVendor().getIsActive())
                 .map(this::toProductResponseDto)
                 .toList();
     }
 
     /**
-     * Get gluten-free products
+     * Get gluten-free products.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getGlutenFreeProducts() {
         return productRepository.findByIsGlutenFreeAndAvailable(true, true).stream()
+                .filter(p -> p.getVendor() != null
+                        && p.getVendor().getIsVerified()
+                        && p.getVendor().getIsActive())
                 .map(this::toProductResponseDto)
                 .toList();
     }
 
     /**
-     * Get popular products
+     * Get popular products.
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getPopularProducts() {
@@ -307,21 +346,21 @@ public class SearchService {
     }
 
     /**
-     * Get Chef's Special products from African Kitchen or African Soups categories
-     * Returns top products sorted by order count and rating
+     * Get Chef's Special products from African Kitchen or African Soups categories.
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getChefSpecials() {
         return productRepository.findChefSpecials().stream()
-                .sorted(Comparator.comparing(Product::getAverageRating).reversed()) // Secondary sort by rating
+                .sorted(Comparator.comparing(Product::getAverageRating).reversed())
                 .limit(10)
                 .map(this::toProductResponseDto)
                 .toList();
     }
 
     /**
-     * Get Featured Products - highly ordered products from verified vendors
-     * Returns top products sorted by order count and review count
+     * Get Featured Products — highly ordered products from active and verified vendors.
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getFeaturedProducts() {
@@ -332,8 +371,8 @@ public class SearchService {
     }
 
     /**
-     * Get products from best restaurants near user (by city)
-     * Returns products from top-rated restaurants in the specified city
+     * Get products from best restaurants near user (by city).
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getProductsFromBestRestaurantsNearMe(String city) {
@@ -344,13 +383,11 @@ public class SearchService {
     }
 
     /**
-     * Get most popular products in the last 3 months
-     * Returns products with the most orders in the last 3 months (better for MVP with limited data)
-     * Optionally filtered by city
+     * Get most popular products in the last 3 months, optionally filtered by city.
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getMostPopularProductsThisMonth(String city) {
-        // Go back 3 months to get enough data for MVP
         java.time.LocalDateTime threeMonthsAgo = java.time.LocalDateTime.now()
                 .minusMonths(3)
                 .withDayOfMonth(1)
@@ -373,9 +410,9 @@ public class SearchService {
     }
 
     /**
-     * Get top N popular product names only (lightweight for frontend)
-     * Returns simple array of unique product names sorted by order count
-     * Excludes products from "African Groceries" and "Farm Produce" categories
+     * Get top N popular product names only (lightweight for frontend).
+     * Excludes African Groceries and Farm Produce categories.
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<String> getPopularProductNames(int limit) {
@@ -387,13 +424,14 @@ public class SearchService {
                             && !categoryName.equalsIgnoreCase("Farm Produce");
                 })
                 .map(Product::getName)
-                .distinct()  // Ensure no duplicate product names
+                .distinct()
                 .limit(limit)
                 .toList();
     }
 
     /**
-     * Get top-rated products
+     * Get top-rated products.
+     * Repository query already filters by isActive and isVerified.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getTopRatedProducts() {
@@ -406,7 +444,7 @@ public class SearchService {
     // ========== CATEGORY SEARCH ==========
 
     /**
-     * Search for categories by name
+     * Search for categories by name.
      */
     @Transactional(readOnly = true)
     public List<CategoryResponseDto> searchCategories(String query) {
@@ -416,7 +454,7 @@ public class SearchService {
     }
 
     /**
-     * Get all active categories
+     * Get all active categories ordered by display order.
      */
     @Transactional(readOnly = true)
     public List<CategoryResponseDto> getAllActiveCategories() {
@@ -428,9 +466,9 @@ public class SearchService {
     // ========== ADVANCED FILTERS ==========
 
     /**
-     * Advanced product search with multiple filters including vendor location
-     * Supports pagination with page and size parameters
-     * Returns PageResponse with metadata (total count, page info, etc.)
+     * Advanced product search with multiple filters including vendor location.
+     * Only returns products from active and verified vendors.
+     * Supports pagination with page and size parameters.
      */
     @Transactional(readOnly = true)
     public ApiResponse.PageResponse<ProductResponseDto> advancedProductSearch(
@@ -453,13 +491,15 @@ public class SearchService {
             products = productRepository.findByAvailable(true);
         }
 
-        // Apply all filters and collect to list
         List<ProductResponseDto> filteredProducts = products.stream()
                 .filter(Product::getAvailable)
+                .filter(p -> p.getVendor() != null
+                        && p.getVendor().getIsVerified()
+                        && p.getVendor().getIsActive())
                 .filter(p -> city == null || city.isBlank() ||
-                        (p.getVendor() != null &&
-                         p.getVendor().getAddress().getCity()!= null &&
-                         p.getVendor().getAddress().getCity().equalsIgnoreCase(city)))
+                        (p.getVendor().getAddress() != null &&
+                                p.getVendor().getAddress().getCity() != null &&
+                                p.getVendor().getAddress().getCity().equalsIgnoreCase(city)))
                 .filter(p -> categoryId == null ||
                         (p.getCategory() != null && p.getCategory().getCategoryId().equals(categoryId)))
                 .filter(p -> minPrice == null || p.getPrice().compareTo(minPrice) >= 0)
@@ -470,19 +510,15 @@ public class SearchService {
                 .map(this::toProductResponseDto)
                 .toList();
 
-        // Calculate pagination metadata
         long totalElements = filteredProducts.size();
         int totalPages = (int) Math.ceil((double) totalElements / size);
         int startIndex = page * size;
         int endIndex = Math.min(startIndex + size, (int) totalElements);
 
-        // Get current page content
         List<ProductResponseDto> pageContent = filteredProducts.subList(
                 Math.min(startIndex, (int) totalElements),
-                Math.min(endIndex, (int) totalElements)
-        );
+                Math.min(endIndex, (int) totalElements));
 
-        // Build PageResponse
         return ApiResponse.PageResponse.<ProductResponseDto>builder()
                 .content(pageContent)
                 .pageNumber(page)
@@ -497,7 +533,8 @@ public class SearchService {
     }
 
     /**
-     * Advanced vendor search with filters
+     * Advanced vendor search with filters.
+     * Always filters by isActive; respects isVerified param if provided.
      */
     @Transactional(readOnly = true)
     public List<VendorProfileResponseDto> advancedVendorSearch(
@@ -508,7 +545,6 @@ public class SearchService {
             Boolean isOpenNow) {
 
         List<VendorProfile> vendors;
-
         if (query != null && !query.isBlank()) {
             vendors = vendorProfileRepository.findByRestaurantNameContainingIgnoreCase(query);
             List<VendorProfile> byCuisine = vendorProfileRepository.findByCuisineTypeContainingIgnoreCase(query);
@@ -530,7 +566,7 @@ public class SearchService {
                 .toList();
     }
 
-    // ========== INNER CLASSES FOR SEARCH RESULTS ==========
+    // ========== INNER CLASSES ==========
 
     @lombok.Data
     @lombok.Builder
@@ -560,7 +596,6 @@ public class SearchService {
                 .restaurantName(product.getVendor() != null ? product.getVendor().getRestaurantName() : null)
                 .categoryId(product.getCategory() != null ? product.getCategory().getCategoryId() : null)
                 .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
-                // Vendor Address Information
                 .vendorAddressLine(product.getVendor() != null && product.getVendor().getAddress() != null
                         ? product.getVendor().getAddress().getAddressLine() : null)
                 .vendorCity(product.getVendor() != null && product.getVendor().getAddress() != null
