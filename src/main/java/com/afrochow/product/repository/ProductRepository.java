@@ -146,6 +146,41 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("startOfMonth") LocalDateTime startOfMonth,
             @Param("city") String city);
 
+
+    // ========== ADVANCED SEARCH ==========
+
+    /**
+     * Search available products by name only, from active and verified vendors.
+     * Optionally filter by city — pass null to skip city filter.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        JOIN p.vendor v
+        JOIN v.address a
+        WHERE p.available = true
+          AND v.isVerified = true
+          AND v.isActive = true
+          AND (:name IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')))
+          AND (:city IS NULL OR LOWER(a.city) = LOWER(:city))
+          AND (:categoryId IS NULL OR p.category.categoryId = :categoryId)
+          AND (:minPrice IS NULL OR p.price >= :minPrice)
+          AND (:maxPrice IS NULL OR p.price <= :maxPrice)
+          AND (:isVegetarian IS NULL OR p.isVegetarian = :isVegetarian)
+          AND (:isVegan IS NULL OR p.isVegan = :isVegan)
+          AND (:isGlutenFree IS NULL OR p.isGlutenFree = :isGlutenFree)
+        ORDER BY SIZE(p.orderLines) DESC
+        """)
+    List<Product> findByFilters(
+            @Param("name")         String name,
+            @Param("city")         String city,
+            @Param("categoryId")   Long categoryId,
+            @Param("minPrice")     BigDecimal minPrice,
+            @Param("maxPrice")     BigDecimal maxPrice,
+            @Param("isVegetarian") Boolean isVegetarian,
+            @Param("isVegan")      Boolean isVegan,
+            @Param("isGlutenFree") Boolean isGlutenFree
+    );
+
     // ========== COUNTS ==========
 
     Long countByVendor(VendorProfile vendor);
