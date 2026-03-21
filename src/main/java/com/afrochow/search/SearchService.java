@@ -483,41 +483,31 @@ public class SearchService {
             int page,
             int size) {
 
-        List<Product> products;
-        if (query != null && !query.isBlank()) {
-            products = productRepository
-                    .findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query);
-        } else {
-            products = productRepository.findByAvailable(true);
-        }
+        // Normalize nulls so JPQL :param IS NULL checks work correctly
+        String  nameParam  = (query != null && !query.isBlank())  ? query.trim()  : null;
+        String  cityParam  = (city  != null && !city.isBlank())   ? city.trim()   : null;
 
-        List<ProductResponseDto> filteredProducts = products.stream()
-                .filter(Product::getAvailable)
-                .filter(p -> p.getVendor() != null
-                        && p.getVendor().getIsVerified()
-                        && p.getVendor().getIsActive())
-                .filter(p -> city == null || city.isBlank() ||
-                        (p.getVendor().getAddress() != null &&
-                                p.getVendor().getAddress().getCity() != null &&
-                                p.getVendor().getAddress().getCity().equalsIgnoreCase(city)))
-                .filter(p -> categoryId == null ||
-                        (p.getCategory() != null && p.getCategory().getCategoryId().equals(categoryId)))
-                .filter(p -> minPrice == null || p.getPrice().compareTo(minPrice) >= 0)
-                .filter(p -> maxPrice == null || p.getPrice().compareTo(maxPrice) <= 0)
-                .filter(p -> isVegetarian == null || p.getIsVegetarian().equals(isVegetarian))
-                .filter(p -> isVegan == null || p.getIsVegan().equals(isVegan))
-                .filter(p -> isGlutenFree == null || p.getIsGlutenFree().equals(isGlutenFree))
+        List<Product> matched = productRepository.findByFilters(
+                nameParam,
+                cityParam,
+                categoryId,
+                minPrice,
+                maxPrice,
+                isVegetarian,
+                isVegan,
+                isGlutenFree
+        );
+
+        long totalElements = matched.size();
+        int  totalPages    = (int) Math.ceil((double) totalElements / size);
+        int  startIndex    = Math.min(page * size, (int) totalElements);
+        int  endIndex      = Math.min(startIndex + size, (int) totalElements);
+
+        List<ProductResponseDto> pageContent = matched
+                .subList(startIndex, endIndex)
+                .stream()
                 .map(this::toProductResponseDto)
                 .toList();
-
-        long totalElements = filteredProducts.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-        int startIndex = page * size;
-        int endIndex = Math.min(startIndex + size, (int) totalElements);
-
-        List<ProductResponseDto> pageContent = filteredProducts.subList(
-                Math.min(startIndex, (int) totalElements),
-                Math.min(endIndex, (int) totalElements));
 
         return ApiResponse.PageResponse.<ProductResponseDto>builder()
                 .content(pageContent)
@@ -531,7 +521,6 @@ public class SearchService {
                 .hasPrevious(page > 0)
                 .build();
     }
-
     /**
      * Advanced vendor search with filters.
      * Always filters by isActive; respects isVerified param if provided.
