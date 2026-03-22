@@ -16,6 +16,8 @@ public class PaymentResponseDto {
 
     private String publicOrderId;
     private BigDecimal amount;
+    private BigDecimal platformFeeAmount;
+    private BigDecimal vendorPayout;
     private PaymentStatus status;
     private PaymentMethod paymentMethod;
     private String transactionId;

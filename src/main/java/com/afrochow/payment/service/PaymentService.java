@@ -13,6 +13,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,12 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final NotificationService notificationService;
+
+    @Value("${stripe.platform.fee-percent:10}")
+    private int platformFeePercent;
+
+    @Value("${stripe.connect.required:true}")
+    private boolean connectRequired;
 
     public PaymentService(
             PaymentRepository paymentRepository,
@@ -66,6 +73,15 @@ public class PaymentService {
             throw new IllegalStateException("Payment is not in pending status");
         }
 
+        String vendorStripeAccountId = order.getVendor().getStripeAccountId();
+        boolean useConnect = connectRequired &&
+                vendorStripeAccountId != null &&
+                !vendorStripeAccountId.isBlank();
+        if (connectRequired && !useConnect) {
+            throw new IllegalStateException(
+                    "Vendor does not have a Stripe account configured for payouts");
+        }
+
         try {
             // Stripe works in the smallest currency unit — convert dollars to cents
             long amountInCents = order.getTotalAmount()
@@ -73,8 +89,13 @@ public class PaymentService {
                     .setScale(0, RoundingMode.HALF_UP)
                     .longValueExact();
 
-            // Create and immediately confirm the PaymentIntent in one call
-            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+            // Platform fee: e.g. 10% of total → kept by Afrochow; remainder goes to vendor
+            long feeInCents = BigDecimal.valueOf(amountInCents)
+                    .multiply(BigDecimal.valueOf(platformFeePercent))
+                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
+                    .longValueExact();
+
+            PaymentIntentCreateParams.Builder paramsBuilder = PaymentIntentCreateParams.builder()
                     .setAmount(amountInCents)
                     .setCurrency("cad")
                     .setPaymentMethod(paymentMethodId)
@@ -83,11 +104,19 @@ public class PaymentService {
                     .putMetadata("publicOrderId",    order.getPublicOrderId())
                     .putMetadata("vendorPublicId",   order.getVendor().getPublicVendorId())
                     .putMetadata("customerPublicId", order.getCustomer().getUser().getPublicUserId())
-                    // Required for 3D Secure — update to your real domain before go-live
-                    .setReturnUrl("https://afrochow.com/order-confirmation/" + order.getPublicOrderId())
-                    .build();
+                    .setReturnUrl("https://afrochow.ca/order-confirmation/" + order.getPublicOrderId());
 
-            PaymentIntent intent = PaymentIntent.create(params);
+            if (useConnect) {
+                paramsBuilder
+                        .setApplicationFeeAmount(feeInCents)
+                        .setTransferData(
+                                PaymentIntentCreateParams.TransferData.builder()
+                                        .setDestination(vendorStripeAccountId)
+                                        .build()
+                        );
+            }
+
+            PaymentIntent intent = PaymentIntent.create(paramsBuilder.build());
 
             if ("succeeded".equals(intent.getStatus())) {
                 // Try to retrieve card details for the receipt — non-critical
@@ -106,6 +135,10 @@ public class PaymentService {
 
                 payment.completePayment(last4, brand);
                 payment.setTransactionId(intent.getId());
+                payment.setPlatformFeeAmount(
+                        BigDecimal.valueOf(feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+                payment.setVendorPayout(
+                        BigDecimal.valueOf(amountInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                 paymentRepository.save(payment);
 
                 notificationService.notifyPaymentSuccess(
@@ -167,11 +200,19 @@ public class PaymentService {
         }
 
         try {
-            com.stripe.model.Refund.create(
+            boolean hasTransfer = order.getVendor().getStripeAccountId() != null
+                    && !order.getVendor().getStripeAccountId().isBlank();
+            com.stripe.param.RefundCreateParams.Builder refundBuilder =
                     com.stripe.param.RefundCreateParams.builder()
-                            .setPaymentIntent(payment.getTransactionId())
-                            .build()
-            );
+                            .setPaymentIntent(payment.getTransactionId());
+            if (hasTransfer) {
+                // Connected account — reverse transfer and return platform fee
+                refundBuilder
+                        .setRefundApplicationFee(true)
+                        .setReverseTransfer(true);
+            }
+            // No transfer = direct charge = plain refund, no extra params needed
+            com.stripe.model.Refund.create(refundBuilder.build());
 
             payment.refundPayment();
             paymentRepository.save(payment);

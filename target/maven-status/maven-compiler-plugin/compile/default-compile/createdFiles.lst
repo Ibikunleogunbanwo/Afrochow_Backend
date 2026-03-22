@@ -8,11 +8,13 @@ com/afrochow/vendor/model/VendorProfile$VendorProfileBuilder.class
 com/afrochow/search/dto/PopularCuisineDto$PopularCuisineDtoBuilder.class
 com/afrochow/order/service/OrderService.class
 com/afrochow/category/repository/CategoryRepository.class
+com/afrochow/promotion/dto/PromotionRequestDto$PromotionRequestDtoBuilder.class
 com/afrochow/review/service/ReviewService$VendorReviewStats.class
 com/afrochow/product/dto/ProductSummaryResponseDto.class
 com/afrochow/image/ImageUploadResponseDto.class
 com/afrochow/security/Services/LoginAttemptService$LoginAttemptStatistics.class
 com/afrochow/review/service/ReviewService$AdminReviewStats$AdminReviewStatsBuilder.class
+com/afrochow/promotion/model/Promotion$PromotionBuilder.class
 com/afrochow/common/enums/Department.class
 com/afrochow/admin/controller/AdminUserManagementController$UserStats.class
 com/afrochow/common/ApiResponse$PageResponse.class
@@ -47,7 +49,10 @@ com/afrochow/payment/dto/PaymentResponseDto$PaymentResponseDtoBuilder.class
 com/afrochow/order/dto/OrderResponseDto.class
 com/afrochow/customer/dto/CustomerProfileRequestDto$CustomerProfileRequestDtoBuilder.class
 com/afrochow/vendor/dto/VendorProfileRequestDto$DayHoursDto$DayHoursDtoBuilder.class
+com/afrochow/promotion/model/PromotionUsage$PromotionUsageBuilder.class
 com/afrochow/common/exceptions/ForbiddenException.class
+com/afrochow/promotion/controller/PromotionController.class
+com/afrochow/promotion/repository/PromotionUsageRepository.class
 com/afrochow/orderline/model/OrderLine$OrderLineBuilder.class
 com/afrochow/config/CacheConfig.class
 com/afrochow/analytics/dto/StatisticsResponseDto$StatisticsResponseDtoBuilder.class
@@ -82,8 +87,10 @@ com/afrochow/vendor/dto/VendorDashboardDto.class
 com/afrochow/auth/dto/LoginRequest$LoginRequestBuilder.class
 com/afrochow/product/dto/ProductResponseDto$ProductResponseDtoBuilder.class
 com/afrochow/common/exceptions/InvalidCredentialsException.class
+com/afrochow/promotion/dto/PromotionResponseDto$PromotionResponseDtoBuilder.class
 com/afrochow/security/JwtTokenProvider$UserInfo.class
 com/afrochow/security/model/LoginAttempt.class
+com/afrochow/promotion/service/PromotionService.class
 com/afrochow/security/dto/RefreshTokenRequestDto$RefreshTokenRequestDtoBuilder.class
 com/afrochow/category/dto/CategoryUpdateRequestDto$CategoryUpdateRequestDtoBuilder.class
 com/afrochow/security/model/PasswordResetToken.class
@@ -96,6 +103,7 @@ com/afrochow/order/controller/AdminOrderController.class
 com/afrochow/security/dto/TokenRefreshRequestDto.class
 com/afrochow/user/dto/UserRequestDto.class
 com/afrochow/vendor/service/VendorProfileService.class
+com/afrochow/promotion/model/Promotion.class
 com/afrochow/order/model/Order$1.class
 com/afrochow/common/exceptions/InsufficientPermissionException.class
 com/afrochow/customer/dto/CustomerPasswordUpdate.class
@@ -134,6 +142,7 @@ com/afrochow/address/dto/AddressRequestDto$AddressRequestDtoBuilder.class
 com/afrochow/vendor/dto/VendorProfileResponseDto$VendorProfileResponseDtoBuilder.class
 com/afrochow/common/exceptions/PasswordPolicyViolationException.class
 com/afrochow/email/EmailVerificationTokenRepository.class
+com/afrochow/promotion/dto/PromotionRequestDto.class
 com/afrochow/common/exceptions/JwtAuthenticationException.class
 com/afrochow/stats/service/StatsService.class
 com/afrochow/vendor/dto/VendorProfileUpdateRequestDto$OperatingHoursDto$OperatingHoursDtoBuilder.class
@@ -157,6 +166,7 @@ com/afrochow/security/model/RefreshToken.class
 com/afrochow/security/Services/SecurityEventService.class
 com/afrochow/security/Utils/SecurityUtils.class
 com/afrochow/common/exceptions/ImageNotFoundException.class
+com/afrochow/analytics/AnalyticsService$1.class
 com/afrochow/common/exceptions/VendorNotVerifiedException.class
 com/afrochow/config/SwaggerAuthConfig.class
 com/afrochow/security/JwtAuthenticationEntryPoint.class
@@ -182,6 +192,7 @@ com/afrochow/notification/dto/BroadcastNotificationRequestDto$BroadcastNotificat
 com/afrochow/security/Services/LoginAttemptService.class
 com/afrochow/product/controller/ProductController.class
 com/afrochow/seeder/CompleteFinalSeeder.class
+com/afrochow/promotion/dto/PromotionResponseDto.class
 com/afrochow/vendor/dto/VendorProfileRequestDto$VendorProfileRequestDtoBuilder.class
 com/afrochow/search/SearchService.class
 com/afrochow/product/dto/ProductUpdateRequestDto$ProductUpdateRequestDtoBuilder.class
@@ -284,6 +295,7 @@ com/afrochow/common/exceptions/JwtAuthenticationException$JwtErrorCode.class
 com/afrochow/order/dto/OrderRequestDto.class
 com/afrochow/order/dto/OrderRequestDto$OrderRequestDtoBuilder.class
 com/afrochow/vendor/dto/VendorProfileResponseDto$OperatingHoursDto.class
+com/afrochow/common/enums/PromotionType.class
 com/afrochow/common/enums/PaymentStatus.class
 com/afrochow/orderline/dto/OrderLineRequestDto.class
 com/afrochow/user/repository/UserRepository.class
@@ -304,6 +316,7 @@ com/afrochow/customer/dto/CustomerPasswordUpdate$CustomerPasswordUpdateBuilder.c
 com/afrochow/category/model/Category$CategoryBuilder.class
 com/afrochow/common/PasswordHashGenerator.class
 com/afrochow/vendor/dto/VendorVerificationResponseDto.class
+com/afrochow/promotion/repository/PromotionRepository.class
 com/afrochow/review/dto/ReviewRequestDto$ReviewRequestDtoBuilder.class
 com/afrochow/common/exceptions/EmailNotVerifiedException.class
 com/afrochow/order/controller/CustomerOrderController.class
@@ -342,6 +355,7 @@ com/afrochow/common/exceptions/TokenRefreshException.class
 com/afrochow/analytics/AnalyticsService$PlatformTrends.class
 com/afrochow/security/dto/PasswordChangeResponseDto$PasswordChangeResponseDtoBuilder.class
 com/afrochow/security/Utils/CookieUtils.class
+com/afrochow/order/service/OrderService$1.class
 com/afrochow/analytics/AnalyticsService$CustomerAnalytics.class
 com/afrochow/auth/service/AuthenticationService.class
 com/afrochow/analytics/AnalyticsService.class
@@ -357,6 +371,7 @@ com/afrochow/config/DotenvConfig.class
 com/afrochow/auth/dto/NewPasswordRequest.class
 com/afrochow/admin/dto/AdminProfileResponseDto.class
 com/afrochow/stats/dto/PlatformStatsDto.class
+com/afrochow/promotion/model/PromotionUsage.class
 com/afrochow/security/dto/TokenRefreshResponseDto$TokenRefreshResponseDtoBuilder.class
 com/afrochow/common/exceptions/AddressNotPresentException.class
 com/afrochow/security/model/PasswordResetToken$PasswordResetTokenBuilder.class

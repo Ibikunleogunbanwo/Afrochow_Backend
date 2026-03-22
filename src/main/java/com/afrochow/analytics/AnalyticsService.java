@@ -9,6 +9,8 @@ import com.afrochow.order.model.Order;
 import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.payment.repository.PaymentRepository;
 import com.afrochow.product.repository.ProductRepository;
+import com.afrochow.promotion.repository.PromotionRepository;
+import com.afrochow.promotion.repository.PromotionUsageRepository;
 import com.afrochow.review.repository.ReviewRepository;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
@@ -38,53 +40,71 @@ public class AnalyticsService {
     private final CustomerProfileRepository customerProfileRepository;
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
+    private final PromotionRepository promotionRepository;
+    private final PromotionUsageRepository promotionUsageRepository;
 
     // ================= VENDOR ANALYTICS =================
 
-    public VendorAnalytics getVendorAnalytics(String vendorPublicId) {
-        VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(vendorPublicId)
+    public VendorAnalytics getVendorAnalytics(String username) {
+        VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
 
         return VendorAnalytics.builder()
                 .totalOrders(orderRepository.countByVendor(vendor))
+                // Pipeline breakdown — each status is a distinct vendor action point
+                .pendingOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.PENDING))
+                .confirmedOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.CONFIRMED))
+                .preparingOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.PREPARING))
+                .readyOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.READY_FOR_PICKUP))
+                .outForDeliveryOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.OUT_FOR_DELIVERY))
                 .deliveredOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.DELIVERED))
                 .cancelledOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.CANCELLED))
-                .pendingOrders((long) orderRepository.findActiveOrdersByVendor(vendor).size())
+                .activeOrders(orderRepository.countActiveOrdersByVendor(vendor))
                 .todayOrders(orderRepository.countVendorTodayOrders(vendor))
+                // Revenue (DELIVERED orders only)
                 .totalRevenue(nvl(orderRepository.calculateVendorRevenue(vendor)))
                 .todayRevenue(nvl(orderRepository.calculateVendorTodayRevenue(vendor)))
                 .last7DaysRevenue(nvl(orderRepository.calculateVendorRevenueFromDate(vendor, LocalDateTime.now().minusDays(7))))
                 .last30DaysRevenue(nvl(orderRepository.calculateVendorRevenueFromDate(vendor, LocalDateTime.now().minusDays(30))))
+                // Catalog
                 .totalProducts(productRepository.countByVendor(vendor))
                 .activeProducts(productRepository.countByVendorAndAvailable(vendor, true))
+                // Reviews
                 .totalReviews(reviewRepository.countByVendor(vendor))
                 .averageRating(round(reviewRepository.calculateVendorAverageRating(vendor)))
                 .build();
     }
 
-    public VendorSalesReport getVendorSalesReport(String vendorPublicId, LocalDateTime start, LocalDateTime end) {
-        VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(vendorPublicId)
+    public VendorSalesReport getVendorSalesReport(String username, LocalDateTime start, LocalDateTime end) {
+        VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
 
         List<Order> orders = orderRepository.findByVendorAndOrderTimeBetween(vendor, start, end);
+
+        long deliveredCount = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
 
         BigDecimal revenue = orders.stream()
                 .filter(o -> o.getStatus() == OrderStatus.DELIVERED)
                 .map(Order::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // Average order value = revenue ÷ delivered orders (not all orders in range)
+        BigDecimal avgOrderValue = deliveredCount == 0
+                ? BigDecimal.ZERO
+                : revenue.divide(BigDecimal.valueOf(deliveredCount), 2, RoundingMode.HALF_UP);
+
         return VendorSalesReport.builder()
                 .startDate(start)
                 .endDate(end)
                 .totalOrders((long) orders.size())
-                .deliveredOrders(orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count())
+                .deliveredOrders(deliveredCount)
                 .totalRevenue(revenue)
-                .averageOrderValue(orders.isEmpty() ? BigDecimal.ZERO : revenue.divide(BigDecimal.valueOf(orders.size()), 2, RoundingMode.HALF_UP))
+                .averageOrderValue(avgOrderValue)
                 .build();
     }
 
-    public List<PopularProduct> getVendorPopularProducts(String vendorPublicId) {
-        VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(vendorPublicId)
+    public List<PopularProduct> getVendorPopularProducts(String username) {
+        VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
 
         return productRepository.findByVendor(vendor).stream()
@@ -102,32 +122,35 @@ public class AnalyticsService {
 
     // ================= CUSTOMER ANALYTICS =================
 
-    public CustomerAnalytics getCustomerAnalytics(String customerPublicId) {
-        User user = userRepository.findByPublicUserId(customerPublicId)
+    public CustomerAnalytics getCustomerAnalytics(String username) {
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         CustomerProfile customer = customerProfileRepository.findByUser(user)
                 .orElseThrow(() -> new EntityNotFoundException("Customer profile not found"));
 
-        List<Order> orders = orderRepository.findByCustomer(customer);
+        long totalOrders = orderRepository.countByCustomer(customer);
+        long deliveredOrders = orderRepository.countByCustomerAndStatus(customer, OrderStatus.DELIVERED);
+        long cancelledOrders = orderRepository.countByCustomerAndStatus(customer, OrderStatus.CANCELLED);
+        BigDecimal totalSpent = nvl(orderRepository.calculateCustomerRevenue(customer));
 
-        BigDecimal spent = orders.stream()
-                .filter(o -> o.getStatus() == OrderStatus.DELIVERED)
-                .map(Order::getTotalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Average order value = spent ÷ delivered orders (spent is DELIVERED only)
+        BigDecimal avgOrderValue = deliveredOrders == 0
+                ? BigDecimal.ZERO
+                : totalSpent.divide(BigDecimal.valueOf(deliveredOrders), 2, RoundingMode.HALF_UP);
 
         return CustomerAnalytics.builder()
-                .totalOrders((long) orders.size())
-                .deliveredOrders(orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count())
-                .cancelledOrders(orders.stream().filter(o -> o.getStatus() == OrderStatus.CANCELLED).count())
-                .totalSpent(spent)
-                .averageOrderValue(orders.isEmpty() ? BigDecimal.ZERO : spent.divide(BigDecimal.valueOf(orders.size()), 2, RoundingMode.HALF_UP))
+                .totalOrders(totalOrders)
+                .deliveredOrders(deliveredOrders)
+                .cancelledOrders(cancelledOrders)
+                .totalSpent(totalSpent)
+                .averageOrderValue(avgOrderValue)
                 .totalReviews((long) reviewRepository.findByUser(user).size())
                 .build();
     }
 
-    public CustomerOrderHistory getCustomerOrderHistory(String customerPublicId) {
-        User user = userRepository.findByPublicUserId(customerPublicId)
+    public CustomerOrderHistory getCustomerOrderHistory(String username) {
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         CustomerProfile customer = customerProfileRepository.findByUser(user)
@@ -143,7 +166,11 @@ public class AnalyticsService {
                                 .orderPublicId(o.getPublicOrderId())
                                 .vendorName(o.getVendor().getRestaurantName())
                                 .status(o.getStatus())
+                                .statusLabel(resolveStatusLabel(o.getStatus(), o.getFulfillmentType()))
+                                .fulfillmentType(o.getFulfillmentType())
                                 .totalAmount(o.getTotalAmount())
+                                .discount(o.getDiscount())
+                                .appliedPromoCode(o.getAppliedPromoCode())
                                 .orderTime(o.getOrderTime())
                                 .build())
                         .toList())
@@ -153,46 +180,53 @@ public class AnalyticsService {
     // ================= ADMIN ANALYTICS =================
 
     public AdminAnalytics getAdminAnalytics() {
+        LocalDateTime now = LocalDateTime.now();
+
         return AdminAnalytics.builder()
+                // Users
                 .totalUsers(userRepository.count())
                 .totalCustomers((long) userRepository.findByRole(Role.CUSTOMER).size())
                 .totalVendors((long) userRepository.findByRole(Role.VENDOR).size())
                 .activeUsers((long) userRepository.findByIsActive(true).size())
+                // Orders — each status separately so the dashboard has a clear pipeline view
                 .totalOrders(orderRepository.count())
+                .pendingOrders(orderRepository.countByStatus(OrderStatus.PENDING))
+                .confirmedOrders(orderRepository.countByStatus(OrderStatus.CONFIRMED))
+                .preparingOrders(orderRepository.countByStatus(OrderStatus.PREPARING))
+                .readyOrders(orderRepository.countByStatus(OrderStatus.READY_FOR_PICKUP))
+                .outForDeliveryOrders(orderRepository.countByStatus(OrderStatus.OUT_FOR_DELIVERY))
                 .deliveredOrders(orderRepository.countByStatus(OrderStatus.DELIVERED))
                 .cancelledOrders(orderRepository.countByStatus(OrderStatus.CANCELLED))
-                .pendingOrders((long) orderRepository.findActiveOrders().size())
+                .refundedOrders(orderRepository.countByStatus(OrderStatus.REFUNDED))
+                .activeOrders(orderRepository.countActiveOrders())
                 .todayOrders(orderRepository.countTodayOrders())
+                // Revenue
                 .totalRevenue(nvl(orderRepository.calculateTotalRevenue()))
+                // Catalog
                 .totalProducts(productRepository.count())
                 .availableProducts(productRepository.countByAvailable(true))
+                // Payments
                 .successfulPayments(paymentRepository.countByStatus(PaymentStatus.COMPLETED))
                 .failedPayments(paymentRepository.countByStatus(PaymentStatus.FAILED))
+                // Reviews
                 .totalReviews(reviewRepository.count())
+                // Promotions
+                .totalPromotions(promotionRepository.count())
+                .activePromotions((long) promotionRepository.findAllCurrentlyActive(now).size())
+                .totalDiscountGiven(nvl(promotionUsageRepository.calculateTotalDiscountGiven()))
                 .build();
     }
 
     public PlatformTrends getPlatformTrends() {
         LocalDateTime now = LocalDateTime.now();
-
-        List<Order> last7DaysOrders = orderRepository.findByOrderTimeBetween(now.minusDays(7), now);
-        List<Order> last30DaysOrders = orderRepository.findByOrderTimeBetween(now.minusDays(30), now);
-
-        BigDecimal revenue7Days = last7DaysOrders.stream()
-                .filter(o -> o.getStatus() == OrderStatus.DELIVERED)
-                .map(Order::getTotalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal revenue30Days = last30DaysOrders.stream()
-                .filter(o -> o.getStatus() == OrderStatus.DELIVERED)
-                .map(Order::getTotalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        LocalDateTime sevenDaysAgo = now.minusDays(7);
+        LocalDateTime thirtyDaysAgo = now.minusDays(30);
 
         return PlatformTrends.builder()
-                .ordersLast7Days((long) last7DaysOrders.size())
-                .ordersLast30Days((long) last30DaysOrders.size())
-                .revenueLast7Days(revenue7Days)
-                .revenueLast30Days(revenue30Days)
+                .ordersLast7Days(orderRepository.countOrdersBetween(sevenDaysAgo, now))
+                .ordersLast30Days(orderRepository.countOrdersBetween(thirtyDaysAgo, now))
+                .revenueLast7Days(nvl(orderRepository.calculateRevenueBetween(sevenDaysAgo, now)))
+                .revenueLast30Days(nvl(orderRepository.calculateRevenueBetween(thirtyDaysAgo, now)))
                 .build();
     }
 
@@ -206,13 +240,42 @@ public class AnalyticsService {
         return value == null ? 0.0 : Math.round(value * 10.0) / 10.0;
     }
 
+    private static String resolveStatusLabel(OrderStatus status, String fulfillmentType) {
+        if (status == null) return null;
+        boolean isPickup = "PICKUP".equalsIgnoreCase(fulfillmentType);
+        return switch (status) {
+            case PENDING          -> "Awaiting Confirmation";
+            case CONFIRMED        -> "Order Confirmed";
+            case PREPARING        -> "Being Prepared";
+            case READY_FOR_PICKUP -> isPickup ? "Available for Pickup" : "Ready for Delivery";
+            case OUT_FOR_DELIVERY -> "Out for Delivery";
+            case DELIVERED        -> isPickup ? "Picked Up" : "Delivered";
+            case CANCELLED        -> "Cancelled";
+            case REFUNDED         -> "Refunded";
+        };
+    }
+
     // ================= DTOs =================
 
     @Data @Builder
     public static class VendorAnalytics {
-        private Long totalOrders, deliveredOrders, cancelledOrders, pendingOrders, todayOrders;
+        private Long totalOrders;
+        // Full pipeline breakdown
+        private Long pendingOrders;       // awaiting vendor acceptance
+        private Long confirmedOrders;     // accepted, not yet preparing
+        private Long preparingOrders;
+        private Long readyOrders;         // READY_FOR_PICKUP (pickup or delivery)
+        private Long outForDeliveryOrders;
+        private Long deliveredOrders;
+        private Long cancelledOrders;
+        private Long activeOrders;        // all non-terminal orders
+        private Long todayOrders;
+        // Revenue (DELIVERED orders only)
         private BigDecimal totalRevenue, todayRevenue, last7DaysRevenue, last30DaysRevenue;
-        private Long totalProducts, activeProducts, totalReviews;
+        // Catalog
+        private Long totalProducts, activeProducts;
+        // Reviews
+        private Long totalReviews;
         private Double averageRating;
     }
 
@@ -247,16 +310,40 @@ public class AnalyticsService {
         private String orderPublicId;
         private String vendorName;
         private OrderStatus status;
+        private String statusLabel;
+        private String fulfillmentType;
         private BigDecimal totalAmount;
+        private BigDecimal discount;
+        private String appliedPromoCode;
         private LocalDateTime orderTime;
     }
 
     @Data @Builder
     public static class AdminAnalytics {
         private Long totalUsers, totalCustomers, totalVendors, activeUsers;
-        private Long totalOrders, deliveredOrders, cancelledOrders, pendingOrders, todayOrders;
+        // Full order pipeline
+        private Long totalOrders;
+        private Long pendingOrders;
+        private Long confirmedOrders;
+        private Long preparingOrders;
+        private Long readyOrders;
+        private Long outForDeliveryOrders;
+        private Long deliveredOrders;
+        private Long cancelledOrders;
+        private Long refundedOrders;
+        private Long activeOrders;
+        private Long todayOrders;
+        // Revenue
         private BigDecimal totalRevenue;
-        private Long totalProducts, availableProducts, successfulPayments, failedPayments, totalReviews;
+        // Catalog
+        private Long totalProducts, availableProducts;
+        // Payments
+        private Long successfulPayments, failedPayments;
+        // Reviews
+        private Long totalReviews;
+        // Promotions
+        private Long totalPromotions, activePromotions;
+        private BigDecimal totalDiscountGiven;
     }
 
     @Data @Builder

@@ -11,6 +11,7 @@ import com.afrochow.common.enums.ProvincialTax;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
 import com.afrochow.notification.service.NotificationService;
+import com.afrochow.promotion.service.PromotionService;
 import com.afrochow.order.dto.OrderRequestDto;
 import com.afrochow.order.dto.OrderResponseDto;
 import com.afrochow.order.dto.OrderSummaryResponseDto;
@@ -50,6 +51,7 @@ public class OrderService {
     private final PaymentRepository paymentRepository;
     private final NotificationService notificationService;
     private final PaymentService paymentService;
+    private final PromotionService promotionService;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -60,7 +62,8 @@ public class OrderService {
             ProductRepository productRepository,
             PaymentRepository paymentRepository,
             NotificationService notificationService,
-            PaymentService paymentService
+            PaymentService paymentService,
+            PromotionService promotionService
     ) {
         this.orderRepository           = orderRepository;
         this.customerProfileRepository = customerProfileRepository;
@@ -71,6 +74,7 @@ public class OrderService {
         this.notificationService       = notificationService;
         this.userRepository            = userRepository;
         this.paymentService            = paymentService;
+        this.promotionService          = promotionService;
     }
 
     // ========== HELPER METHODS ==========
@@ -192,9 +196,23 @@ public class OrderService {
         // ── Validate minimum order amount ─────────────────────────────────────
 
         if (vendor.getMinimumOrderAmount() != null &&
-                order.getSubtotal().compareTo(vendor.getMinimumOrderAmount()) < 0) {
+                order.calculateSubtotal().compareTo(vendor.getMinimumOrderAmount()) < 0) {
             throw new IllegalStateException(
                     "Order does not meet minimum amount of $" + vendor.getMinimumOrderAmount());
+        }
+
+        // ── Apply promo code (before save so @PrePersist uses discounted total) ──
+
+        BigDecimal promoDiscount = BigDecimal.ZERO;
+        if (request.getPromoCode() != null && !request.getPromoCode().isBlank()) {
+            promoDiscount = promotionService.calculateDiscount(
+                    request.getPromoCode(),
+                    order.calculateSubtotal(),
+                    customer.getUser().getPublicUserId(),
+                    request.getVendorPublicId()
+            );
+            order.setDiscount(promoDiscount);
+            order.setAppliedPromoCode(request.getPromoCode().toUpperCase().trim());
         }
 
         // ── Save order ────────────────────────────────────────────────────────
@@ -219,17 +237,22 @@ public class OrderService {
             throw new IllegalStateException("Payment failed: " + e.getMessage());
         }
 
-        // ── Payment succeeded — confirm the order ─────────────────────────────
+        // ── Payment succeeded — order stays PENDING until vendor manually accepts ──────
 
-        savedOrder.updateStatus(OrderStatus.CONFIRMED);
-        Order confirmedOrder = orderRepository.save(savedOrder);
+        // Record promo usage now that payment is confirmed
+        if (request.getPromoCode() != null && !request.getPromoCode().isBlank()
+                && promoDiscount.compareTo(BigDecimal.ZERO) > 0) {
+            promotionService.recordUsage(
+                    request.getPromoCode(),
+                    customer.getUser(),
+                    savedOrder,
+                    promoDiscount
+            );
+        }
 
-        // ── Send notifications ────────────────────────────────────────────────
+        notificationService.notifyVendorNewOrder(savedOrder);
 
-        notificationService.notifyCustomerOrderConfirmed(confirmedOrder);
-        notificationService.notifyVendorNewOrder(confirmedOrder);
-
-        return toResponseDto(confirmedOrder);
+        return toResponseDto(savedOrder);
     }
 
     public List<OrderSummaryResponseDto> getCustomerOrders(Long customerUserId) {
@@ -248,6 +271,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public OrderResponseDto getCustomerOrder(Long customerUserId, String publicOrderId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
@@ -272,10 +296,11 @@ public class OrderService {
             throw new IllegalStateException("Order cannot be cancelled at this stage");
         }
 
+        String previousStatus = order.getStatus().toString();
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderCancelled(updatedOrder, "Cancelled by customer");
+        notificationService.notifyCustomerOrderCancelled(updatedOrder, "Cancelled by customer", previousStatus);
 
         return toResponseDto(updatedOrder);
     }
@@ -310,6 +335,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public OrderResponseDto getVendorOrder(String username, String publicOrderId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
@@ -329,18 +355,14 @@ public class OrderService {
             throw new IllegalStateException("You can only accept orders for your restaurant");
         }
 
-        // FIX 5: createOrder sets status to CONFIRMED after payment succeeds.
-        // If this endpoint is meant as a manual vendor step, it should check CONFIRMED,
-        // not PENDING. If the intent is a pre-payment accept gate, reconsider the flow.
-        if (order.getStatus() != OrderStatus.CONFIRMED) {
-            throw new IllegalStateException("Only confirmed orders can be accepted");
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException("Only pending orders can be accepted");
         }
 
-        order.updateStatus(OrderStatus.PREPARING);
+        order.updateStatus(OrderStatus.CONFIRMED);
         Order updatedOrder = orderRepository.save(order);
 
-        // FIX 3: Removed notifyVendorNewOrder — the vendor is the one performing this action
-        notificationService.notifyCustomerOrderPreparing(updatedOrder);
+        notificationService.notifyCustomerOrderConfirmed(updatedOrder);
         return toResponseDto(updatedOrder);
     }
 
@@ -355,10 +377,11 @@ public class OrderService {
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new IllegalStateException("Only pending orders can be rejected");
         }
+        String previousStatus = order.getStatus().toString();
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderCancelled(updatedOrder, "Rejected by vendor");
+        notificationService.notifyCustomerOrderCancelled(updatedOrder, "Rejected by vendor", previousStatus);
         return toResponseDto(updatedOrder);
     }
 
@@ -405,6 +428,9 @@ public class OrderService {
             throw new IllegalStateException(
                     "You can only mark orders for delivery for your restaurant");
         }
+        if ("PICKUP".equalsIgnoreCase(order.getFulfillmentType())) {
+            throw new IllegalStateException("Pickup orders do not go out for delivery");
+        }
         if (order.getStatus() != OrderStatus.READY_FOR_PICKUP) {
             throw new IllegalStateException("Only ready orders can be sent out for delivery");
         }
@@ -423,9 +449,12 @@ public class OrderService {
             throw new IllegalStateException(
                     "You can only mark orders delivered for your restaurant");
         }
-        if (order.getStatus() != OrderStatus.OUT_FOR_DELIVERY) {
-            throw new IllegalStateException(
-                    "Only out-for-delivery orders can be marked as delivered");
+        boolean isPickup = "PICKUP".equalsIgnoreCase(order.getFulfillmentType());
+        OrderStatus requiredStatus = isPickup ? OrderStatus.READY_FOR_PICKUP : OrderStatus.OUT_FOR_DELIVERY;
+        if (order.getStatus() != requiredStatus) {
+            throw new IllegalStateException(isPickup
+                    ? "Only orders available for pickup can be marked as picked up"
+                    : "Only out-for-delivery orders can be marked as delivered");
         }
         order.updateStatus(OrderStatus.DELIVERED);
         Order updatedOrder = orderRepository.save(order);
@@ -443,6 +472,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public OrderResponseDto getOrderById(String publicOrderId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
@@ -494,8 +524,10 @@ public class OrderService {
                 .deliveryFee(order.getDeliveryFee())
                 .tax(order.getTax())
                 .discount(order.getDiscount())
+                .appliedPromoCode(order.getAppliedPromoCode())
                 .totalAmount(order.getTotalAmount())
                 .status(order.getStatus())
+                .statusLabel(resolveStatusLabel(order.getStatus(), order.getFulfillmentType()))
                 .specialInstructions(order.getSpecialInstructions())
                 .customerPublicId(getCustomerPublicId(order))
                 .customerName(getCustomerFullName(order))
@@ -552,6 +584,7 @@ public class OrderService {
                         ? order.getVendor().getRestaurantName() : null)
                 .totalAmount(order.getTotalAmount())
                 .status(order.getStatus())
+                .statusLabel(resolveStatusLabel(order.getStatus(), order.getFulfillmentType()))
                 .orderTime(order.getOrderTime())
                 .fulfillmentType(order.getFulfillmentType())
                 .canBeCancelled(order.canBeCancelled())
@@ -590,8 +623,10 @@ public class OrderService {
     private PaymentResponseDto toPaymentResponseDto(Payment payment) {
         if (payment == null) return null;
         return PaymentResponseDto.builder()
-                .publicOrderId(payment.publicOrderId())
+                .publicOrderId(payment.getOrder() != null ? payment.getOrder().getPublicOrderId() : null)
                 .amount(payment.getAmount())
+                .platformFeeAmount(payment.getPlatformFeeAmount())
+                .vendorPayout(payment.getVendorPayout())
                 .status(payment.getStatus())
                 .paymentMethod(payment.getPaymentMethod())
                 .transactionId(payment.getTransactionId())
@@ -607,5 +642,20 @@ public class OrderService {
                 .failedAt(payment.getFailedAt())
                 .refundedAt(payment.getRefundedAt())
                 .build();
+    }
+
+    private String resolveStatusLabel(OrderStatus status, String fulfillmentType) {
+        if (status == null) return null;
+        boolean isPickup = "PICKUP".equalsIgnoreCase(fulfillmentType);
+        return switch (status) {
+            case PENDING           -> "Awaiting Confirmation";
+            case CONFIRMED         -> "Order Confirmed";
+            case PREPARING         -> "Being Prepared";
+            case READY_FOR_PICKUP  -> isPickup ? "Available for Pickup" : "Ready for Delivery";
+            case OUT_FOR_DELIVERY  -> "Out for Delivery";
+            case DELIVERED         -> isPickup ? "Picked Up" : "Delivered";
+            case CANCELLED         -> "Cancelled";
+            case REFUNDED          -> "Refunded";
+        };
     }
 }

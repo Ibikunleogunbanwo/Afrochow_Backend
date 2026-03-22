@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -45,9 +44,9 @@ public class AdminProfileController {
     @Operation(summary = "Update profile", description = "Update the authenticated admin's profile")
     public ResponseEntity<ApiResponse<AdminProfileResponseDto>> updateProfile(
             @Valid @RequestBody AdminProfileUpdateRequestDto request,
-            @AuthenticationPrincipal UserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        Long userId = Long.parseLong(userDetails.getUsername());
+        Long userId = userDetails.getUserId();
         AdminProfileResponseDto profile = adminProfileService.updateProfile(userId, request);
         return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", profile));
     }
