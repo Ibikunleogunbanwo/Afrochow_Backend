@@ -1,21 +1,30 @@
 package com.afrochow.payment.service;
 
-import com.afrochow.payment.dto.PaymentResponseDto;
-import com.afrochow.order.model.Order;
-import com.afrochow.payment.model.Payment;
+import com.afrochow.common.enums.NotificationType;
 import com.afrochow.common.enums.PaymentStatus;
+import com.afrochow.common.enums.RelatedEntityType;
 import com.afrochow.notification.service.NotificationService;
+import com.afrochow.order.model.Order;
 import com.afrochow.order.repository.OrderRepository;
+import com.afrochow.payment.dto.PaymentResponseDto;
+import com.afrochow.payment.model.Payment;
 import com.afrochow.payment.repository.PaymentRepository;
+import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
+import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Service for managing payments
+ * Service for managing payments.
+ * Handles both real Stripe charges (chargeOrder, refundStripeCharge)
+ * and internal payment record management.
  */
 @Service
 public class PaymentService {
@@ -29,9 +38,147 @@ public class PaymentService {
             OrderRepository orderRepository,
             NotificationService notificationService
     ) {
-        this.paymentRepository = paymentRepository;
-        this.orderRepository = orderRepository;
+        this.paymentRepository   = paymentRepository;
+        this.orderRepository     = orderRepository;
         this.notificationService = notificationService;
+    }
+
+    // ========== STRIPE METHODS ==========
+
+    /**
+     * Charge the customer via Stripe using a paymentMethodId token.
+     * Called by OrderService.createOrder() after the order is saved.
+     * The paymentMethodId is created client-side by Stripe.js — raw card
+     * details never reach this backend.
+     * On success : updates Payment record to COMPLETED with Stripe transaction details.
+     * On failure : updates Payment record to FAILED and throws RuntimeException.
+     *
+     * @param order           saved Order with totalAmount already calculated
+     * @param paymentMethodId Stripe payment method token from frontend
+     */
+    @Transactional
+    public void chargeOrder(Order order, String paymentMethodId) {
+        Payment payment = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment record not found for order: " + order.getPublicOrderId()));
+
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            throw new IllegalStateException("Payment is not in pending status");
+        }
+
+        try {
+            // Stripe works in the smallest currency unit — convert dollars to cents
+            long amountInCents = order.getTotalAmount()
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .longValueExact();
+
+            // Create and immediately confirm the PaymentIntent in one call
+            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                    .setAmount(amountInCents)
+                    .setCurrency("cad")
+                    .setPaymentMethod(paymentMethodId)
+                    .setConfirm(true)
+                    .setDescription("Afrochow order " + order.getPublicOrderId())
+                    .putMetadata("publicOrderId",    order.getPublicOrderId())
+                    .putMetadata("vendorPublicId",   order.getVendor().getPublicVendorId())
+                    .putMetadata("customerPublicId", order.getCustomer().getUser().getPublicUserId())
+                    // Required for 3D Secure — update to your real domain before go-live
+                    .setReturnUrl("https://afrochow.com/order-confirmation/" + order.getPublicOrderId())
+                    .build();
+
+            PaymentIntent intent = PaymentIntent.create(params);
+
+            if ("succeeded".equals(intent.getStatus())) {
+                // Try to retrieve card details for the receipt — non-critical
+                String last4 = null;
+                String brand = null;
+                try {
+                    com.stripe.model.PaymentMethod stripeMethod =
+                            com.stripe.model.PaymentMethod.retrieve(paymentMethodId);
+                    if (stripeMethod.getCard() != null) {
+                        last4 = stripeMethod.getCard().getLast4();
+                        brand = stripeMethod.getCard().getBrand();
+                    }
+                } catch (StripeException ignored) {
+                    // Don't fail the order over cosmetic card details
+                }
+
+                payment.completePayment(last4, brand);
+                payment.setTransactionId(intent.getId());
+                paymentRepository.save(payment);
+
+                notificationService.notifyPaymentSuccess(
+                        order.getCustomer().getUser().getPublicUserId(),
+                        intent.getId(),
+                        order.getPublicOrderId(),
+                        order.getTotalAmount()
+                );
+
+            } else if ("requires_action".equals(intent.getStatus())) {
+                // 3D Secure required — client secret is surfaced to the frontend
+                payment.setStatus(PaymentStatus.PENDING);
+                payment.setTransactionId(intent.getId());
+                payment.setNotes("Requires 3D Secure authentication");
+                paymentRepository.save(payment);
+                throw new RuntimeException("3DS_REQUIRED:" + intent.getClientSecret());
+
+            } else {
+                throw new RuntimeException(
+                        "Stripe payment failed with status: " + intent.getStatus());
+            }
+
+        } catch (StripeException e) {
+            payment.failPayment();
+            payment.setNotes("Stripe error: " + e.getMessage());
+            paymentRepository.save(payment);
+
+            notificationService.notifyPaymentFailed(
+                    order.getCustomer().getUser().getPublicUserId(),
+                    order.getPublicOrderId(),
+                    e.getMessage()
+            );
+
+            throw new RuntimeException("Payment failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Refund a completed Stripe charge.
+     * Called by OrderService.cancelCustomerOrder() when an already-paid
+     * order is canceled. Safe to call on unpaid orders — returns silently.
+     *
+     * @param order the order to refund
+     */
+    @Transactional
+    public void refundStripeCharge(Order order) {
+        Payment payment = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment record not found for order: " + order.getPublicOrderId()));
+
+        if (payment.getStatus() != PaymentStatus.COMPLETED) {
+            // Nothing to refund if payment was never completed
+            return;
+        }
+
+        if (payment.getTransactionId() == null) {
+            throw new IllegalStateException(
+                    "Cannot refund — no Stripe transaction ID on record");
+        }
+
+        try {
+            com.stripe.model.Refund.create(
+                    com.stripe.param.RefundCreateParams.builder()
+                            .setPaymentIntent(payment.getTransactionId())
+                            .build()
+            );
+
+            payment.refundPayment();
+            paymentRepository.save(payment);
+
+        } catch (StripeException e) {
+            throw new RuntimeException("Stripe refund failed: " + e.getMessage());
+        }
     }
 
     // ========== CUSTOMER METHODS ==========
@@ -43,49 +190,47 @@ public class PaymentService {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
-        // Verify ownership
         if (!order.getCustomer().getUser().getUserId().equals(customerUserId)) {
-            throw new IllegalStateException("You can only view payments for your own orders");
+            throw new IllegalStateException(
+                    "You can only view payments for your own orders");
         }
 
         Payment payment = paymentRepository.findByOrder(order)
-                .orElseThrow(() -> new EntityNotFoundException("Payment not found for this order"));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment not found for this order"));
 
         return toResponseDto(payment);
     }
 
     /**
-     * Process payment (simulated - customer)
-     * In a real application, this would integrate with a payment gateway
+     * Process payment — legacy simulated method kept for backward compatibility.
+     * New code should use chargeOrder() instead.
      */
     @Transactional
-    public PaymentResponseDto processPayment(Long customerUserId, String publicOrderId, String cardLast4, String cardBrand) {
+    public PaymentResponseDto processPayment(Long customerUserId, String publicOrderId,
+                                             String cardLast4, String cardBrand) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
-        // Verify ownership
         if (!order.getCustomer().getUser().getUserId().equals(customerUserId)) {
-            throw new IllegalStateException("You can only process payments for your own orders");
+            throw new IllegalStateException(
+                    "You can only process payments for your own orders");
         }
 
         Payment payment = paymentRepository.findByOrder(order)
-                .orElseThrow(() -> new EntityNotFoundException("Payment not found for this order"));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment not found for this order"));
 
-        // Check if payment is pending
         if (payment.getStatus() != PaymentStatus.PENDING) {
             throw new IllegalStateException("Payment is not in pending status");
         }
 
-        // Simulate payment processing
-        // In production, this would call Stripe/PayPal/etc.
         try {
-            // Simulate successful payment
             payment.completePayment(cardLast4, cardBrand);
             payment.setTransactionId("TXN-" + System.currentTimeMillis());
 
             Payment savedPayment = paymentRepository.save(payment);
 
-            // Send payment success notifications (in-app + email)
             notificationService.notifyPaymentSuccess(
                     order.getCustomer().getUser().getPublicUserId(),
                     savedPayment.getTransactionId(),
@@ -94,12 +239,11 @@ public class PaymentService {
             );
 
             return toResponseDto(savedPayment);
+
         } catch (Exception e) {
-            // Mark payment as failed
             payment.failPayment();
             paymentRepository.save(payment);
 
-            // Send payment failed notifications (in-app + email)
             notificationService.notifyPaymentFailed(
                     order.getCustomer().getUser().getPublicUserId(),
                     order.getPublicOrderId(),
@@ -118,20 +262,19 @@ public class PaymentService {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
-        // Verify ownership
         if (!order.getCustomer().getUser().getUserId().equals(customerUserId)) {
-            throw new IllegalStateException("You can only retry payments for your own orders");
+            throw new IllegalStateException(
+                    "You can only retry payments for your own orders");
         }
 
         Payment payment = paymentRepository.findByOrder(order)
-                .orElseThrow(() -> new EntityNotFoundException("Payment not found for this order"));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment not found for this order"));
 
-        // Check if payment failed
         if (payment.getStatus() != PaymentStatus.FAILED) {
             throw new IllegalStateException("Can only retry failed payments");
         }
 
-        // Reset to pending for retry
         payment.setStatus(PaymentStatus.PENDING);
         Payment savedPayment = paymentRepository.save(payment);
 
@@ -144,8 +287,7 @@ public class PaymentService {
      * Get all payments (admin)
      */
     public List<PaymentResponseDto> getAllPayments() {
-        List<Payment> payments = paymentRepository.findAll();
-        return payments.stream()
+        return paymentRepository.findAll().stream()
                 .map(this::toResponseDto)
                 .collect(Collectors.toList());
     }
@@ -167,7 +309,8 @@ public class PaymentService {
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
         Payment payment = paymentRepository.findByOrder(order)
-                .orElseThrow(() -> new EntityNotFoundException("Payment not found for this order"));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment not found for this order"));
 
         return toResponseDto(payment);
     }
@@ -176,8 +319,7 @@ public class PaymentService {
      * Get payments by status (admin)
      */
     public List<PaymentResponseDto> getPaymentsByStatus(PaymentStatus status) {
-        List<Payment> payments = paymentRepository.findByStatus(status);
-        return payments.stream()
+        return paymentRepository.findByStatus(status).stream()
                 .map(this::toResponseDto)
                 .collect(Collectors.toList());
     }
@@ -186,62 +328,52 @@ public class PaymentService {
      * Get failed payments (admin)
      */
     public List<PaymentResponseDto> getFailedPayments() {
-        List<Payment> payments = paymentRepository.findFailedPayments();
-        return payments.stream()
+        return paymentRepository.findFailedPayments().stream()
                 .map(this::toResponseDto)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Refund payment (admin only)
+     * Refund payment via admin — calls real Stripe refund.
      */
     @Transactional
     public PaymentResponseDto refundPayment(String publicOrderId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
+        refundStripeCharge(order);
+
         Payment payment = paymentRepository.findByOrder(order)
-                .orElseThrow(() -> new EntityNotFoundException("Payment not found for this order"));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment not found for this order"));
 
-        // Check if payment is completed
-        if (payment.getStatus() != PaymentStatus.COMPLETED) {
-            throw new IllegalStateException("Can only refund completed payments");
-        }
-
-        // Process refund
-        payment.refundPayment();
-        Payment savedPayment = paymentRepository.save(payment);
-
-        // Send refund notification (in-app only for now)
-        // Note: Could be enhanced to use NotificationService.notifyPaymentRefund() if implemented
         notificationService.createNotification(
                 order.getCustomer().getUser().getPublicUserId(),
                 "Payment Refunded",
-                String.format("Your payment of $%.2f for order #%s has been refunded. " +
-                        "The refund will appear in your account within 5-10 business days.",
+                String.format(
+                        "Your payment of $%.2f for order #%s has been refunded. " +
+                                "The refund will appear in your account within 5-10 business days.",
                         payment.getAmount(), order.getPublicOrderId()),
-                com.afrochow.common.enums.NotificationType.PAYMENT_SUCCESS,
-                com.afrochow.common.enums.RelatedEntityType.PAYMENT,
-                savedPayment.getTransactionId()
+                NotificationType.PAYMENT_SUCCESS,
+                RelatedEntityType.PAYMENT,
+                payment.getTransactionId()
         );
 
-        return toResponseDto(savedPayment);
+        return toResponseDto(payment);
     }
 
     // ========== STATISTICS ==========
 
-    /**
-     * Count payments by status
-     */
     public Long countPaymentsByStatus(PaymentStatus status) {
         return paymentRepository.countByStatus(status);
     }
 
-    // ========== MAPPING METHODS ==========
+    // ========== MAPPING ==========
 
     private PaymentResponseDto toResponseDto(Payment payment) {
         return PaymentResponseDto.builder()
-                .publicOrderId(payment.getOrder() != null ? payment.getOrder().getPublicOrderId() : null)
+                .publicOrderId(payment.getOrder() != null
+                        ? payment.getOrder().getPublicOrderId() : null)
                 .amount(payment.getAmount())
                 .status(payment.getStatus())
                 .paymentMethod(payment.getPaymentMethod())

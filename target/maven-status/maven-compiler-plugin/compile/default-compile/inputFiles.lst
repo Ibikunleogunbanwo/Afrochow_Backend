@@ -53,6 +53,7 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/PaymentMethod.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/PaymentStatus.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/Province.java
+/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/ProvincialTax.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/RelatedEntityType.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/Role.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/exceptions/AccountLockedException.java
@@ -88,6 +89,7 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/DotenvConfig.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/ResendConfig.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/SecurityConfig.java
+/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/StripeConfig.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/SwaggerAuthConfig.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/WebConfig.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/customer/controller/CustomerProfileController.java
