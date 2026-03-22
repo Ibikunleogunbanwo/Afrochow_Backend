@@ -2,13 +2,13 @@ package com.afrochow.payment.controller;
 
 import com.afrochow.common.ApiResponse;
 import com.afrochow.payment.dto.PaymentResponseDto;
+import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.common.enums.PaymentStatus;
 import com.afrochow.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,9 +45,9 @@ public class PaymentController {
     @Operation(summary = "Get payment", description = "Get payment details for an order")
     public ResponseEntity<ApiResponse<PaymentResponseDto>> getPayment(
             @PathVariable String publicOrderId,
-            @AuthenticationPrincipal UserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        Long userId = Long.parseLong(userDetails.getUsername());
+        Long userId = userDetails.getUserId();
         PaymentResponseDto payment = paymentService.getPaymentByOrderId(userId, publicOrderId);
         return ResponseEntity.ok(ApiResponse.success(payment));
     }
@@ -58,9 +58,9 @@ public class PaymentController {
             @PathVariable String publicOrderId,
             @RequestParam(required = false) String cardLast4,
             @RequestParam(required = false) String cardBrand,
-            @AuthenticationPrincipal UserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        Long userId = Long.parseLong(userDetails.getUsername());
+        Long userId = userDetails.getUserId();
         PaymentResponseDto payment = paymentService.processPayment(userId, publicOrderId, cardLast4, cardBrand);
         return ResponseEntity.ok(ApiResponse.success("Payment processed successfully", payment));
     }
@@ -69,9 +69,9 @@ public class PaymentController {
     @Operation(summary = "Retry payment", description = "Retry a failed payment")
     public ResponseEntity<ApiResponse<PaymentResponseDto>> retryPayment(
             @PathVariable String publicOrderId,
-            @AuthenticationPrincipal UserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        Long userId = Long.parseLong(userDetails.getUsername());
+        Long userId = userDetails.getUserId();
         PaymentResponseDto payment = paymentService.retryPayment(userId, publicOrderId);
         return ResponseEntity.ok(ApiResponse.success("Payment retried successfully", payment));
     }

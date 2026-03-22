@@ -79,6 +79,10 @@ public class Order {
     @Builder.Default
     private BigDecimal discount = BigDecimal.ZERO;
 
+    /** Promo code applied to this order (nullable — no promo applied). */
+    @Column(length = 50)
+    private String appliedPromoCode;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 

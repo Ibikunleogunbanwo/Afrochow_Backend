@@ -61,6 +61,10 @@ public class VendorProfile {
     private String logoUrl;
     private String bannerUrl;
 
+    // ========== STRIPE CONNECT ==========
+    @Column(length = 100)
+    private String stripeAccountId;
+
     // ========== BUSINESS VERIFICATION ==========
     @Column(length = 255)
     private String businessLicenseUrl;

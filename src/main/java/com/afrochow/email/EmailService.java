@@ -48,7 +48,7 @@ public class EmailService {
     @Value("${app.name:Afrochow}")
     private String appName;
 
-    @Value("${app.url:https://afrochow.com}")
+    @Value("${app.frontend.url:https://afrochow.ca}")
     private String appUrl;
 
     @Getter
@@ -150,6 +150,7 @@ public class EmailService {
             Context context = new Context();
             context.setVariable("firstName", firstName);
             context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
             context.setVariable("changeTime", LocalDateTime.now().format(DATE_FORMATTER));
 
             String subject = String.format("Password Changed - %s", appName);
@@ -189,6 +190,7 @@ public class EmailService {
             context.setVariable("verificationCode", verificationCode);
             context.setVariable("expirationMinutes", verificationExpirationMinutes);
             context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
 
             String subject = String.format("Verify Your Email - %s", appName);
 
@@ -232,8 +234,9 @@ public class EmailService {
             context.setVariable("orderPublicId", orderPublicId);
             context.setVariable("vendorName", vendorName);
             context.setVariable("totalAmount", String.format("$%.2f", totalAmount));
-            context.setVariable("orderTime", orderTime.format(DATE_FORMATTER));
+            context.setVariable("orderTime", orderTime != null ? orderTime.format(DATE_FORMATTER) : LocalDateTime.now().format(DATE_FORMATTER));
             context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
             context.setVariable("orderTrackingUrl", String.format("%s/orders/%s", appUrl, orderPublicId));
 
             String subject = String.format("Order Confirmation #%s - %s", orderPublicId, appName);
@@ -273,6 +276,7 @@ public class EmailService {
             context.setVariable("oldStatus", oldStatus);
             context.setVariable("newStatus", newStatus);
             context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
             context.setVariable("orderTrackingUrl", String.format("%s/orders/%s", appUrl, orderPublicId));
 
             String subject = String.format("Order Update: %s - %s", newStatus, appName);
@@ -312,6 +316,7 @@ public class EmailService {
             context.setVariable("customerName", customerName);
             context.setVariable("totalAmount", String.format("$%.2f", totalAmount));
             context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
             context.setVariable("orderManagementUrl", String.format("%s/vendor/orders/%s", appUrl, orderPublicId));
 
             String subject = String.format("New Order #%s - %s", orderPublicId, appName);
@@ -354,6 +359,8 @@ public class EmailService {
             context.setVariable("amount", String.format("$%.2f", amount));
             context.setVariable("paymentTime", LocalDateTime.now().format(DATE_FORMATTER));
             context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
+            context.setVariable("orderViewUrl", String.format("%s/orders/%s", appUrl, orderPublicId));
 
             String subject = String.format("Payment Confirmation - %s", appName);
             String htmlContent = processTemplate("payment-confirmation", context);
@@ -390,6 +397,7 @@ public class EmailService {
             context.setVariable("orderPublicId", orderPublicId);
             context.setVariable("reason", reason);
             context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
             context.setVariable("retryUrl", String.format("%s/orders/%s/payment", appUrl, orderPublicId));
 
             String subject = String.format("Payment Failed - %s", appName);
@@ -423,6 +431,7 @@ public class EmailService {
             context.setVariable("title", title);
             context.setVariable("message", message);
             context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
 
             String subject = String.format("%s - %s", title, appName);
             String htmlContent = processTemplate("notification", context);

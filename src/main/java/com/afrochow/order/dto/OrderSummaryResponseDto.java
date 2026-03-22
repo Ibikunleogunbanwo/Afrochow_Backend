@@ -21,6 +21,7 @@ public class OrderSummaryResponseDto {
     private AddressResponseDto deliveryAddress;
     private BigDecimal totalAmount;
     private OrderStatus status;
+    private String statusLabel;
     private LocalDateTime orderTime;
     private LocalDateTime estimatedDeliveryTime;
     private Integer itemCount;
