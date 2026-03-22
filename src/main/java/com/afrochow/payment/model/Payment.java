@@ -35,6 +35,12 @@ public class Payment {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
+    @Column(precision = 10, scale = 2)
+    private BigDecimal platformFeeAmount;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal vendorPayout;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PaymentStatus status;

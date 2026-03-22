@@ -265,7 +265,7 @@ public class NotificationService {
         try {
             User customer = order.getCustomer().getUser();
             String vendorName = order.getVendor().getRestaurantName();
-            String message = order.getStatus() == OrderStatus.READY_FOR_PICKUP
+            String message = "PICKUP".equalsIgnoreCase(order.getFulfillmentType())
                 ? "Your order from " + vendorName + " is ready for pickup!"
                 : "Your order from " + vendorName + " is ready and will be delivered soon!";
 
@@ -344,11 +344,13 @@ public class NotificationService {
             );
 
             // 2. Email notification
+            String previousStatus = "PICKUP".equalsIgnoreCase(order.getFulfillmentType())
+                    ? "READY_FOR_PICKUP" : "OUT_FOR_DELIVERY";
             emailService.sendOrderStatusUpdateEmail(
                 customer.getEmail(),
                 customer.getFirstName(),
                 order.getPublicOrderId(),
-                "OUT_FOR_DELIVERY",
+                previousStatus,
                 "DELIVERED"
             );
 
@@ -365,7 +367,7 @@ public class NotificationService {
      */
     @Async
     @Transactional
-    public void notifyCustomerOrderCancelled(Order order, String reason) {
+    public void notifyCustomerOrderCancelled(Order order, String reason, String previousStatus) {
         try {
             User customer = order.getCustomer().getUser();
             String vendorName = order.getVendor().getRestaurantName();
@@ -389,7 +391,7 @@ public class NotificationService {
                 customer.getEmail(),
                 customer.getFirstName(),
                 order.getPublicOrderId(),
-                order.getStatus().toString(),
+                previousStatus,
                 "CANCELLED"
             );
 

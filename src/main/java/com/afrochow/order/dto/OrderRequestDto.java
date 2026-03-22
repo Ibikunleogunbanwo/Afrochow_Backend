@@ -50,4 +50,8 @@ public class OrderRequestDto {
 
     @Size(max = 500, message = "Special instructions must not exceed 500 characters")
     private String specialInstructions;
+
+    /** Optional promo code to apply a discount to this order. */
+    @Size(max = 50)
+    private String promoCode;
 }

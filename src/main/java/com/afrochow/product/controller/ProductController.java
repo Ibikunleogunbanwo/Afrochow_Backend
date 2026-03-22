@@ -16,7 +16,6 @@ import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -198,7 +197,7 @@ public class ProductController {
             @PathVariable String publicProductId,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        Long userId = Long.parseLong(userDetails.getUsername());
+        Long userId = userDetails.getUserId();
         ProductResponseDto product = productService.getVendorProduct(userId, publicProductId);
         return ResponseBuilder.ok("Product retrieved successfully", product);
     }
@@ -239,9 +238,9 @@ public class ProductController {
     @Operation(summary = "Toggle availability", description = "Toggle product availability (ownership required)")
     public ResponseEntity<ApiResponse<ProductResponseDto>> toggleAvailability(
             @PathVariable String publicProductId,
-            @AuthenticationPrincipal UserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        Long userId = Long.parseLong(userDetails.getUsername());
+        Long userId = userDetails.getUserId();
         ProductResponseDto product = productService.toggleProductAvailability(userId, publicProductId);
         return ResponseBuilder.ok("Product availability toggled successfully", product);
     }
@@ -259,10 +258,10 @@ public class ProductController {
                     content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE)
             )
             @RequestParam("image") MultipartFile image,
-            @AuthenticationPrincipal UserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         try {
-            Long userId = Long.parseLong(userDetails.getUsername());
+            Long userId = userDetails.getUserId();
             ProductResponseDto product = productService.uploadProductImage(userId, publicProductId, image);
             return ResponseBuilder.ok("Product image uploaded successfully", product);
         } catch (IOException e) {

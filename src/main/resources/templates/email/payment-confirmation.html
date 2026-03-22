@@ -146,7 +146,7 @@
             </div>
 
             <center>
-                <a th:href="|${appUrl}/orders|" class="view-button">View Order</a>
+                <a th:href="${orderViewUrl}" class="view-button">View Order</a>
             </center>
 
             <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0; font-size: 13px;">
@@ -162,7 +162,7 @@
                 Bringing African flavors to your doorstep
             </p>
             <p style="font-size: 11px; color: #999; margin-top: 15px;">
-                Payment confirmation from <span th:text="${appUrl}">afrochow.com</span>
+                Payment confirmation from <span th:text="${appUrl}">afrochow.ca</span>
             </p>
         </div>
     </div>

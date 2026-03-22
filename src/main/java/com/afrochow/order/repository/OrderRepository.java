@@ -89,6 +89,27 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COUNT(o) FROM Order o WHERE o.vendor = :vendor AND DATE(o.orderTime) = CURRENT_DATE")
     Long countVendorTodayOrders(@Param("vendor") VendorProfile vendor);
 
+    // Count queries — by customer and status
+    Long countByCustomerAndStatus(CustomerProfile customer, OrderStatus status);
+
+    // Efficient count of active (non-terminal) orders
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status NOT IN ('DELIVERED', 'CANCELLED', 'REFUNDED')")
+    Long countActiveOrders();
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.vendor = :vendor AND o.status NOT IN ('DELIVERED', 'CANCELLED', 'REFUNDED')")
+    Long countActiveOrdersByVendor(@Param("vendor") VendorProfile vendor);
+
+    // Customer revenue (DELIVERED orders only)
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.customer = :customer AND o.status = 'DELIVERED'")
+    BigDecimal calculateCustomerRevenue(@Param("customer") CustomerProfile customer);
+
+    // Date-range aggregate queries (used by PlatformTrends — avoid loading all orders into memory)
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.orderTime >= :startDate AND o.orderTime <= :endDate")
+    Long countOrdersBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status = 'DELIVERED' AND o.orderTime >= :startDate AND o.orderTime <= :endDate")
+    BigDecimal calculateRevenueBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
     // Sum aggregation queries
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.vendor.id = :vendorId")
     BigDecimal sumTotalAmountByVendorId(@Param("vendorId") Long vendorId);

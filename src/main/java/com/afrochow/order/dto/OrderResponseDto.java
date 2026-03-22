@@ -23,9 +23,11 @@ public class OrderResponseDto {
     private BigDecimal deliveryFee;
     private BigDecimal tax;
     private BigDecimal discount;
+    private String appliedPromoCode;
     private BigDecimal totalAmount;
 
     private OrderStatus status;
+    private String statusLabel;
     private String specialInstructions;
 
     private String customerPublicId;

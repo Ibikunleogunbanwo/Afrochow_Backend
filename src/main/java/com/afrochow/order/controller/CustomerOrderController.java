@@ -2,6 +2,7 @@ package com.afrochow.order.controller;
 
 import com.afrochow.common.ApiResponse;
 import com.afrochow.order.dto.OrderRequestDto;
+import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.order.dto.OrderResponseDto;
 import com.afrochow.order.dto.OrderSummaryResponseDto;
 import com.afrochow.order.service.OrderService;
@@ -46,14 +47,8 @@ public class CustomerOrderController {
     private Long getUserId(UserDetails userDetails) {
         if (userDetails == null) {
             throw new IllegalStateException("User authentication details are missing");
-        } else {
-            userDetails.getUsername();
         }
-        try {
-            return Long.parseLong(userDetails.getUsername());
-        } catch (NumberFormatException e) {
-            throw new IllegalStateException("Invalid user ID format", e);
-        }
+        return ((CustomUserDetails) userDetails).getUserId();
     }
 
     @PostMapping
