@@ -160,6 +160,13 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- pom.xml -->
+		<dependency>
+			<groupId>com.stripe</groupId>
+			<artifactId>stripe-java</artifactId>
+			<version>25.3.0</version>
+		</dependency>
+
 		<!-- Environment Variables Support (.env file) -->
 		<dependency>
 			<groupId>io.github.cdimascio</groupId>
