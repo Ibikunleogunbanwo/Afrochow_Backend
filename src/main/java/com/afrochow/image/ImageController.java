@@ -103,7 +103,7 @@ public class ImageController {
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ImageUploadResponseDto.class)))
     })
-    public ResponseEntity<ImageUploadResponseDto> uploadRegistrationImage(
+    public ResponseEntity<ApiResponse<ImageUploadResponseDto>> uploadRegistrationImage(
             @Parameter(description = "Image file (JPEG, PNG, GIF, WebP, max 5MB)", required = true)
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "Image category", example = "registrations")
@@ -114,18 +114,18 @@ public class ImageController {
             String safeCategory = sanitizeInput(category, "category");
 
             String imageUrl = imageUploadService.uploadImageForRegistrationAndGetUrl(file, safeCategory);
-            return ResponseEntity.ok(ImageUploadResponseDto.builder()
-                    .success(true).imageUrl(imageUrl).message("Image uploaded successfully").build());
+            ImageUploadResponseDto dto = ImageUploadResponseDto.builder()
+                    .success(true).imageUrl(imageUrl).message("Image uploaded successfully").build();
+            return ResponseEntity.ok(ApiResponse.success("Image uploaded successfully", dto));
 
         } catch (ImageValidationException e) {
             log.warn("Registration image validation failed — category: {}, reason: {}", category, e.getMessage());
-            return ResponseEntity.badRequest().body(ImageUploadResponseDto.builder()
-                    .success(false).imageUrl(null).message(e.getMessage()).build());
+            return ResponseEntity.badRequest().body(ApiResponse.badRequest(e.getMessage()));
 
         } catch (Exception e) {
             log.error("Registration image upload failed — category: {}, error: {}", category, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ImageUploadResponseDto.builder()
-                    .success(false).imageUrl(null).message("Upload failed. Please try again.").build());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.internalError("Upload failed. Please try again."));
         }
     }
 
@@ -145,7 +145,7 @@ public class ImageController {
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = Step4Response.class)))
     })
-    public ResponseEntity<Step4Response> uploadDocuments(
+    public ResponseEntity<ApiResponse<Step4Response>> uploadDocuments(
             @Parameter(description = "Business licence image (optional)")
             @RequestPart(value = "businessLicense", required = false) MultipartFile license,
             @Parameter(description = "Logo image (required)", required = true)
@@ -168,9 +168,16 @@ public class ImageController {
         boolean allOk = Stream.of(licenseResponse, logoResponse, bannerResponse, profileResponse)
                 .allMatch(ImageUploadResponseDto::isSuccess);
 
-        return allOk
-                ? ResponseEntity.ok(response)
-                : ResponseEntity.badRequest().body(response);
+        if (allOk) {
+            return ResponseEntity.ok(ApiResponse.success("Documents uploaded successfully", response));
+        } else {
+            return ResponseEntity.badRequest().body(ApiResponse.<Step4Response>builder()
+                    .success(false)
+                    .message("One or more files failed validation")
+                    .errorCode("BAD_REQUEST")
+                    .data(response)
+                    .build());
+        }
     }
 
     // ─── Upload user image ────────────────────────────────────────────────────
@@ -189,7 +196,7 @@ public class ImageController {
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ImageUploadResponseDto.class)))
     })
-    public ResponseEntity<ImageUploadResponseDto> uploadUserImage(
+    public ResponseEntity<ApiResponse<ImageUploadResponseDto>> uploadUserImage(
             @Parameter(description = "Image file (JPEG, PNG, GIF, WebP, max 5MB)", required = true)
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "Image category (e.g. profiles, vendors)", required = true)
@@ -203,18 +210,18 @@ public class ImageController {
             String safeUserId   = sanitizeInput(publicUserId, "userId");
 
             String imageUrl = imageUploadService.uploadImageAndGetUrl(file, safeCategory, safeUserId);
-            return ResponseEntity.ok(ImageUploadResponseDto.builder()
-                    .success(true).imageUrl(imageUrl).message("Image uploaded successfully").build());
+            ImageUploadResponseDto dto = ImageUploadResponseDto.builder()
+                    .success(true).imageUrl(imageUrl).message("Image uploaded successfully").build();
+            return ResponseEntity.ok(ApiResponse.success("Image uploaded successfully", dto));
 
         } catch (ImageValidationException e) {
             log.warn("User image validation failed — category: {}, userId: {}, reason: {}", category, publicUserId, e.getMessage());
-            return ResponseEntity.badRequest().body(ImageUploadResponseDto.builder()
-                    .success(false).imageUrl(null).message(e.getMessage()).build());
+            return ResponseEntity.badRequest().body(ApiResponse.badRequest(e.getMessage()));
 
         } catch (Exception e) {
             log.error("User image upload failed — category: {}, userId: {}, error: {}", category, publicUserId, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ImageUploadResponseDto.builder()
-                    .success(false).imageUrl(null).message("Upload failed. Please try again.").build());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.internalError("Upload failed. Please try again."));
         }
     }
 
