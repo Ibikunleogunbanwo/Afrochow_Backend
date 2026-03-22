@@ -275,6 +275,7 @@ com/afrochow/product/dto/ProductSummaryResponseDto$ProductSummaryResponseDtoBuil
 com/afrochow/vendor/dto/VendorProfileUpdateRequestDto$VendorProfileUpdateRequestDtoBuilder.class
 com/afrochow/security/model/SecurityEvent$SecurityEventType.class
 com/afrochow/search/dto/PopularCuisineDto$ProductSummary.class
+com/afrochow/config/StripeConfig.class
 com/afrochow/common/exceptions/UnauthorizedException.class
 com/afrochow/common/ApiResponse.class
 com/afrochow/review/dto/ReviewResponseDto.class
@@ -286,6 +287,7 @@ com/afrochow/vendor/dto/VendorProfileResponseDto$OperatingHoursDto.class
 com/afrochow/common/enums/PaymentStatus.class
 com/afrochow/orderline/dto/OrderLineRequestDto.class
 com/afrochow/user/repository/UserRepository.class
+com/afrochow/common/enums/ProvincialTax.class
 com/afrochow/customer/dto/CustomerDashboardDto.class
 com/afrochow/order/model/Order$OrderBuilder.class
 com/afrochow/security/repository/PasswordResetTokenRepository.class
