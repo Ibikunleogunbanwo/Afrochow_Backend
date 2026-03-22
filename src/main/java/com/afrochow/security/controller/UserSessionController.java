@@ -1,5 +1,6 @@
 package com.afrochow.security.controller;
 
+import com.afrochow.common.ApiResponse;
 import com.afrochow.security.dto.ActiveSessionDto;
 import com.afrochow.security.Services.RefreshTokenService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,39 +31,26 @@ public class UserSessionController {
         this.refreshTokenService = refreshTokenService;
     }
 
-    /**
-     * Get all active sessions for the authenticated user
-     *
-     * @param userDetails Authenticated user details
-     * @return List of active sessions
-     */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get active sessions", description = "Get all active sessions for the authenticated user")
-    public ResponseEntity<List<ActiveSessionDto>> getActiveSessions(
+    public ResponseEntity<ApiResponse<List<ActiveSessionDto>>> getActiveSessions(
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         String username = userDetails.getUsername();
         List<ActiveSessionDto> sessions = refreshTokenService.getActiveSessions(username);
-        return ResponseEntity.ok(sessions);
+        return ResponseEntity.ok(ApiResponse.success(sessions));
     }
 
-    /**
-     * Revoke a specific session
-     *
-     * @param tokenId ID of the session to revoke
-     * @param userDetails Authenticated user details
-     * @return Success message
-     */
     @DeleteMapping("/{tokenId}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Revoke session", description = "Revoke a specific session by token ID")
-    public ResponseEntity<String> revokeSession(
+    public ResponseEntity<ApiResponse<Void>> revokeSession(
             @PathVariable Long tokenId,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         String username = userDetails.getUsername();
         refreshTokenService.revokeSession(username, tokenId);
-        return ResponseEntity.ok("Session revoked successfully");
+        return ResponseEntity.ok(ApiResponse.success("Session revoked successfully"));
     }
 }

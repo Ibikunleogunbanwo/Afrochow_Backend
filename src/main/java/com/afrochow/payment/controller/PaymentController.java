@@ -1,5 +1,6 @@
 package com.afrochow.payment.controller;
 
+import com.afrochow.common.ApiResponse;
 import com.afrochow.payment.dto.PaymentResponseDto;
 import com.afrochow.common.enums.PaymentStatus;
 import com.afrochow.payment.service.PaymentService;
@@ -40,26 +41,20 @@ public class PaymentController {
 
     // ========== CUSTOMER ENDPOINTS ==========
 
-    /**
-     * Get payment for an order
-     */
     @GetMapping("/customer/payments/order/{publicOrderId}")
     @Operation(summary = "Get payment", description = "Get payment details for an order")
-    public ResponseEntity<PaymentResponseDto> getPayment(
+    public ResponseEntity<ApiResponse<PaymentResponseDto>> getPayment(
             @PathVariable String publicOrderId,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         Long userId = Long.parseLong(userDetails.getUsername());
         PaymentResponseDto payment = paymentService.getPaymentByOrderId(userId, publicOrderId);
-        return ResponseEntity.ok(payment);
+        return ResponseEntity.ok(ApiResponse.success(payment));
     }
 
-    /**
-     * Process payment
-     */
     @PostMapping("/customer/payments/order/{publicOrderId}/process")
     @Operation(summary = "Process payment", description = "Process payment for an order")
-    public ResponseEntity<PaymentResponseDto> processPayment(
+    public ResponseEntity<ApiResponse<PaymentResponseDto>> processPayment(
             @PathVariable String publicOrderId,
             @RequestParam(required = false) String cardLast4,
             @RequestParam(required = false) String cardBrand,
@@ -67,90 +62,69 @@ public class PaymentController {
     ) {
         Long userId = Long.parseLong(userDetails.getUsername());
         PaymentResponseDto payment = paymentService.processPayment(userId, publicOrderId, cardLast4, cardBrand);
-        return ResponseEntity.ok(payment);
+        return ResponseEntity.ok(ApiResponse.success("Payment processed successfully", payment));
     }
 
-    /**
-     * Retry failed payment
-     */
     @PostMapping("/customer/payments/order/{publicOrderId}/retry")
     @Operation(summary = "Retry payment", description = "Retry a failed payment")
-    public ResponseEntity<PaymentResponseDto> retryPayment(
+    public ResponseEntity<ApiResponse<PaymentResponseDto>> retryPayment(
             @PathVariable String publicOrderId,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         Long userId = Long.parseLong(userDetails.getUsername());
         PaymentResponseDto payment = paymentService.retryPayment(userId, publicOrderId);
-        return ResponseEntity.ok(payment);
+        return ResponseEntity.ok(ApiResponse.success("Payment retried successfully", payment));
     }
 
     // ========== ADMIN ENDPOINTS ==========
 
-    /**
-     * Get all payments
-     */
     @GetMapping("/admin/payments")
     @Operation(summary = "Get all payments", description = "Get all payments in the system")
-    public ResponseEntity<List<PaymentResponseDto>> getAllPayments() {
+    public ResponseEntity<ApiResponse<List<PaymentResponseDto>>> getAllPayments() {
         List<PaymentResponseDto> payments = paymentService.getAllPayments();
-        return ResponseEntity.ok(payments);
+        return ResponseEntity.ok(ApiResponse.success(payments));
     }
 
-    /**
-     * Get payment by transaction ID
-     */
     @GetMapping("/admin/payments/transaction/{transactionId}")
     @Operation(summary = "Get payment by transaction", description = "Get payment by transaction ID")
-    public ResponseEntity<PaymentResponseDto> getPaymentByTransaction(
+    public ResponseEntity<ApiResponse<PaymentResponseDto>> getPaymentByTransaction(
             @PathVariable String transactionId
     ) {
         PaymentResponseDto payment = paymentService.getPaymentByTransactionId(transactionId);
-        return ResponseEntity.ok(payment);
+        return ResponseEntity.ok(ApiResponse.success(payment));
     }
 
-    /**
-     * Get payment by order ID
-     */
     @GetMapping("/admin/payments/order/{publicOrderId}")
     @Operation(summary = "Get payment by order", description = "Get payment for a specific order")
-    public ResponseEntity<PaymentResponseDto> getPaymentByOrder(
+    public ResponseEntity<ApiResponse<PaymentResponseDto>> getPaymentByOrder(
             @PathVariable String publicOrderId
     ) {
         PaymentResponseDto payment = paymentService.getPaymentByOrderIdAdmin(publicOrderId);
-        return ResponseEntity.ok(payment);
+        return ResponseEntity.ok(ApiResponse.success(payment));
     }
 
-    /**
-     * Get payments by status
-     */
     @GetMapping("/admin/payments/status/{status}")
     @Operation(summary = "Get payments by status", description = "Get payments filtered by status")
-    public ResponseEntity<List<PaymentResponseDto>> getPaymentsByStatus(
+    public ResponseEntity<ApiResponse<List<PaymentResponseDto>>> getPaymentsByStatus(
             @PathVariable PaymentStatus status
     ) {
         List<PaymentResponseDto> payments = paymentService.getPaymentsByStatus(status);
-        return ResponseEntity.ok(payments);
+        return ResponseEntity.ok(ApiResponse.success(payments));
     }
 
-    /**
-     * Get failed payments
-     */
     @GetMapping("/admin/payments/failed")
     @Operation(summary = "Get failed payments", description = "Get all failed payments")
-    public ResponseEntity<List<PaymentResponseDto>> getFailedPayments() {
+    public ResponseEntity<ApiResponse<List<PaymentResponseDto>>> getFailedPayments() {
         List<PaymentResponseDto> payments = paymentService.getFailedPayments();
-        return ResponseEntity.ok(payments);
+        return ResponseEntity.ok(ApiResponse.success(payments));
     }
 
-    /**
-     * Refund payment
-     */
     @PostMapping("/admin/payments/order/{publicOrderId}/refund")
     @Operation(summary = "Refund payment", description = "Process a refund for a completed payment")
-    public ResponseEntity<PaymentResponseDto> refundPayment(
+    public ResponseEntity<ApiResponse<PaymentResponseDto>> refundPayment(
             @PathVariable String publicOrderId
     ) {
         PaymentResponseDto payment = paymentService.refundPayment(publicOrderId);
-        return ResponseEntity.ok(payment);
+        return ResponseEntity.ok(ApiResponse.success("Payment refunded successfully", payment));
     }
 }

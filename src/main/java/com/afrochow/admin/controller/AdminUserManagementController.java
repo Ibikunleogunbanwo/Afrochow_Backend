@@ -1,5 +1,6 @@
 package com.afrochow.admin.controller;
 
+import com.afrochow.common.ApiResponse;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.Role;
 import com.afrochow.user.repository.UserRepository;
@@ -26,79 +27,79 @@ public class AdminUserManagementController {
 
     @GetMapping
     @Operation(summary = "Get all users", description = "Get all users in the system (admin only)")
-    public ResponseEntity<List<UserSummaryDto>> getAllUsers() {
+    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getAllUsers() {
         List<User> users = userRepository.findAll();
         List<UserSummaryDto> summaries = users.stream()
                 .map(this::toUserSummary)
                 .toList();
-        return ResponseEntity.ok(summaries);
+        return ResponseEntity.ok(ApiResponse.success(summaries));
     }
 
     @GetMapping("/{publicUserId}")
     @Operation(summary = "Get user by ID", description = "Get detailed information about a specific user")
-    public ResponseEntity<UserDetailDto> getUserById(@PathVariable String publicUserId) {
+    public ResponseEntity<ApiResponse<UserDetailDto>> getUserById(@PathVariable String publicUserId) {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
-        return ResponseEntity.ok(toUserDetail(user));
+        return ResponseEntity.ok(ApiResponse.success(toUserDetail(user)));
     }
 
     @GetMapping("/role/{role}")
     @Operation(summary = "Get users by role", description = "Get all users with a specific role")
-    public ResponseEntity<List<UserSummaryDto>> getUsersByRole(@PathVariable Role role) {
+    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getUsersByRole(@PathVariable Role role) {
         List<User> users = userRepository.findByRole(role);
         List<UserSummaryDto> summaries = users.stream()
                 .map(this::toUserSummary)
                 .toList();
-        return ResponseEntity.ok(summaries);
+        return ResponseEntity.ok(ApiResponse.success(summaries));
     }
 
     @GetMapping("/active")
     @Operation(summary = "Get active users", description = "Get all active users")
-    public ResponseEntity<List<UserSummaryDto>> getActiveUsers() {
+    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getActiveUsers() {
         List<User> users = userRepository.findByIsActive(true);
         List<UserSummaryDto> summaries = users.stream()
                 .map(this::toUserSummary)
                 .toList();
-        return ResponseEntity.ok(summaries);
+        return ResponseEntity.ok(ApiResponse.success(summaries));
     }
 
     @GetMapping("/inactive")
     @Operation(summary = "Get inactive users", description = "Get all inactive/suspended users")
-    public ResponseEntity<List<UserSummaryDto>> getInactiveUsers() {
+    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getInactiveUsers() {
         List<User> users = userRepository.findByIsActive(false);
         List<UserSummaryDto> summaries = users.stream()
                 .map(this::toUserSummary)
                 .toList();
-        return ResponseEntity.ok(summaries);
+        return ResponseEntity.ok(ApiResponse.success(summaries));
     }
 
     @GetMapping("/search")
     @Operation(summary = "Search users", description = "Search users by name")
-    public ResponseEntity<List<UserSummaryDto>> searchUsers(@RequestParam String query) {
+    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> searchUsers(@RequestParam String query) {
         List<User> users = userRepository
                 .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(query, query);
         List<UserSummaryDto> summaries = users.stream()
                 .map(this::toUserSummary)
                 .toList();
-        return ResponseEntity.ok(summaries);
+        return ResponseEntity.ok(ApiResponse.success(summaries));
     }
 
     // ========== MODIFY USERS ==========
 
     @PatchMapping("/{publicUserId}/activate")
     @Operation(summary = "Activate user", description = "Activate a suspended user account")
-    public ResponseEntity<UserSummaryDto> activateUser(@PathVariable String publicUserId) {
+    public ResponseEntity<ApiResponse<UserSummaryDto>> activateUser(@PathVariable String publicUserId) {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         user.setIsActive(true);
         User updatedUser = userRepository.save(user);
-        return ResponseEntity.ok(toUserSummary(updatedUser));
+        return ResponseEntity.ok(ApiResponse.success("User activated successfully", toUserSummary(updatedUser)));
     }
 
     @PatchMapping("/{publicUserId}/deactivate")
     @Operation(summary = "Deactivate user", description = "Suspend/deactivate a user account")
-    public ResponseEntity<UserSummaryDto> deactivateUser(@PathVariable String publicUserId) {
+    public ResponseEntity<ApiResponse<UserSummaryDto>> deactivateUser(@PathVariable String publicUserId) {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
@@ -109,12 +110,12 @@ public class AdminUserManagementController {
 
         user.setIsActive(false);
         User updatedUser = userRepository.save(user);
-        return ResponseEntity.ok(toUserSummary(updatedUser));
+        return ResponseEntity.ok(ApiResponse.success("User deactivated successfully", toUserSummary(updatedUser)));
     }
 
     @PatchMapping("/{publicUserId}/role")
     @Operation(summary = "Change user role", description = "Change a user's role (CUSTOMER, VENDOR, ADMIN)")
-    public ResponseEntity<UserSummaryDto> changeUserRole(
+    public ResponseEntity<ApiResponse<UserSummaryDto>> changeUserRole(
             @PathVariable String publicUserId,
             @RequestParam Role newRole) {
 
@@ -128,12 +129,12 @@ public class AdminUserManagementController {
 
         user.setRole(newRole);
         User updatedUser = userRepository.save(user);
-        return ResponseEntity.ok(toUserSummary(updatedUser));
+        return ResponseEntity.ok(ApiResponse.success("User role updated successfully", toUserSummary(updatedUser)));
     }
 
     @DeleteMapping("/{publicUserId}")
     @Operation(summary = "Delete user", description = "Permanently delete a user account (use with caution)")
-    public ResponseEntity<Void> deleteUser(@PathVariable String publicUserId) {
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String publicUserId) {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
@@ -143,14 +144,14 @@ public class AdminUserManagementController {
         }
 
         userRepository.delete(user);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(ApiResponse.success("User deleted successfully"));
     }
 
     // ========== STATISTICS ==========
 
     @GetMapping("/stats")
     @Operation(summary = "Get user statistics", description = "Get system-wide user statistics")
-    public ResponseEntity<UserStats> getUserStats() {
+    public ResponseEntity<ApiResponse<UserStats>> getUserStats() {
         long totalUsers = userRepository.count();
         long activeUsers = userRepository.findByIsActive(true).size();
         long inactiveUsers = totalUsers - activeUsers;
@@ -167,7 +168,7 @@ public class AdminUserManagementController {
                 .totalAdmins(admins)
                 .build();
 
-        return ResponseEntity.ok(stats);
+        return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
     // ========== HELPER METHODS ==========

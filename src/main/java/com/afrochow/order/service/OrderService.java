@@ -553,6 +553,8 @@ public class OrderService {
                 .totalAmount(order.getTotalAmount())
                 .status(order.getStatus())
                 .orderTime(order.getOrderTime())
+                .fulfillmentType(order.getFulfillmentType())
+                .canBeCancelled(order.canBeCancelled())
                 .build();
     }
 
