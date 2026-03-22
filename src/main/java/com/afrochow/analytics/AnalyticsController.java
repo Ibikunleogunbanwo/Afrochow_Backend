@@ -1,5 +1,6 @@
 package com.afrochow.analytics;
 
+import com.afrochow.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,25 +25,18 @@ public class AnalyticsController {
 
     @GetMapping("/vendor")
     @PreAuthorize("hasRole('VENDOR')")
-    @Operation(
-            summary = "Get vendor analytics",
-            description = "Get comprehensive analytics for the authenticated vendor"
-    )
-    public ResponseEntity<AnalyticsService.VendorAnalytics> getVendorAnalytics(
+    @Operation(summary = "Get vendor analytics", description = "Get comprehensive analytics for the authenticated vendor")
+    public ResponseEntity<ApiResponse<AnalyticsService.VendorAnalytics>> getVendorAnalytics(
             Authentication authentication) {
-
-        return ResponseEntity.ok(
+        return ResponseEntity.ok(ApiResponse.success(
                 analyticsService.getVendorAnalytics(authentication.getName())
-        );
+        ));
     }
 
     @GetMapping("/vendor/sales-report")
     @PreAuthorize("hasRole('VENDOR')")
-    @Operation(
-            summary = "Get vendor sales report",
-            description = "Get vendor sales report for a specific date range"
-    )
-    public ResponseEntity<AnalyticsService.VendorSalesReport> getVendorSalesReport(
+    @Operation(summary = "Get vendor sales report", description = "Get vendor sales report for a specific date range")
+    public ResponseEntity<ApiResponse<AnalyticsService.VendorSalesReport>> getVendorSalesReport(
             Authentication authentication,
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -50,79 +44,56 @@ public class AnalyticsController {
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
             LocalDateTime endDate) {
-
-        return ResponseEntity.ok(
-                analyticsService.getVendorSalesReport(
-                        authentication.getName(),
-                        startDate,
-                        endDate
-                )
-        );
+        return ResponseEntity.ok(ApiResponse.success(
+                analyticsService.getVendorSalesReport(authentication.getName(), startDate, endDate)
+        ));
     }
 
     @GetMapping("/vendor/popular-products")
     @PreAuthorize("hasRole('VENDOR')")
-    @Operation(
-            summary = "Get popular products",
-            description = "Get top 10 popular products for the authenticated vendor"
-    )
-    public ResponseEntity<List<AnalyticsService.PopularProduct>> getVendorPopularProducts(
+    @Operation(summary = "Get popular products", description = "Get top 10 popular products for the authenticated vendor")
+    public ResponseEntity<ApiResponse<List<AnalyticsService.PopularProduct>>> getVendorPopularProducts(
             Authentication authentication) {
-
-        return ResponseEntity.ok(
+        return ResponseEntity.ok(ApiResponse.success(
                 analyticsService.getVendorPopularProducts(authentication.getName())
-        );
+        ));
     }
 
     // ================= CUSTOMER =================
 
     @GetMapping("/customer")
     @PreAuthorize("hasRole('CUSTOMER')")
-    @Operation(
-            summary = "Get customer analytics",
-            description = "Get analytics for the authenticated customer"
-    )
-    public ResponseEntity<AnalyticsService.CustomerAnalytics> getCustomerAnalytics(
+    @Operation(summary = "Get customer analytics", description = "Get analytics for the authenticated customer")
+    public ResponseEntity<ApiResponse<AnalyticsService.CustomerAnalytics>> getCustomerAnalytics(
             Authentication authentication) {
-
-        return ResponseEntity.ok(
+        return ResponseEntity.ok(ApiResponse.success(
                 analyticsService.getCustomerAnalytics(authentication.getName())
-        );
+        ));
     }
 
     @GetMapping("/customer/order-history")
     @PreAuthorize("hasRole('CUSTOMER')")
-    @Operation(
-            summary = "Get customer order history",
-            description = "Get recent order history for the authenticated customer"
-    )
-    public ResponseEntity<AnalyticsService.CustomerOrderHistory> getCustomerOrderHistory(
+    @Operation(summary = "Get customer order history", description = "Get recent order history for the authenticated customer")
+    public ResponseEntity<ApiResponse<AnalyticsService.CustomerOrderHistory>> getCustomerOrderHistory(
             Authentication authentication) {
-
-        return ResponseEntity.ok(
+        return ResponseEntity.ok(ApiResponse.success(
                 analyticsService.getCustomerOrderHistory(authentication.getName())
-        );
+        ));
     }
 
     // ================= ADMIN =================
 
     @GetMapping("/admin/platform")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Get platform analytics",
-            description = "Get platform-wide analytics (admin only)"
-    )
-    public ResponseEntity<AnalyticsService.AdminAnalytics> getAdminAnalytics() {
-        return ResponseEntity.ok(analyticsService.getAdminAnalytics());
+    @Operation(summary = "Get platform analytics", description = "Get platform-wide analytics (admin only)")
+    public ResponseEntity<ApiResponse<AnalyticsService.AdminAnalytics>> getAdminAnalytics() {
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.getAdminAnalytics()));
     }
 
     @GetMapping("/admin/trends")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Get platform trends",
-            description = "Get platform sales trends (admin only)"
-    )
-    public ResponseEntity<AnalyticsService.PlatformTrends> getPlatformTrends() {
-        return ResponseEntity.ok(analyticsService.getPlatformTrends());
+    @Operation(summary = "Get platform trends", description = "Get platform sales trends (admin only)")
+    public ResponseEntity<ApiResponse<AnalyticsService.PlatformTrends>> getPlatformTrends() {
+        return ResponseEntity.ok(ApiResponse.success(analyticsService.getPlatformTrends()));
     }
 }
