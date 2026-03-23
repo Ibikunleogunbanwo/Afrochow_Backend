@@ -2,6 +2,7 @@ package com.afrochow.customer.dto;
 
 import com.afrochow.common.enums.PaymentMethod;
 import com.afrochow.common.enums.Role;
+import com.afrochow.common.validation.CanadianPhone;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ public class CustomerUpdateRequestDto {
     private String profileImageUrl;
     private String firstName;
     private String lastName;
+    @CanadianPhone
     private String phone;
     private Role role;
     private String defaultDeliveryInstructions;

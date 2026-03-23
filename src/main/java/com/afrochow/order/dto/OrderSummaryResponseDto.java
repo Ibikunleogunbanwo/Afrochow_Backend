@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -25,6 +26,7 @@ public class OrderSummaryResponseDto {
     private LocalDateTime orderTime;
     private LocalDateTime estimatedDeliveryTime;
     private Integer itemCount;
+    private List<String> itemNames;
     private String fulfillmentType;
     private Boolean canBeCancelled;
 }
