@@ -32,7 +32,6 @@ public class PromotionController {
     // ========== CUSTOMER ENDPOINTS ==========
 
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get active promotions", description = "List all currently active promotions")
     public ResponseEntity<ApiResponse<List<PromotionResponseDto>>> getActivePromotions() {
         return ResponseEntity.ok(ApiResponse.success(promotionService.getActivePromotions()));
