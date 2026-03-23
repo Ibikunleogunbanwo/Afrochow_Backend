@@ -41,6 +41,7 @@ com/afrochow/security/model/CustomUserDetails.class
 com/afrochow/review/controller/ReviewController.class
 com/afrochow/admin/dto/AdminProfileUpdateRequestDto.class
 com/afrochow/analytics/AnalyticsService$PlatformTrends$PlatformTrendsBuilder.class
+com/afrochow/common/validation/PhoneUtils.class
 com/afrochow/security/Utils/CookieConstants.class
 com/afrochow/payment/dto/PaymentRequestDto.class
 com/afrochow/user/model/User$UserBuilder.class
@@ -101,6 +102,7 @@ com/afrochow/review/model/Review$ReviewBuilder.class
 com/afrochow/analytics/dto/RevenueReportDto.class
 com/afrochow/order/controller/AdminOrderController.class
 com/afrochow/security/dto/TokenRefreshRequestDto.class
+com/afrochow/promotion/dto/PromotionPreviewResponseDto.class
 com/afrochow/user/dto/UserRequestDto.class
 com/afrochow/vendor/service/VendorProfileService.class
 com/afrochow/promotion/model/Promotion.class
@@ -136,6 +138,7 @@ com/afrochow/analytics/AnalyticsService$AdminAnalytics.class
 com/afrochow/auth/dto/ChangePasswordRequestDto.class
 com/afrochow/common/enums/PaymentMethod.class
 com/afrochow/product/model/Product$ProductBuilder.class
+com/afrochow/common/jackson/FlexibleLocalDateTimeDeserializer.class
 com/afrochow/category/model/Category.class
 com/afrochow/notification/service/PushNotificationService.class
 com/afrochow/address/dto/AddressRequestDto$AddressRequestDtoBuilder.class
@@ -166,6 +169,7 @@ com/afrochow/security/model/RefreshToken.class
 com/afrochow/security/Services/SecurityEventService.class
 com/afrochow/security/Utils/SecurityUtils.class
 com/afrochow/common/exceptions/ImageNotFoundException.class
+com/afrochow/common/validation/CanadianPhoneValidator.class
 com/afrochow/analytics/AnalyticsService$1.class
 com/afrochow/common/exceptions/VendorNotVerifiedException.class
 com/afrochow/config/SwaggerAuthConfig.class
@@ -189,6 +193,7 @@ com/afrochow/order/dto/OrderSummaryResponseDto.class
 com/afrochow/review/dto/ReviewRequestDto.class
 com/afrochow/analytics/AnalyticsService$CustomerAnalytics$CustomerAnalyticsBuilder.class
 com/afrochow/notification/dto/BroadcastNotificationRequestDto$BroadcastNotificationRequestDtoBuilder.class
+com/afrochow/promotion/dto/PromotionPreviewRequestDto.class
 com/afrochow/security/Services/LoginAttemptService.class
 com/afrochow/product/controller/ProductController.class
 com/afrochow/seeder/CompleteFinalSeeder.class
@@ -259,6 +264,7 @@ com/afrochow/product/model/Product.class
 com/afrochow/order/dto/OrderTrackingDto.class
 com/afrochow/analytics/dto/RevenueReportDto$RevenueReportDtoBuilder.class
 com/afrochow/customer/service/CustomerProfileService.class
+com/afrochow/common/validation/CanadianPhone.class
 com/afrochow/analytics/AnalyticsController.class
 com/afrochow/config/WebConfig.class
 com/afrochow/auth/service/AuthenticationService$1.class
@@ -274,6 +280,7 @@ com/afrochow/review/service/ReviewService$VendorReviewStats$VendorReviewStatsBui
 com/afrochow/security/model/LoginAttempt$LoginAttemptBuilder.class
 com/afrochow/analytics/AnalyticsService$OrderSummary$OrderSummaryBuilder.class
 com/afrochow/security/dto/RefreshTokenRequestDto.class
+com/afrochow/user/UserController.class
 com/afrochow/vendor/dto/VendorProfileResponseDto.class
 com/afrochow/address/controller/CustomerAddressController.class
 com/afrochow/security/model/SecurityEvent.class
@@ -330,6 +337,7 @@ com/afrochow/category/controller/CategoryController.class
 com/afrochow/admin/repository/AdminProfileRepository.class
 com/afrochow/security/Services/RateLimitService.class
 com/afrochow/security/Services/RateLimitService$AttemptTracker.class
+com/afrochow/promotion/dto/PromotionPreviewResponseDto$PromotionPreviewResponseDtoBuilder.class
 com/afrochow/customer/dto/CustomerProfileResponseDto.class
 com/afrochow/search/SearchService$UniversalSearchResults$UniversalSearchResultsBuilder.class
 com/afrochow/vendor/model/VendorProfile$DayHours.class

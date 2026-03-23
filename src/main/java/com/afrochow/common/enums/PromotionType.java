@@ -2,5 +2,6 @@ package com.afrochow.common.enums;
 
 public enum PromotionType {
     PERCENTAGE,
-    FIXED_AMOUNT
+    FIXED_AMOUNT,
+    FREE_DELIVERY
 }
