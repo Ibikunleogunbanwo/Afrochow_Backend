@@ -33,16 +33,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Security Configuration for Afrochow Application
- *
- * This configuration provides:
- * - JWT-based stateless authentication
- * - Role-based access control (CUSTOMER, VENDOR, ADMIN)
- * - Comprehensive security headers
- * - CORS configuration
- * - BCrypt password encoding
- */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(securedEnabled = true, jsr250Enabled = true)
@@ -83,17 +73,6 @@ public class SecurityConfig {
     /**
      * Prevents Spring Boot from auto-registering JwtAuthenticationFilter
      * as a standalone servlet filter OUTSIDE the Spring Security filter chain.
-     *
-     * Without this, the filter runs twice:
-     *  1. Before FilterChainProxy (too early — SecurityContext not ready)
-     *  2. Inside the security chain (correct position)
-     *
-     * The first run sets authentication, then FilterChainProxy re-secures
-     * the request clearing the context, then AnonymousAuthenticationFilter
-     * overwrites with anonymous — causing 401 on every protected endpoint.
-     *
-     * Setting enabled=false ensures the filter ONLY runs inside the
-     * security chain where it is registered via addFilterBefore().
      */
     @Bean
     public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(
@@ -111,20 +90,13 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Disable CSRF — using JWT tokens (stateless)
                 .csrf(AbstractHttpConfigurer::disable)
-
-                // Enable CORS with custom configuration
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-                // Configure comprehensive security headers
                 .headers(this::configureSecurityHeaders)
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // ── IMAGES — declared first, explicit per-method ──
-                        // Must be at the top so Spring Security matches these
-                        // before any authenticated() catch-all rules below.
+                        // ── IMAGES ────────────────────────────────────────
                         .requestMatchers(HttpMethod.GET,
                                 "/api/images/**",
                                 "/images/**"
@@ -138,26 +110,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE,
                                 "/api/images",
                                 "/images"
-                        ).permitAll()
-
-                        // ── ADMIN ─────────────────────────────────────────
-                        .requestMatchers("/auth/register/admin").hasRole("ADMIN")
-                        .requestMatchers("/admin/**", "/api/v1/admin/**").hasRole("ADMIN")
-
-                        // ── PUBLIC ────────────────────────────────────────
-                        .requestMatchers(
-                                "/auth/register/customer",
-                                "/auth/register/vendor",
-                                "/auth/login",
-                                "/auth/refresh",
-                                "/auth/logout",
-                                "/auth/logout-all/**",
-                                "/auth/forgot-password",
-                                "/auth/reset-password",
-                                "/auth/verify-email",
-                                "/auth/resend-verification",
-                                "/v1/public/**",
-                                "/public/**"
                         ).permitAll()
 
                         // ── API DOCS ──────────────────────────────────────
@@ -178,6 +130,26 @@ public class SecurityConfig {
                         // ── PLATFORM STATS ────────────────────────────────
                         .requestMatchers("/stats/**").permitAll()
 
+                        // ── AUTH ──────────────────────────────────────────
+                        .requestMatchers(
+                                "/auth/register/customer",
+                                "/auth/register/vendor",
+                                "/auth/login",
+                                "/auth/refresh",
+                                "/auth/logout",
+                                "/auth/logout-all/**",
+                                "/auth/forgot-password",
+                                "/auth/reset-password",
+                                "/auth/verify-email",
+                                "/auth/resend-verification",
+                                "/v1/public/**",
+                                "/public/**"
+                        ).permitAll()
+
+                        // ── ADMIN ─────────────────────────────────────────
+                        .requestMatchers("/auth/register/admin").hasRole("ADMIN")
+                        .requestMatchers("/admin/**", "/api/v1/admin/**").hasRole("ADMIN")
+
                         // ── PUBLIC BROWSING (GET only) ────────────────────
                         .requestMatchers(HttpMethod.GET,
                                 "/products/**",
@@ -191,6 +163,28 @@ public class SecurityConfig {
                                 "/api/v1/reviews/**"
                         ).permitAll()
 
+                        // ── PROMOTIONS ────────────────────────────────────
+                        // IMPORTANT: specific rules MUST come before the broad permitAll below.
+                        // Spring Security matches top-to-bottom and stops at first match.
+
+                        // Admin — most restrictive first
+                        .requestMatchers("/promotions/admin/**").hasRole("ADMIN")
+
+                        // Vendor — manage own promotions
+                        .requestMatchers(HttpMethod.GET, "/promotions/vendor/mine").hasRole("VENDOR")
+                        .requestMatchers(HttpMethod.POST, "/promotions/vendor").hasRole("VENDOR")
+                        .requestMatchers(HttpMethod.PUT, "/promotions/vendor/**").hasRole("VENDOR")
+                        .requestMatchers(HttpMethod.DELETE, "/promotions/vendor/**").hasRole("VENDOR")
+
+                        // Authenticated — preview discount (needs per-user limit check)
+                        .requestMatchers(HttpMethod.POST, "/promotions/preview").authenticated()
+
+                        // Public — browse active promotions (must be last in promotions block)
+                        .requestMatchers(HttpMethod.GET,
+                                "/promotions",
+                                "/promotions/**"
+                        ).permitAll()
+
                         // ── CUSTOMER ──────────────────────────────────────
                         .requestMatchers("/customer/**", "/api/v1/customer/**").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.POST, "/customer/profile/image").hasRole("CUSTOMER")
@@ -198,60 +192,45 @@ public class SecurityConfig {
                         // ── VENDOR ────────────────────────────────────────
                         .requestMatchers("/vendor/**", "/api/v1/vendor/**").hasRole("VENDOR")
 
-                        // ── PROMOTIONS ────────────────────────────────────
-                        // Public: browse active promotions and validate codes
-                        .requestMatchers(HttpMethod.GET,
-                                "/promotions",
-                                "/promotions/vendor/{vendorPublicId}",
-                                "/promotions/validate/**",
-                                "/promotions/preview"
-                        ).permitAll()
-                        // Authenticated: preview discount (needs per-user limit check)
-                        .requestMatchers(HttpMethod.POST, "/promotions/preview").authenticated()
-                        // Vendor: manage own promotions
-                        .requestMatchers(HttpMethod.GET, "/promotions/vendor/mine").hasRole("VENDOR")
-                        .requestMatchers(HttpMethod.POST, "/promotions/vendor").hasRole("VENDOR")
-                        .requestMatchers(HttpMethod.PUT, "/promotions/vendor/**").hasRole("VENDOR")
-                        .requestMatchers(HttpMethod.DELETE, "/promotions/vendor/**").hasRole("VENDOR")
-                        // Admin: manage all promotions
-                        .requestMatchers("/promotions/admin/**").hasRole("ADMIN")
-
                         // ── ORDERS ────────────────────────────────────────
-                        .requestMatchers(HttpMethod.POST, "/orders/**", "/api/v1/orders/**")
-                        .hasAnyRole("CUSTOMER", "VENDOR")
-                        .requestMatchers(HttpMethod.GET, "/orders/**", "/api/v1/orders/**")
-                        .hasAnyRole("CUSTOMER", "VENDOR", "ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/orders/**", "/api/v1/orders/**")
-                        .hasAnyRole("CUSTOMER", "ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/orders/**", "/api/v1/orders/**")
-                        .hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST,
+                                "/orders/**",
+                                "/api/v1/orders/**"
+                        ).hasAnyRole("CUSTOMER", "VENDOR")
+                        .requestMatchers(HttpMethod.GET,
+                                "/orders/**",
+                                "/api/v1/orders/**"
+                        ).hasAnyRole("CUSTOMER", "VENDOR", "ADMIN")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/orders/**",
+                                "/api/v1/orders/**"
+                        ).hasAnyRole("CUSTOMER", "ADMIN")
+                        .requestMatchers(HttpMethod.DELETE,
+                                "/orders/**",
+                                "/api/v1/orders/**"
+                        ).hasRole("ADMIN")
 
                         // ── DEFAULT — must be last ────────────────────────
                         .anyRequest().authenticated()
                 )
 
-                // Exception handling
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                 )
 
-                // Stateless session management (JWT-based)
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // Register authentication provider
                 .authenticationProvider(authenticationProvider())
 
-                // Place JWT filter just before AnonymousAuthenticationFilter so our
-                // authenticated user is never overwritten by the anonymous placeholder.
                 .addFilterBefore(jwtAuthenticationFilter, AnonymousAuthenticationFilter.class);
 
         return http.build();
     }
 
     /* ==========================================================
-       SECURITY HEADERS CONFIGURATION
+       SECURITY HEADERS
        ========================================================== */
 
     private void configureSecurityHeaders(
