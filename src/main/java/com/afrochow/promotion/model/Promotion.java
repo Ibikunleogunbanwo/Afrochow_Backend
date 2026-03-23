@@ -40,7 +40,7 @@ public class Promotion {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private PromotionType type;
 
     /** Percentage (0-100) for PERCENTAGE type, or dollar amount for FIXED_AMOUNT. */

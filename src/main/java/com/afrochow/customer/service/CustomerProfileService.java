@@ -7,6 +7,7 @@ import com.afrochow.customer.dto.CustomerUpdateRequestDto;
 import com.afrochow.customer.dto.CustomerProfileResponseDto;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
+import com.afrochow.common.validation.PhoneUtils;
 import com.afrochow.image.ImageUploadService;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.model.User;
@@ -90,7 +91,9 @@ public class CustomerProfileService {
         // Update other fields as needed...
         Optional.ofNullable(dto.getFirstName()).filter(s -> !s.isBlank()).ifPresent(user::setFirstName);
         Optional.ofNullable(dto.getLastName()).filter(s -> !s.isBlank()).ifPresent(user::setLastName);
-        Optional.ofNullable(dto.getPhone()).filter(s -> !s.isBlank()).ifPresent(user::setPhone);
+        Optional.ofNullable(dto.getPhone()).filter(s -> !s.isBlank())
+                .map(PhoneUtils::normalize)
+                .ifPresent(user::setPhone);
         Optional.ofNullable(dto.getEmail()).filter(s -> !s.isBlank()).ifPresent(email -> {
             if (!email.equalsIgnoreCase(user.getEmail())) {
                 userRepository.findByEmail(email).ifPresent(u -> {

@@ -1,6 +1,7 @@
 package com.afrochow.auth.dto;
 
 import com.afrochow.common.enums.Role;
+import com.afrochow.common.validation.CanadianPhone;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -34,6 +35,7 @@ public class RegisterRequestDto {
     private String lastName;
 
     @NotBlank(message = "Phone number is required")
+    @CanadianPhone
     private String phoneNumber;
 
     @NotNull(message = "Role is required")

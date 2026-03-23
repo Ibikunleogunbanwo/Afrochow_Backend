@@ -1,7 +1,10 @@
 package com.afrochow.promotion.service;
 
 import com.afrochow.common.enums.PromotionType;
+import com.afrochow.common.jackson.FlexibleLocalDateTimeDeserializer;
 import com.afrochow.order.model.Order;
+import com.afrochow.promotion.dto.PromotionPreviewRequestDto;
+import com.afrochow.promotion.dto.PromotionPreviewResponseDto;
 import com.afrochow.promotion.dto.PromotionRequestDto;
 import com.afrochow.promotion.dto.PromotionResponseDto;
 import com.afrochow.promotion.model.Promotion;
@@ -39,7 +42,10 @@ public class PromotionService {
         if (promotionRepository.existsByCode(request.getCode().toUpperCase().trim())) {
             throw new IllegalArgumentException("Promo code already exists: " + request.getCode());
         }
-        if (request.getEndDate().isBefore(request.getStartDate())) {
+        LocalDateTime startDate = FlexibleLocalDateTimeDeserializer.parse(request.getStartDate());
+        LocalDateTime endDate   = FlexibleLocalDateTimeDeserializer.parse(request.getEndDate());
+
+        if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("End date must be after start date");
         }
         if (request.getType() == PromotionType.PERCENTAGE &&
@@ -63,8 +69,8 @@ public class PromotionService {
                 .minimumOrderAmount(request.getMinimumOrderAmount())
                 .usageLimit(request.getUsageLimit())
                 .perUserLimit(request.getPerUserLimit())
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
+                .startDate(startDate)
+                .endDate(endDate)
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .vendor(vendor)
                 .build();
@@ -83,7 +89,10 @@ public class PromotionService {
             throw new IllegalArgumentException("Promo code already exists: " + request.getCode());
         }
 
-        if (request.getEndDate().isBefore(request.getStartDate())) {
+        LocalDateTime updStartDate = FlexibleLocalDateTimeDeserializer.parse(request.getStartDate());
+        LocalDateTime updEndDate   = FlexibleLocalDateTimeDeserializer.parse(request.getEndDate());
+
+        if (updEndDate.isBefore(updStartDate)) {
             throw new IllegalArgumentException("End date must be after start date");
         }
 
@@ -102,8 +111,8 @@ public class PromotionService {
         promotion.setMinimumOrderAmount(request.getMinimumOrderAmount());
         promotion.setUsageLimit(request.getUsageLimit());
         promotion.setPerUserLimit(request.getPerUserLimit());
-        promotion.setStartDate(request.getStartDate());
-        promotion.setEndDate(request.getEndDate());
+        promotion.setStartDate(updStartDate);
+        promotion.setEndDate(updEndDate);
         if (request.getIsActive() != null) {
             promotion.setIsActive(request.getIsActive());
         }
@@ -135,6 +144,113 @@ public class PromotionService {
         return toDto(promotion, promotionUsageRepository.countByPromotion(promotion));
     }
 
+    // ========== VENDOR METHODS ==========
+
+    @Transactional
+    public PromotionResponseDto createVendorPromotion(String username, PromotionRequestDto request) {
+        VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
+                .orElseThrow(() -> new EntityNotFoundException("Vendor profile not found"));
+
+        if (promotionRepository.existsByCode(request.getCode().toUpperCase().trim())) {
+            throw new IllegalArgumentException("Promo code already exists: " + request.getCode());
+        }
+        LocalDateTime vendorStartDate = FlexibleLocalDateTimeDeserializer.parse(request.getStartDate());
+        LocalDateTime vendorEndDate   = FlexibleLocalDateTimeDeserializer.parse(request.getEndDate());
+        if (vendorEndDate.isBefore(vendorStartDate)) {
+            throw new IllegalArgumentException("End date must be after start date");
+        }
+        if (request.getType() == PromotionType.PERCENTAGE &&
+                request.getValue().compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new IllegalArgumentException("Percentage value cannot exceed 100");
+        }
+
+        Promotion promotion = Promotion.builder()
+                .code(request.getCode())
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .type(request.getType())
+                .value(request.getValue())
+                .maxDiscountAmount(request.getMaxDiscountAmount())
+                .minimumOrderAmount(request.getMinimumOrderAmount())
+                .usageLimit(request.getUsageLimit())
+                .perUserLimit(request.getPerUserLimit())
+                .startDate(vendorStartDate)
+                .endDate(vendorEndDate)
+                .isActive(request.getIsActive() != null ? request.getIsActive() : true)
+                .vendor(vendor)
+                .build();
+
+        return toDto(promotionRepository.save(promotion), 0L);
+    }
+
+    @Transactional
+    public PromotionResponseDto updateVendorPromotion(String username, String publicPromotionId,
+                                                      PromotionRequestDto request) {
+        VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
+                .orElseThrow(() -> new EntityNotFoundException("Vendor profile not found"));
+
+        Promotion promotion = promotionRepository.findByPublicPromotionId(publicPromotionId)
+                .orElseThrow(() -> new EntityNotFoundException("Promotion not found"));
+
+        if (promotion.getVendor() == null || !promotion.getVendor().getId().equals(vendor.getId())) {
+            throw new IllegalStateException("You do not have permission to modify this promotion");
+        }
+
+        String newCode = request.getCode().toUpperCase().trim();
+        if (!newCode.equals(promotion.getCode()) && promotionRepository.existsByCode(newCode)) {
+            throw new IllegalArgumentException("Promo code already exists: " + request.getCode());
+        }
+        LocalDateTime vendorUpdStart = FlexibleLocalDateTimeDeserializer.parse(request.getStartDate());
+        LocalDateTime vendorUpdEnd   = FlexibleLocalDateTimeDeserializer.parse(request.getEndDate());
+        if (vendorUpdEnd.isBefore(vendorUpdStart)) {
+            throw new IllegalArgumentException("End date must be after start date");
+        }
+
+        promotion.setCode(request.getCode());
+        promotion.setTitle(request.getTitle());
+        promotion.setDescription(request.getDescription());
+        promotion.setType(request.getType());
+        promotion.setValue(request.getValue());
+        promotion.setMaxDiscountAmount(request.getMaxDiscountAmount());
+        promotion.setMinimumOrderAmount(request.getMinimumOrderAmount());
+        promotion.setUsageLimit(request.getUsageLimit());
+        promotion.setPerUserLimit(request.getPerUserLimit());
+        promotion.setStartDate(vendorUpdStart);
+        promotion.setEndDate(vendorUpdEnd);
+        if (request.getIsActive() != null) {
+            promotion.setIsActive(request.getIsActive());
+        }
+
+        long usageCount = promotionUsageRepository.countByPromotion(promotion);
+        return toDto(promotionRepository.save(promotion), usageCount);
+    }
+
+    @Transactional
+    public void deactivateVendorPromotion(String username, String publicPromotionId) {
+        VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
+                .orElseThrow(() -> new EntityNotFoundException("Vendor profile not found"));
+
+        Promotion promotion = promotionRepository.findByPublicPromotionId(publicPromotionId)
+                .orElseThrow(() -> new EntityNotFoundException("Promotion not found"));
+
+        if (promotion.getVendor() == null || !promotion.getVendor().getId().equals(vendor.getId())) {
+            throw new IllegalStateException("You do not have permission to modify this promotion");
+        }
+
+        promotion.setIsActive(false);
+        promotionRepository.save(promotion);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PromotionResponseDto> getVendorOwnPromotions(String username) {
+        VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
+                .orElseThrow(() -> new EntityNotFoundException("Vendor profile not found"));
+
+        return promotionRepository.findByVendor(vendor).stream()
+                .map(p -> toDto(p, promotionUsageRepository.countByPromotion(p)))
+                .collect(Collectors.toList());
+    }
+
     // ========== CUSTOMER METHODS ==========
 
     @Transactional(readOnly = true)
@@ -163,6 +279,68 @@ public class PromotionService {
             throw new IllegalStateException("Promo code is not currently active");
         }
         return toDto(promotion, null);
+    }
+
+    // ========== PREVIEW ==========
+
+    /**
+     * Validate a promo code and compute the exact discount for a given subtotal.
+     * Safe to call before checkout — does NOT record usage.
+     */
+    @Transactional(readOnly = true)
+    public PromotionPreviewResponseDto previewDiscount(PromotionPreviewRequestDto request,
+                                                       String userPublicId) {
+        Promotion promotion = promotionRepository.findByCode(request.getPromoCode().toUpperCase().trim())
+                .orElseThrow(() -> new EntityNotFoundException("Promo code not found"));
+
+        if (!promotion.isCurrentlyActive()) {
+            throw new IllegalStateException("Promo code is expired or inactive");
+        }
+
+        // Vendor restriction check
+        if (promotion.getVendor() != null &&
+                !promotion.getVendor().getUser().getPublicUserId().equals(request.getVendorPublicId())) {
+            throw new IllegalStateException("Promo code is not valid for this vendor");
+        }
+
+        // Minimum order amount check
+        if (promotion.getMinimumOrderAmount() != null &&
+                request.getSubtotal().compareTo(promotion.getMinimumOrderAmount()) < 0) {
+            throw new IllegalStateException(String.format(
+                    "Minimum order amount of $%.2f required for this promo code",
+                    promotion.getMinimumOrderAmount()));
+        }
+
+        // Global usage limit check
+        if (promotion.getUsageLimit() != null) {
+            long totalUsed = promotionUsageRepository.countByPromotion(promotion);
+            if (totalUsed >= promotion.getUsageLimit()) {
+                throw new IllegalStateException("Promo code has reached its usage limit");
+            }
+        }
+
+        // Per-user limit check
+        if (promotion.getPerUserLimit() != null && userPublicId != null) {
+            User user = userRepository.findByPublicUserId(userPublicId)
+                    .orElseThrow(() -> new EntityNotFoundException("User not found"));
+            long userUsed = promotionUsageRepository.countByPromotionAndUser(promotion, user);
+            if (userUsed >= promotion.getPerUserLimit()) {
+                throw new IllegalStateException("You have already used this promo code the maximum number of times");
+            }
+        }
+
+        BigDecimal discountAmount = computeDiscountAmount(promotion, request.getSubtotal());
+        BigDecimal discountedSubtotal = request.getSubtotal().subtract(discountAmount);
+
+        return PromotionPreviewResponseDto.builder()
+                .promoCode(promotion.getCode())
+                .title(promotion.getTitle())
+                .description(promotion.getDescription())
+                .type(promotion.getType())
+                .value(promotion.getValue())
+                .discountAmount(discountAmount)
+                .discountedSubtotal(discountedSubtotal)
+                .build();
     }
 
     // ========== ORDER INTEGRATION ==========
@@ -244,18 +422,30 @@ public class PromotionService {
     // ========== PRIVATE HELPERS ==========
 
     private BigDecimal computeDiscountAmount(Promotion promotion, BigDecimal subtotal) {
+        return computeDiscountAmount(promotion, subtotal, null);
+    }
+
+    private BigDecimal computeDiscountAmount(Promotion promotion, BigDecimal subtotal,
+                                             BigDecimal deliveryFee) {
         BigDecimal discount;
         if (promotion.getType() == PromotionType.PERCENTAGE) {
             discount = subtotal
                     .multiply(promotion.getValue())
                     .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-            // Apply cap if set
             if (promotion.getMaxDiscountAmount() != null &&
                     discount.compareTo(promotion.getMaxDiscountAmount()) > 0) {
                 discount = promotion.getMaxDiscountAmount();
             }
+        } else if (promotion.getType() == PromotionType.FREE_DELIVERY) {
+            // Discount equals the delivery fee — zero for pickup orders
+            discount = deliveryFee != null
+                    ? deliveryFee.setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
         } else {
-            discount = promotion.getValue().setScale(2, RoundingMode.HALF_UP);
+            // FIXED_AMOUNT
+            discount = promotion.getValue() != null
+                    ? promotion.getValue().setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
         }
         // Discount cannot exceed the subtotal
         return discount.min(subtotal);

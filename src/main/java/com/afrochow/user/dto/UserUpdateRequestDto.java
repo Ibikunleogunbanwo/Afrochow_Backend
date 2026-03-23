@@ -1,4 +1,7 @@
 package com.afrochow.user.dto;
+import com.afrochow.common.validation.CanadianPhone;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,12 +13,22 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserUpdateRequestDto {
 
-    private String email;           // Optional
-    private String password;        // Optional
-    private String confirmPassword; // Optional, for password change
-    private String firstName;       // Optional
-    private String lastName;        // Optional
-    private String phone;           // Optional
+    @Email(message = "Invalid email format")
+    private String email;
+
+    @Size(min = 8, message = "Password must be at least 8 characters")
+    private String password;
+
+    private String confirmPassword;
+
+    @Size(min = 1, max = 50, message = "First name must be between 1 and 50 characters")
+    private String firstName;
+
+    @Size(min = 1, max = 50, message = "Last name must be between 1 and 50 characters")
+    private String lastName;
+
+    @CanadianPhone
+    private String phone;
 
     /**
      * Optional helper: check if password and confirmPassword match

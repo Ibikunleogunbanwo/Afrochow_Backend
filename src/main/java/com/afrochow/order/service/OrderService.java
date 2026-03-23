@@ -255,6 +255,7 @@ public class OrderService {
         return toResponseDto(savedOrder);
     }
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getCustomerOrders(Long customerUserId) {
         CustomerProfile customer = customerProfileRepository.findByUser_UserId(customerUserId)
                 .orElseThrow(() -> new EntityNotFoundException("Customer profile not found"));
@@ -263,6 +264,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getCustomerActiveOrders(Long customerUserId) {
         CustomerProfile customer = customerProfileRepository.findByUser_UserId(customerUserId)
                 .orElseThrow(() -> new EntityNotFoundException("Customer profile not found"));
@@ -307,6 +309,7 @@ public class OrderService {
 
     // ========== VENDOR METHODS ==========
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getVendorOrders(String username) {
         VendorProfile vendor = getVendorByUsername(username);
         return orderRepository.findByVendorOrderByOrderTimeDesc(vendor).stream()
@@ -314,6 +317,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getVendorActiveOrders(String username) {
         VendorProfile vendor = getVendorByUsername(username);
         return orderRepository.findActiveOrdersByVendor(vendor).stream()
@@ -321,6 +325,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getVendorTodayOrders(String username) {
         VendorProfile vendor = getVendorByUsername(username);
         return orderRepository.findTodayOrdersByVendor(vendor).stream()
@@ -328,6 +333,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getVendorOrdersByStatus(String username, OrderStatus status) {
         VendorProfile vendor = getVendorByUsername(username);
         return orderRepository.findByVendorAndStatus(vendor, status).stream()
@@ -466,6 +472,7 @@ public class OrderService {
 
     // ========== ADMIN METHODS ==========
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getAllOrders() {
         return orderRepository.findAll().stream()
                 .map(this::toSummaryResponseDto)
@@ -479,12 +486,14 @@ public class OrderService {
         return toResponseDto(order);
     }
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getActiveOrders() {
         return orderRepository.findActiveOrders().stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getOrdersByStatus(OrderStatus status) {
         return orderRepository.findByStatusOrderByOrderTimeDesc(status).stream()
                 .map(this::toSummaryResponseDto)
@@ -578,6 +587,13 @@ public class OrderService {
     }
 
     private OrderSummaryResponseDto toSummaryResponseDto(Order order) {
+        List<String> itemNames = order.getOrderLines() == null ? List.of()
+                : order.getOrderLines().stream()
+                        .map(line -> line.getProductNameAtPurchase() != null
+                                ? line.getProductNameAtPurchase()
+                                : (line.getProduct() != null ? line.getProduct().getName() : "Unknown item"))
+                        .toList();
+
         return OrderSummaryResponseDto.builder()
                 .publicOrderId(order.getPublicOrderId())
                 .vendorName(order.getVendor() != null
@@ -588,6 +604,8 @@ public class OrderService {
                 .orderTime(order.getOrderTime())
                 .fulfillmentType(order.getFulfillmentType())
                 .canBeCancelled(order.canBeCancelled())
+                .itemCount(itemNames.size())
+                .itemNames(itemNames)
                 .build();
     }
 

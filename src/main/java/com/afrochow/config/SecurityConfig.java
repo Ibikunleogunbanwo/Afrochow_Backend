@@ -198,6 +198,24 @@ public class SecurityConfig {
                         // ── VENDOR ────────────────────────────────────────
                         .requestMatchers("/vendor/**", "/api/v1/vendor/**").hasRole("VENDOR")
 
+                        // ── PROMOTIONS ────────────────────────────────────
+                        // Public: browse active promotions and validate codes
+                        .requestMatchers(HttpMethod.GET,
+                                "/promotions",
+                                "/promotions/vendor/{vendorPublicId}",
+                                "/promotions/validate/**",
+                                "/promotions/preview"
+                        ).permitAll()
+                        // Authenticated: preview discount (needs per-user limit check)
+                        .requestMatchers(HttpMethod.POST, "/promotions/preview").authenticated()
+                        // Vendor: manage own promotions
+                        .requestMatchers(HttpMethod.GET, "/promotions/vendor/mine").hasRole("VENDOR")
+                        .requestMatchers(HttpMethod.POST, "/promotions/vendor").hasRole("VENDOR")
+                        .requestMatchers(HttpMethod.PUT, "/promotions/vendor/**").hasRole("VENDOR")
+                        .requestMatchers(HttpMethod.DELETE, "/promotions/vendor/**").hasRole("VENDOR")
+                        // Admin: manage all promotions
+                        .requestMatchers("/promotions/admin/**").hasRole("ADMIN")
+
                         // ── ORDERS ────────────────────────────────────────
                         .requestMatchers(HttpMethod.POST, "/orders/**", "/api/v1/orders/**")
                         .hasAnyRole("CUSTOMER", "VENDOR")

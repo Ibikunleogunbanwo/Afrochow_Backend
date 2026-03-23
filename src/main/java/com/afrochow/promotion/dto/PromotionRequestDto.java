@@ -8,7 +8,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -31,8 +30,8 @@ public class PromotionRequestDto {
     @NotNull(message = "Promotion type is required")
     private PromotionType type;
 
-    @NotNull(message = "Value is required")
-    @DecimalMin(value = "0.01", message = "Value must be greater than 0")
+    /** Required for PERCENTAGE and FIXED_AMOUNT. Not needed for FREE_DELIVERY. */
+    @DecimalMin(value = "0.00", message = "Value must be 0 or greater")
     private BigDecimal value;
 
     /** Max discount cap — only relevant for PERCENTAGE type. */
@@ -48,11 +47,11 @@ public class PromotionRequestDto {
     @Min(value = 1, message = "Per-user limit must be at least 1")
     private Integer perUserLimit;
 
-    @NotNull(message = "Start date is required")
-    private LocalDateTime startDate;
+    @NotBlank(message = "Start date is required")
+    private String startDate;
 
-    @NotNull(message = "End date is required")
-    private LocalDateTime endDate;
+    @NotBlank(message = "End date is required")
+    private String endDate;
 
     private Boolean isActive;
 

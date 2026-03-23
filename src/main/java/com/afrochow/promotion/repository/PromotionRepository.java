@@ -1,6 +1,7 @@
 package com.afrochow.promotion.repository;
 
 import com.afrochow.promotion.model.Promotion;
+import com.afrochow.vendor.model.VendorProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -37,6 +38,8 @@ public interface PromotionRepository extends JpaRepository<Promotion, Long> {
     List<Promotion> findActiveForVendor(
             @Param("now") LocalDateTime now,
             @Param("vendorPublicId") String vendorPublicId);
+
+    List<Promotion> findByVendor(VendorProfile vendor);
 
     boolean existsByCode(String code);
 }
