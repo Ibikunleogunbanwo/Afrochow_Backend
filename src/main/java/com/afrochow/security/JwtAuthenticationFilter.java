@@ -52,11 +52,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/auth/verify-email",
             "/auth/resend-verification",
             "/public/",
-            "/images",                       // DELETE /images?imageUrl=...
-            "/images/",                      // GET /images/category/filename
+            "/images",
+            "/images/",
             "/swagger-ui/",
             "/v3/api-docs",
-            "/error"
+            "/error",
+            "/promotions",
+            "/promotions/**",
+            "/promotions/vendor/{vendorPublicId}",
+            "/promotions/validate/**",
+            "/promotions/preview",
+            "/stats/**"
     );
 
     private final JwtTokenProvider tokenProvider;
