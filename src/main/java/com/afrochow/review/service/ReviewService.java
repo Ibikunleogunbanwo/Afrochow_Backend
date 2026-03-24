@@ -109,8 +109,7 @@ public class ReviewService {
      */
     @Transactional
     public ReviewResponseDto createReview(String userPublicId, ReviewRequestDto request) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+        User user = resolveUser(userPublicId);
 
         VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(request.getVendorPublicId())
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
@@ -133,7 +132,10 @@ public class ReviewService {
                     .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
             // Validate that the order belongs to this user
-            if (!order.getCustomer().getUser().getPublicUserId().equals(userPublicId)) {
+            User orderOwner = order.getCustomer().getUser();
+            if (!orderOwner.getPublicUserId().equals(userPublicId)
+                    && !orderOwner.getEmail().equals(userPublicId)
+                    && !orderOwner.getUsername().equals(userPublicId)) {
                 throw new IllegalStateException("Order does not belong to this user");
             }
 
@@ -169,7 +171,7 @@ public class ReviewService {
                 .orElseThrow(() -> new EntityNotFoundException("Review not found"));
 
         // Validate ownership
-        if (!review.getUser().getPublicUserId().equals(userPublicId)) {
+        if (!isOwner(review.getUser(), userPublicId)) {
             throw new IllegalStateException("You can only update your own reviews");
         }
 
@@ -194,7 +196,7 @@ public class ReviewService {
                 .orElseThrow(() -> new EntityNotFoundException("Review not found"));
 
         // Validate ownership
-        if (!review.getUser().getPublicUserId().equals(userPublicId)) {
+        if (!isOwner(review.getUser(), userPublicId)) {
             throw new IllegalStateException("You can only delete your own reviews");
         }
 
@@ -211,8 +213,7 @@ public class ReviewService {
      */
     @Transactional(readOnly = true)
     public List<ReviewResponseDto> getMyReviews(String userPublicId) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+        User user = resolveUser(userPublicId);
 
         List<Review> reviews = reviewRepository.findByUserOrderByCreatedAtDesc(user);
         return reviews.stream()
@@ -392,5 +393,20 @@ public class ReviewService {
                 .rating(dto.getRating())
                 .comment(dto.getComment())
                 .build();
+    }
+
+    /** Resolve a user by publicUserId, email, or username — whichever matches. */
+    private User resolveUser(String identifier) {
+        return userRepository.findByPublicUserId(identifier)
+                .or(() -> userRepository.findByEmail(identifier))
+                .or(() -> userRepository.findByUsername(identifier))
+                .orElseThrow(() -> new EntityNotFoundException("User not found: " + identifier));
+    }
+
+    /** Check ownership against all three possible identifier forms. */
+    private boolean isOwner(User user, String identifier) {
+        return user.getPublicUserId().equals(identifier)
+                || user.getEmail().equals(identifier)
+                || user.getUsername().equals(identifier);
     }
 }

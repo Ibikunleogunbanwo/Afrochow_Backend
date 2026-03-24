@@ -17,7 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
 @Tag(name = "Admin User Management", description = "Admin APIs for managing all users")
 public class AdminUserManagementController {
 
@@ -92,6 +92,10 @@ public class AdminUserManagementController {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
+        if (user.getRole() == Role.SUPERADMIN) {
+            throw new IllegalStateException("Cannot modify a SUPERADMIN account");
+        }
+
         user.setIsActive(true);
         User updatedUser = userRepository.save(user);
         return ResponseEntity.ok(ApiResponse.success("User activated successfully", toUserSummary(updatedUser)));
@@ -103,7 +107,10 @@ public class AdminUserManagementController {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
-        // Prevent admin from deactivating themselves
+        if (user.getRole() == Role.SUPERADMIN) {
+            throw new IllegalStateException("Cannot modify a SUPERADMIN account");
+        }
+
         if (user.isAdmin()) {
             throw new IllegalStateException("Cannot deactivate admin accounts");
         }
@@ -114,7 +121,8 @@ public class AdminUserManagementController {
     }
 
     @PatchMapping("/{publicUserId}/role")
-    @Operation(summary = "Change user role", description = "Change a user's role (CUSTOMER, VENDOR, ADMIN)")
+    @PreAuthorize("hasRole('SUPERADMIN')")
+    @Operation(summary = "Change user role", description = "Change a user's role — SUPERADMIN only")
     public ResponseEntity<ApiResponse<UserSummaryDto>> changeUserRole(
             @PathVariable String publicUserId,
             @RequestParam Role newRole) {
@@ -122,9 +130,14 @@ public class AdminUserManagementController {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
-        // Prevent changing admin roles
-        if (user.isAdmin() || newRole == Role.ADMIN) {
-            throw new IllegalStateException("Cannot change admin roles");
+        // Cannot assign SUPERADMIN role via API
+        if (newRole == Role.SUPERADMIN) {
+            throw new IllegalStateException("Cannot assign SUPERADMIN role via API");
+        }
+
+        // Cannot modify a SUPERADMIN
+        if (user.getRole() == Role.SUPERADMIN) {
+            throw new IllegalStateException("Cannot modify a SUPERADMIN");
         }
 
         user.setRole(newRole);
@@ -133,12 +146,18 @@ public class AdminUserManagementController {
     }
 
     @DeleteMapping("/{publicUserId}")
-    @Operation(summary = "Delete user", description = "Permanently delete a user account (use with caution)")
+    @PreAuthorize("hasRole('SUPERADMIN')")
+    @Operation(summary = "Delete user", description = "Permanently delete a user account — SUPERADMIN only")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String publicUserId) {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
-        // Prevent deleting admin accounts
+        // Cannot delete a SUPERADMIN
+        if (user.getRole() == Role.SUPERADMIN) {
+            throw new IllegalStateException("Cannot delete a SUPERADMIN");
+        }
+
+        // Cannot delete regular admin accounts either
         if (user.isAdmin()) {
             throw new IllegalStateException("Cannot delete admin accounts");
         }
@@ -158,6 +177,7 @@ public class AdminUserManagementController {
         long customers = userRepository.findByRole(Role.CUSTOMER).size();
         long vendors = userRepository.findByRole(Role.VENDOR).size();
         long admins = userRepository.findByRole(Role.ADMIN).size();
+        long superAdmins = userRepository.findByRole(Role.SUPERADMIN).size();
 
         UserStats stats = UserStats.builder()
                 .totalUsers(totalUsers)
@@ -166,6 +186,7 @@ public class AdminUserManagementController {
                 .totalCustomers(customers)
                 .totalVendors(vendors)
                 .totalAdmins(admins)
+                .totalSuperAdmins(superAdmins)
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success(stats));
@@ -234,5 +255,6 @@ public class AdminUserManagementController {
         private Long totalCustomers;
         private Long totalVendors;
         private Long totalAdmins;
+        private Long totalSuperAdmins;  // Added
     }
 }

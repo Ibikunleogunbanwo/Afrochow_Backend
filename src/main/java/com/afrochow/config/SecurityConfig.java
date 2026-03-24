@@ -147,8 +147,8 @@ public class SecurityConfig {
                         ).permitAll()
 
                         // ── ADMIN ─────────────────────────────────────────
-                        .requestMatchers("/auth/register/admin").hasRole("ADMIN")
-                        .requestMatchers("/admin/**", "/api/v1/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/auth/register/admin").hasRole("SUPERADMIN")
+                        .requestMatchers("/admin/**", "/api/v1/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // ── PUBLIC BROWSING (GET only) ────────────────────
                         .requestMatchers(HttpMethod.GET,

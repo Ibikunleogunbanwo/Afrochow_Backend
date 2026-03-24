@@ -4,15 +4,18 @@ import com.afrochow.email.EmailService;
 import com.afrochow.notification.dto.NotificationDto;
 import com.afrochow.notification.model.Notification;
 import com.afrochow.order.model.Order;
+import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.NotificationType;
-import com.afrochow.common.enums.OrderStatus;
 import com.afrochow.common.enums.RelatedEntityType;
 import com.afrochow.notification.repository.NotificationRepository;
 import com.afrochow.user.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,15 +26,16 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Unified Notification Service - Orchestrator for all notification channels
+ * Unified Notification Service — orchestrates all notification channels.
  *
- * This service coordinates notifications across multiple channels:
- * 1. In-App Notifications (Database) - Always created for persistent history
- * 2. Email Notifications - For important/critical events
- * 3. Push Notifications - For real-time mobile updates (future)
- * 4. SMS Notifications - For very critical events (future)
+ * Channels:
+ *  1. In-App (DB)  — always created for persistent history
+ *  2. Email        — for important / critical events
+ *  3. Push / SMS   — future
  *
- * All notification methods are @Async to avoid blocking the main request thread.
+ * All order lifecycle methods are @Async and accept a publicOrderId string
+ * (not an Order entity) so they load a fresh entity on their own thread/
+ * transaction, avoiding detached-proxy issues.
  */
 @Slf4j
 @Service
@@ -39,14 +43,12 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
-    private final EmailService emailService;
+    private final UserRepository         userRepository;
+    private final OrderRepository        orderRepository;
+    private final EmailService           emailService;
 
-    // ========== CREATE NOTIFICATIONS ==========
+    // ========== GENERIC CREATE ==========
 
-    /**
-     * Create and send a notification to a user
-     */
     @Transactional
     public NotificationDto createNotification(
             String userPublicId,
@@ -56,10 +58,9 @@ public class NotificationService {
             RelatedEntityType relatedEntityType,
             String relatedEntityId) {
 
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+        User user = resolveUser(userPublicId);
 
-        Notification notification = Notification.builder()
+        Notification saved = notificationRepository.save(Notification.builder()
                 .user(user)
                 .title(title)
                 .message(message)
@@ -68,696 +69,477 @@ public class NotificationService {
                 .relatedEntityId(relatedEntityId)
                 .createdAt(LocalDateTime.now())
                 .isRead(false)
-                .build();
+                .build());
 
-        Notification savedNotification = notificationRepository.save(notification);
-        return toDto(savedNotification);
+        return toDto(saved);
     }
 
-    /**
-     * Create order update notification
-     */
     @Transactional
     public NotificationDto notifyOrderUpdate(String userPublicId, String orderPublicId, String message) {
-        return createNotification(
-                userPublicId,
-                "Order Update",
-                message,
-                NotificationType.ORDER_UPDATE,
-                RelatedEntityType.ORDER,
-                orderPublicId
-        );
+        return createNotification(userPublicId, "Order Update", message,
+                NotificationType.ORDER_UPDATE, RelatedEntityType.ORDER, orderPublicId);
     }
 
-    /**
-     * Create delivery update notification
-     */
     @Transactional
     public NotificationDto notifyDeliveryUpdate(String userPublicId, String orderPublicId, String message) {
-        return createNotification(
-                userPublicId,
-                "Delivery Update",
-                message,
-                NotificationType.DELIVERY_UPDATE,
-                RelatedEntityType.ORDER,
-                orderPublicId
-        );
+        return createNotification(userPublicId, "Delivery Update", message,
+                NotificationType.DELIVERY_UPDATE, RelatedEntityType.ORDER, orderPublicId);
     }
 
-    /**
-     * Create payment success notification
-     */
     @Transactional
     public NotificationDto notifyPaymentSuccess(String userPublicId, String paymentPublicId, String message) {
-        return createNotification(
-                userPublicId,
-                "Payment Successful",
-                message,
-                NotificationType.PAYMENT_SUCCESS,
-                RelatedEntityType.PAYMENT,
-                paymentPublicId
-        );
+        return createNotification(userPublicId, "Payment Successful", message,
+                NotificationType.PAYMENT_SUCCESS, RelatedEntityType.PAYMENT, paymentPublicId);
     }
 
-    /**
-     * Create promotional notification
-     */
     @Transactional
     public NotificationDto sendPromoNotification(String userPublicId, String title, String message) {
-        return createNotification(
-                userPublicId,
-                title,
-                message,
-                NotificationType.PROMO,
-                null,
-                null
-        );
+        return createNotification(userPublicId, title, message,
+                NotificationType.PROMO, null, null);
     }
 
-    /**
-     * Create system alert notification
-     */
     @Transactional
     public NotificationDto sendSystemAlert(String userPublicId, String title, String message) {
-        return createNotification(
-                userPublicId,
-                title,
-                message,
-                NotificationType.SYSTEM_ALERT,
-                null,
-                null
-        );
+        return createNotification(userPublicId, title, message,
+                NotificationType.SYSTEM_ALERT, null, null);
     }
 
-    // ========== ORDER NOTIFICATIONS (Multi-Channel) ==========
+    // ========== ORDER LIFECYCLE NOTIFICATIONS (Fix 5: accept publicOrderId, load fresh) ==========
 
     /**
-     * Notify customer when order is confirmed (after payment success)
-     * Channels: In-App (always) + Email
+     * Notify customer when order is confirmed (after payment).
+     * Channels: In-App + Email
      */
     @Async
     @Transactional
-    public void notifyCustomerOrderConfirmed(Order order) {
+    public void notifyCustomerOrderConfirmed(String publicOrderId) {
         try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
             User customer = order.getCustomer().getUser();
             String vendorName = order.getVendor().getRestaurantName();
 
-            // 1. In-app notification (always)
-            createInAppNotification(
-                customer,
-                NotificationType.ORDER_UPDATE,
-                "Order Confirmed",
-                "Your order from " + vendorName + " has been confirmed and payment received.",
-                RelatedEntityType.ORDER,
-                order.getPublicOrderId()
-            );
+            createInAppNotification(customer, NotificationType.ORDER_UPDATE,
+                    "Order Confirmed",
+                    "Your order from " + vendorName + " has been confirmed and payment received.",
+                    RelatedEntityType.ORDER, publicOrderId);
 
-            // 2. Email notification
             emailService.sendOrderConfirmationEmail(
-                customer.getEmail(),
-                customer.getFirstName(),
-                order.getPublicOrderId(),
-                vendorName,
-                order.getTotalAmount(),
-                order.getCreatedAt()
-            );
+                    customer.getEmail(), customer.getFirstName(),
+                    publicOrderId, vendorName,
+                    order.getTotalAmount(), order.getCreatedAt());
 
-            log.info("Order confirmed notifications sent for order: {}", order.getPublicOrderId());
+            log.info("Order confirmed notifications sent for order: {}", publicOrderId);
         } catch (Exception e) {
-            log.error("Failed to send order confirmed notifications for order: {}",
-                order.getPublicOrderId(), e);
+            log.error("Failed to send order confirmed notifications for order: {}", publicOrderId, e);
         }
     }
 
     /**
-     * Notify vendor of new order
-     * Channels: In-App (always) + Email
+     * Notify vendor of a new order.
+     * Channels: In-App + Email
+     * Fix 1: uses NEW_ORDER type instead of ORDER_UPDATE.
      */
     @Async
     @Transactional
-    public void notifyVendorNewOrder(Order order) {
+    public void notifyVendorNewOrder(String publicOrderId) {
         try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
             User vendor = order.getVendor().getUser();
-            String customerName = order.getCustomer().getUser().getFirstName() + " " +
-                                 order.getCustomer().getUser().getLastName();
+            String customerName = order.getCustomer().getUser().getFirstName() + " "
+                    + order.getCustomer().getUser().getLastName();
 
-            // 1. In-app notification (always)
-            createInAppNotification(
-                vendor,
-                NotificationType.ORDER_UPDATE,
-                "New Order Received",
-                "New order #" + order.getPublicOrderId() + " from " + customerName,
-                RelatedEntityType.ORDER,
-                order.getPublicOrderId()
-            );
+            createInAppNotification(vendor, NotificationType.NEW_ORDER,   // Fix 1
+                    "New Order Received",
+                    "New order #" + publicOrderId + " from " + customerName,
+                    RelatedEntityType.ORDER, publicOrderId);
 
-            // 2. Email notification
             emailService.sendNewOrderNotificationToVendor(
-                vendor.getEmail(),
-                order.getVendor().getRestaurantName(),
-                order.getPublicOrderId(),
-                customerName,
-                order.getTotalAmount()
-            );
+                    vendor.getEmail(), order.getVendor().getRestaurantName(),
+                    publicOrderId, customerName, order.getTotalAmount());
 
-            log.info("New order notifications sent to vendor for order: {}", order.getPublicOrderId());
+            log.info("New order notifications sent to vendor for order: {}", publicOrderId);
         } catch (Exception e) {
-            log.error("Failed to send new order notifications to vendor for order: {}",
-                order.getPublicOrderId(), e);
+            log.error("Failed to send new order notifications to vendor for order: {}", publicOrderId, e);
         }
     }
 
     /**
-     * Notify customer when order is being prepared
-     * Channels: In-App (always) only - not critical enough for email
+     * Notify customer when order is being prepared.
+     * Channels: In-App only
      */
     @Async
     @Transactional
-    public void notifyCustomerOrderPreparing(Order order) {
+    public void notifyCustomerOrderPreparing(String publicOrderId) {
         try {
-            User customer = order.getCustomer().getUser();
-            String vendorName = order.getVendor().getRestaurantName();
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
 
-            // In-app notification only (not critical enough for email)
-            createInAppNotification(
-                customer,
-                NotificationType.ORDER_UPDATE,
-                "Order Being Prepared",
-                vendorName + " is preparing your order",
-                RelatedEntityType.ORDER,
-                order.getPublicOrderId()
-            );
+            createInAppNotification(order.getCustomer().getUser(), NotificationType.ORDER_UPDATE,
+                    "Order Being Prepared",
+                    order.getVendor().getRestaurantName() + " is preparing your order",
+                    RelatedEntityType.ORDER, publicOrderId);
 
-            log.info("Order preparing notification sent for order: {}", order.getPublicOrderId());
+            log.info("Order preparing notification sent for order: {}", publicOrderId);
         } catch (Exception e) {
-            log.error("Failed to send order preparing notification for order: {}",
-                order.getPublicOrderId(), e);
+            log.error("Failed to send order preparing notification for order: {}", publicOrderId, e);
         }
     }
 
     /**
-     * Notify customer when order is ready for pickup/delivery
-     * Channels: In-App (always) + Email
+     * Notify customer when order is ready for pickup / delivery.
+     * Channels: In-App + Email
      */
     @Async
     @Transactional
-    public void notifyCustomerOrderReady(Order order) {
+    public void notifyCustomerOrderReady(String publicOrderId) {
         try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
             User customer = order.getCustomer().getUser();
             String vendorName = order.getVendor().getRestaurantName();
             String message = "PICKUP".equalsIgnoreCase(order.getFulfillmentType())
-                ? "Your order from " + vendorName + " is ready for pickup!"
-                : "Your order from " + vendorName + " is ready and will be delivered soon!";
+                    ? "Your order from " + vendorName + " is ready for pickup!"
+                    : "Your order from " + vendorName + " is ready and will be delivered soon!";
 
-            // 1. In-app notification (always)
-            createInAppNotification(
-                customer,
-                NotificationType.ORDER_UPDATE,
-                "Order Ready",
-                message,
-                RelatedEntityType.ORDER,
-                order.getPublicOrderId()
-            );
+            createInAppNotification(customer, NotificationType.ORDER_UPDATE,
+                    "Order Ready", message, RelatedEntityType.ORDER, publicOrderId);
 
-            // 2. Email notification
             emailService.sendOrderStatusUpdateEmail(
-                customer.getEmail(),
-                customer.getFirstName(),
-                order.getPublicOrderId(),
-                "PREPARING",
-                order.getStatus().toString()
-            );
+                    customer.getEmail(), customer.getFirstName(),
+                    publicOrderId, "PREPARING", order.getStatus().toString());
 
-            log.info("Order ready notifications sent for order: {}", order.getPublicOrderId());
+            log.info("Order ready notifications sent for order: {}", publicOrderId);
         } catch (Exception e) {
-            log.error("Failed to send order ready notifications for order: {}",
-                order.getPublicOrderId(), e);
+            log.error("Failed to send order ready notifications for order: {}", publicOrderId, e);
         }
     }
 
     /**
-     * Notify customer when order is out for delivery
-     * Channels: In-App (always) only
+     * Notify customer when order is out for delivery.
+     * Channels: In-App only
      */
     @Async
     @Transactional
-    public void notifyCustomerOrderOutForDelivery(Order order) {
+    public void notifyCustomerOrderOutForDelivery(String publicOrderId) {
         try {
-            User customer = order.getCustomer().getUser();
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
 
-            // In-app notification (future: add push notification for real-time update)
-            createInAppNotification(
-                customer,
-                NotificationType.DELIVERY_UPDATE,
-                "Order Out for Delivery",
-                "Your order is on its way!",
-                RelatedEntityType.ORDER,
-                order.getPublicOrderId()
-            );
+            createInAppNotification(order.getCustomer().getUser(), NotificationType.DELIVERY_UPDATE,
+                    "Order Out for Delivery",
+                    "Your order is on its way!",
+                    RelatedEntityType.ORDER, publicOrderId);
 
-            log.info("Out for delivery notification sent for order: {}", order.getPublicOrderId());
+            log.info("Out for delivery notification sent for order: {}", publicOrderId);
         } catch (Exception e) {
-            log.error("Failed to send out for delivery notification for order: {}",
-                order.getPublicOrderId(), e);
+            log.error("Failed to send out for delivery notification for order: {}", publicOrderId, e);
         }
     }
 
     /**
-     * Notify customer when order is delivered
-     * Channels: In-App (always) + Email
+     * Notify customer when order is delivered.
+     * Channels: In-App + Email
      */
     @Async
     @Transactional
-    public void notifyCustomerOrderDelivered(Order order) {
+    public void notifyCustomerOrderDelivered(String publicOrderId) {
         try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
             User customer = order.getCustomer().getUser();
             String vendorName = order.getVendor().getRestaurantName();
-
-            // 1. In-app notification (always)
-            createInAppNotification(
-                customer,
-                NotificationType.DELIVERY_UPDATE,
-                "Order Delivered",
-                "Your order from " + vendorName + " has been delivered. Enjoy your meal!",
-                RelatedEntityType.ORDER,
-                order.getPublicOrderId()
-            );
-
-            // 2. Email notification
             String previousStatus = "PICKUP".equalsIgnoreCase(order.getFulfillmentType())
                     ? "READY_FOR_PICKUP" : "OUT_FOR_DELIVERY";
-            emailService.sendOrderStatusUpdateEmail(
-                customer.getEmail(),
-                customer.getFirstName(),
-                order.getPublicOrderId(),
-                previousStatus,
-                "DELIVERED"
-            );
 
-            log.info("Order delivered notifications sent for order: {}", order.getPublicOrderId());
+            createInAppNotification(customer, NotificationType.DELIVERY_UPDATE,
+                    "Order Delivered",
+                    "Your order from " + vendorName + " has been delivered. Enjoy your meal!",
+                    RelatedEntityType.ORDER, publicOrderId);
+
+            emailService.sendOrderStatusUpdateEmail(
+                    customer.getEmail(), customer.getFirstName(),
+                    publicOrderId, previousStatus, "DELIVERED");
+
+            log.info("Order delivered notifications sent for order: {}", publicOrderId);
         } catch (Exception e) {
-            log.error("Failed to send order delivered notifications for order: {}",
-                order.getPublicOrderId(), e);
+            log.error("Failed to send order delivered notifications for order: {}", publicOrderId, e);
         }
     }
 
     /**
-     * Notify customer when order is cancelled
-     * Channels: In-App (always) + Email
+     * Notify customer when order is cancelled.
+     * Channels: In-App + Email
      */
     @Async
     @Transactional
-    public void notifyCustomerOrderCancelled(Order order, String reason, String previousStatus) {
+    public void notifyCustomerOrderCancelled(String publicOrderId, String reason, String previousStatus) {
         try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
             User customer = order.getCustomer().getUser();
             String vendorName = order.getVendor().getRestaurantName();
             String message = "Your order from " + vendorName + " has been cancelled.";
-            if (reason != null && !reason.isEmpty()) {
-                message += " Reason: " + reason;
-            }
+            if (reason != null && !reason.isEmpty()) message += " Reason: " + reason;
 
-            // 1. In-app notification (always)
-            createInAppNotification(
-                customer,
-                NotificationType.ORDER_UPDATE,
-                "Order Cancelled",
-                message,
-                RelatedEntityType.ORDER,
-                order.getPublicOrderId()
-            );
+            createInAppNotification(customer, NotificationType.ORDER_UPDATE,
+                    "Order Cancelled", message, RelatedEntityType.ORDER, publicOrderId);
 
-            // 2. Email notification
             emailService.sendOrderStatusUpdateEmail(
-                customer.getEmail(),
-                customer.getFirstName(),
-                order.getPublicOrderId(),
-                previousStatus,
-                "CANCELLED"
-            );
+                    customer.getEmail(), customer.getFirstName(),
+                    publicOrderId, previousStatus, "CANCELLED");
 
-            log.info("Order cancelled notifications sent for order: {}", order.getPublicOrderId());
+            log.info("Order cancelled notifications sent for order: {}", publicOrderId);
         } catch (Exception e) {
-            log.error("Failed to send order cancelled notifications for order: {}",
-                order.getPublicOrderId(), e);
+            log.error("Failed to send order cancelled notifications for order: {}", publicOrderId, e);
         }
     }
 
     // ========== PAYMENT NOTIFICATIONS ==========
 
-    /**
-     * Notify customer of successful payment
-     * Channels: In-App (always) + Email
-     */
     @Async
     @Transactional
     public void notifyPaymentSuccess(String userPublicId, String paymentPublicId,
                                      String orderPublicId, BigDecimal amount) {
         try {
-            User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+            User user = resolveUser(userPublicId);
 
-            // 1. In-app notification (always)
-            createInAppNotification(
-                user,
-                NotificationType.PAYMENT_SUCCESS,
-                "Payment Successful",
-                "Your payment of $" + String.format("%.2f", amount) + " has been processed successfully",
-                RelatedEntityType.PAYMENT,
-                paymentPublicId
-            );
+            createInAppNotification(user, NotificationType.PAYMENT_SUCCESS,
+                    "Payment Successful",
+                    "Your payment of $" + String.format("%.2f", amount) + " has been processed successfully",
+                    RelatedEntityType.PAYMENT, paymentPublicId);
 
-            // 2. Email notification
             emailService.sendPaymentConfirmationEmail(
-                user.getEmail(),
-                user.getFirstName(),
-                paymentPublicId,
-                orderPublicId,
-                amount
-            );
+                    user.getEmail(), user.getFirstName(),
+                    paymentPublicId, orderPublicId, amount);
 
             log.info("Payment success notifications sent for payment: {}", paymentPublicId);
         } catch (Exception e) {
-            log.error("Failed to send payment success notifications for payment: {}",
-                paymentPublicId, e);
+            log.error("Failed to send payment success notifications for payment: {}", paymentPublicId, e);
         }
     }
 
-    /**
-     * Notify customer of failed payment
-     * Channels: In-App (always) + Email
-     */
     @Async
     @Transactional
     public void notifyPaymentFailed(String userPublicId, String orderPublicId, String reason) {
         try {
-            User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+            User user = resolveUser(userPublicId);
 
-            // 1. In-app notification (always)
-            createInAppNotification(
-                user,
-                NotificationType.SYSTEM_ALERT,
-                "Payment Failed",
-                "Your payment for order #" + orderPublicId + " failed. Please try again.",
-                RelatedEntityType.ORDER,
-                orderPublicId
-            );
+            createInAppNotification(user, NotificationType.SYSTEM_ALERT,
+                    "Payment Failed",
+                    "Your payment for order #" + orderPublicId + " failed. Please try again.",
+                    RelatedEntityType.ORDER, orderPublicId);
 
-            // 2. Email notification
             emailService.sendPaymentFailedEmail(
-                user.getEmail(),
-                user.getFirstName(),
-                orderPublicId,
-                reason
-            );
+                    user.getEmail(), user.getFirstName(), orderPublicId, reason);
 
             log.info("Payment failed notifications sent for order: {}", orderPublicId);
         } catch (Exception e) {
-            log.error("Failed to send payment failed notifications for order: {}",
-                orderPublicId, e);
+            log.error("Failed to send payment failed notifications for order: {}", orderPublicId, e);
         }
     }
 
-    // ========== REVIEW NOTIFICATIONS ==========
+    // ========== REVIEW & FAVORITE NOTIFICATIONS ==========
 
-    /**
-     * Notify vendor of new review
-     * Channels: In-App (always) only
-     */
     @Async
     @Transactional
     public void notifyVendorNewReview(String vendorPublicId, String reviewerName,
                                       Integer rating, String reviewType) {
         try {
-            User vendor = userRepository.findByPublicUserId(vendorPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
+            User vendor = resolveUser(vendorPublicId);
 
             String stars = "⭐".repeat(rating);
-            String message = reviewerName + " left a " + rating + "-star review " + stars +
-                           " on your " + reviewType;
-
-            // In-app notification only
-            createInAppNotification(
-                vendor,
-                NotificationType.SYSTEM_ALERT,
-                "New Review",
-                message,
-                RelatedEntityType.REVIEW,
-                null
-            );
+            createInAppNotification(vendor, NotificationType.SYSTEM_ALERT,
+                    "New Review",
+                    reviewerName + " left a " + rating + "-star review " + stars + " on your " + reviewType,
+                    RelatedEntityType.REVIEW, null);
 
             log.info("New review notification sent to vendor: {}", vendorPublicId);
         } catch (Exception e) {
-            log.error("Failed to send new review notification to vendor: {}",
-                vendorPublicId, e);
+            log.error("Failed to send new review notification to vendor: {}", vendorPublicId, e);
         }
     }
 
-    // ========== FAVORITE NOTIFICATIONS ==========
-
-    /**
-     * Notify vendor when they are favorited by a customer
-     * Channels: In-App (always) only
-     */
     @Async
     @Transactional
     public void notifyVendorFavorited(String vendorPublicId, String customerName) {
         try {
-            User vendor = userRepository.findByPublicUserId(vendorPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
+            User vendor = resolveUser(vendorPublicId);
 
-            String message = customerName + " added your restaurant to their favorites! ❤️";
-
-            // In-app notification only
-            createInAppNotification(
-                vendor,
-                NotificationType.SYSTEM_ALERT,
-                "New Favorite",
-                message,
-                null,
-                null
-            );
+            createInAppNotification(vendor, NotificationType.SYSTEM_ALERT,
+                    "New Favorite",
+                    customerName + " added your restaurant to their favorites! ❤️",
+                    null, null);
 
             log.info("Vendor favorited notification sent to vendor: {}", vendorPublicId);
         } catch (Exception e) {
-            log.error("Failed to send vendor favorited notification to vendor: {}",
-                vendorPublicId, e);
+            log.error("Failed to send vendor favorited notification to vendor: {}", vendorPublicId, e);
         }
     }
 
-    // ========== BROADCAST NOTIFICATIONS ==========
+    // ========== BROADCAST (Fix 4: single SQL INSERT SELECT) ==========
 
-    /**
-     * Send notification to all users (admin only)
-     */
     @Transactional
-    public List<NotificationDto> broadcastNotification(
-            String title,
-            String message,
-            NotificationType type) {
-
-        List<User> allUsers = userRepository.findAll();
-
-        List<Notification> notifications = allUsers.stream()
-                .map(user -> Notification.builder()
-                        .user(user)
-                        .title(title)
-                        .message(message)
-                        .type(type)
-                        .createdAt(LocalDateTime.now())
-                        .isRead(false)
-                        .build())
-                .toList();
-
-        List<Notification> savedNotifications = notificationRepository.saveAll(notifications);
-        return savedNotifications.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+    public void broadcastNotification(String title, String message, NotificationType type) {
+        notificationRepository.insertBroadcastToAllUsers(title, message, type.name());
+        log.info("Broadcast notification sent to all users: [{}] {}", type, title);
     }
 
-    // ========== HELPER METHODS ==========
+    // ========== READ ==========
 
-    /**
-     * Create in-app notification (stored in database)
-     * This is the persistent notification that appears in the web app
-     */
-    private void createInAppNotification(User user, NotificationType type,
-                                        String title, String message,
-                                        RelatedEntityType entityType,
-                                        String entityId) {
-        Notification notification = Notification.builder()
-            .user(user)
-            .type(type)
-            .title(title)
-            .message(message)
-            .relatedEntityType(entityType)
-            .relatedEntityId(entityId)
-            .isRead(false)
-            .createdAt(LocalDateTime.now())
-            .build();
-
-        notificationRepository.save(notification);
-    }
-
-    // ========== READ NOTIFICATIONS ==========
-
-    /**
-     * Get all notifications for a user
-     */
+    /** Fix 3: paginated — use page/size query params from the controller. */
     @Transactional(readOnly = true)
-    public List<NotificationDto> getUserNotifications(String userPublicId) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        List<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user);
-        return notifications.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+    public Page<NotificationDto> getUserNotifications(String userPublicId, Pageable pageable) {
+        User user = resolveUser(userPublicId);
+        return notificationRepository.findByUserOrderByCreatedAtDesc(user, pageable)
+                .map(this::toDto);
     }
 
-    /**
-     * Get unread notifications for a user
-     */
     @Transactional(readOnly = true)
     public List<NotificationDto> getUnreadNotifications(String userPublicId) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        List<Notification> notifications = notificationRepository.findByUserAndIsReadOrderByCreatedAtDesc(user, false);
-        return notifications.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        User user = resolveUser(userPublicId);
+        return notificationRepository.findByUserAndIsReadOrderByCreatedAtDesc(user, false)
+                .stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    /**
-     * Get notifications by type
-     */
     @Transactional(readOnly = true)
     public List<NotificationDto> getNotificationsByType(String userPublicId, NotificationType type) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        List<Notification> notifications = notificationRepository.findByUserAndType(user, type);
-        return notifications.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        User user = resolveUser(userPublicId);
+        return notificationRepository.findByUserAndType(user, type)
+                .stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    /**
-     * Get recent notifications (last 7 days)
-     */
     @Transactional(readOnly = true)
     public List<NotificationDto> getRecentNotifications(String userPublicId) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
-        List<Notification> notifications = notificationRepository
-                .findByUserAndCreatedAtAfterOrderByCreatedAtDesc(user, sevenDaysAgo);
-        return notifications.stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        User user = resolveUser(userPublicId);
+        return notificationRepository
+                .findByUserAndCreatedAtAfterOrderByCreatedAtDesc(user, LocalDateTime.now().minusDays(7))
+                .stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    // ========== UPDATE NOTIFICATIONS ==========
+    // ========== UPDATE ==========
 
-    /**
-     * Mark a notification as read
-     */
     @Transactional
     public NotificationDto markAsRead(String userPublicId, Long notificationId) {
-        Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new EntityNotFoundException("Notification not found"));
-
-        // Validate ownership
-        if (!notification.getUser().getPublicUserId().equals(userPublicId)) {
-            throw new IllegalStateException("You can only mark your own notifications as read");
-        }
-
-        notification.markAsRead();
-        Notification updatedNotification = notificationRepository.save(notification);
-        return toDto(updatedNotification);
+        Notification n = getOwnedNotification(userPublicId, notificationId);
+        n.markAsRead();
+        return toDto(notificationRepository.save(n));
     }
 
-    /**
-     * Mark all notifications as read
-     */
-    @Transactional
-    public void markAllAsRead(String userPublicId) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        List<Notification> unreadNotifications = notificationRepository.findByUserAndIsReadOrderByCreatedAtDesc(user, false);
-        unreadNotifications.forEach(Notification::markAsRead);
-        notificationRepository.saveAll(unreadNotifications);
-    }
-
-    /**
-     * Mark a notification as unread
-     */
     @Transactional
     public NotificationDto markAsUnread(String userPublicId, Long notificationId) {
-        Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new EntityNotFoundException("Notification not found"));
-
-        // Validate ownership
-        if (!notification.getUser().getPublicUserId().equals(userPublicId)) {
-            throw new IllegalStateException("You can only mark your own notifications as unread");
-        }
-
-        notification.markAsUnread();
-        Notification updatedNotification = notificationRepository.save(notification);
-        return toDto(updatedNotification);
+        Notification n = getOwnedNotification(userPublicId, notificationId);
+        n.markAsUnread();
+        return toDto(notificationRepository.save(n));
     }
 
-    // ========== DELETE NOTIFICATIONS ==========
+    @Transactional
+    public void markAllAsRead(String userPublicId) {
+        User user = resolveUser(userPublicId);
+        List<Notification> unread = notificationRepository
+                .findByUserAndIsReadOrderByCreatedAtDesc(user, false);
+        unread.forEach(Notification::markAsRead);
+        notificationRepository.saveAll(unread);
+    }
 
-    /**
-     * Delete a notification
-     */
+    // ========== DELETE ==========
+
     @Transactional
     public void deleteNotification(String userPublicId, Long notificationId) {
-        Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new EntityNotFoundException("Notification not found"));
-
-        // Validate ownership
-        if (!notification.getUser().getPublicUserId().equals(userPublicId)) {
-            throw new IllegalStateException("You can only delete your own notifications");
-        }
-
-        notificationRepository.delete(notification);
+        Notification n = getOwnedNotification(userPublicId, notificationId);
+        notificationRepository.delete(n);
     }
 
-    /**
-     * Delete all read notifications
-     */
+    /** Fix 2: single DELETE statement instead of fetch-then-delete. */
     @Transactional
     public void deleteAllReadNotifications(String userPublicId) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        List<Notification> readNotifications = notificationRepository.findByUserAndIsReadOrderByCreatedAtDesc(user, true);
-        notificationRepository.deleteAll(readNotifications);
+        User user = resolveUser(userPublicId);
+        notificationRepository.deleteAllReadByUser(user);
     }
 
-    // ========== STATISTICS ==========
+    // ========== STATS ==========
 
-    /**
-     * Get notification statistics for a user
-     */
     @Transactional(readOnly = true)
     public NotificationStats getNotificationStats(String userPublicId) {
-        User user = userRepository.findByPublicUserId(userPublicId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-
-        Long totalCount = notificationRepository.countByUser(user);
-        Long unreadCount = notificationRepository.countByUserAndIsRead(user, false);
-        Long readCount = totalCount - unreadCount;
-
+        User user = resolveUser(userPublicId);
+        Long total  = notificationRepository.countByUser(user);
+        Long unread = notificationRepository.countByUserAndIsRead(user, false);
         return NotificationStats.builder()
-                .totalNotifications(totalCount)
-                .unreadNotifications(unreadCount)
-                .readNotifications(readCount)
+                .totalNotifications(total)
+                .unreadNotifications(unread)
+                .readNotifications(total - unread)
+                .build();
+    }
+
+    // ========== HELPERS ==========
+
+    /**
+     * Resolve a user by publicUserId, email, or username — whichever matches.
+     * authentication.getName() returns whichever value CustomUserDetails.getUsername()
+     * is set to (currently the plain username string), so we try all three fields.
+     */
+    private User resolveUser(String identifier) {
+        return userRepository.findByPublicUserId(identifier)
+                .or(() -> userRepository.findByEmail(identifier))
+                .or(() -> userRepository.findByUsername(identifier))
+                .orElseThrow(() -> new EntityNotFoundException("User not found: " + identifier));
+    }
+
+    /** Fix 5: load Order fresh on the async thread to avoid detached-proxy issues. */
+    private Order loadOrder(String publicOrderId) {
+        return orderRepository.findByPublicOrderId(publicOrderId).orElseGet(() -> {
+            log.warn("Order not found for notification: {}", publicOrderId);
+            return null;
+        });
+    }
+
+    private Notification getOwnedNotification(String userIdentifier, Long notificationId) {
+        Notification n = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new EntityNotFoundException("Notification not found"));
+        User owner = n.getUser();
+        boolean isOwner = owner.getPublicUserId().equals(userIdentifier)
+                || owner.getEmail().equals(userIdentifier)
+                || owner.getUsername().equals(userIdentifier);
+        if (!isOwner) {
+            throw new IllegalStateException("You can only modify your own notifications");
+        }
+        return n;
+    }
+
+    private void createInAppNotification(User user, NotificationType type,
+                                         String title, String message,
+                                         RelatedEntityType entityType, String entityId) {
+        notificationRepository.save(Notification.builder()
+                .user(user)
+                .type(type)
+                .title(title)
+                .message(message)
+                .relatedEntityType(entityType)
+                .relatedEntityId(entityId)
+                .isRead(false)
+                .createdAt(LocalDateTime.now())
+                .build());
+    }
+
+    private NotificationDto toDto(Notification n) {
+        return NotificationDto.builder()
+                .notificationId(n.getNotificationId())
+                .userName(n.getUser() != null
+                        ? n.getUser().getFirstName() + " " + n.getUser().getLastName() : null)
+                .title(n.getTitle())
+                .message(n.getMessage())
+                .type(n.getType())
+                .relatedEntityType(n.getRelatedEntityType())
+                .relatedEntityId(n.getRelatedEntityId())
+                .isRead(n.getIsRead())
+                .createdAt(n.getCreatedAt())
+                .readAt(n.getReadAt())
                 .build();
     }
 
@@ -769,22 +551,5 @@ public class NotificationService {
         private Long totalNotifications;
         private Long unreadNotifications;
         private Long readNotifications;
-    }
-
-    // ========== MAPPING METHODS ==========
-
-    private NotificationDto toDto(Notification notification) {
-        return NotificationDto.builder()
-                .notificationId(notification.getNotificationId())
-                .userName(notification.getUser() != null ? notification.getUser().getFirstName() + " " + notification.getUser().getLastName() : null)
-                .title(notification.getTitle())
-                .message(notification.getMessage())
-                .type(notification.getType())
-                .relatedEntityType(notification.getRelatedEntityType())
-                .relatedEntityId(notification.getRelatedEntityId())
-                .isRead(notification.getIsRead())
-                .createdAt(notification.getCreatedAt())
-                .readAt(notification.getReadAt())
-                .build();
     }
 }

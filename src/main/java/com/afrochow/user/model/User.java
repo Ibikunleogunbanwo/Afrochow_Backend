@@ -62,7 +62,7 @@ public class User {
     private String phone;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private Role role;
 
     @Builder.Default
@@ -157,7 +157,12 @@ public class User {
 
     @Transient
     public boolean isAdmin() {
-        return role == Role.ADMIN;
+        return role == Role.ADMIN || role == Role.SUPERADMIN;
+    }
+
+    @Transient
+    public boolean isSuperAdmin() {
+        return role == Role.SUPERADMIN;
     }
 
     @Transient
@@ -165,7 +170,7 @@ public class User {
         return switch (role) {
             case CUSTOMER -> customerProfile;
             case VENDOR -> vendorProfile;
-            case ADMIN -> adminProfile;
+            case ADMIN, SUPERADMIN -> adminProfile;
         };
     }
 }

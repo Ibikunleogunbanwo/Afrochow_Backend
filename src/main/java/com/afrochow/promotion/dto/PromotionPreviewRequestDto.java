@@ -23,4 +23,8 @@ public class PromotionPreviewRequestDto {
     @NotNull(message = "Subtotal is required")
     @DecimalMin(value = "0.01", message = "Subtotal must be greater than 0")
     private BigDecimal subtotal;
+
+    /** Optional — delivery fee for the cart. Required for FREE_DELIVERY promos to show accurate discount. */
+    @DecimalMin(value = "0.00", message = "Delivery fee cannot be negative")
+    private BigDecimal deliveryFee;
 }

@@ -19,5 +19,6 @@ public interface AdminProfileRepository extends JpaRepository<AdminProfile, Long
 
     List<AdminProfile> findByDepartment(String department);
 
+
     Optional<AdminProfile> findByEmployeeId(String employeeId);
 }
