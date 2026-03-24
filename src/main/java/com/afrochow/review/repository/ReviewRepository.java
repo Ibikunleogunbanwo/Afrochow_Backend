@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -56,4 +57,8 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
 
     List<Review> findByIsVisible(Boolean isVisible);
+
+    // Date-range review count (used by AdminAnalytics date filter)
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.createdAt >= :startDate AND r.createdAt <= :endDate")
+    Long countByCreatedAtBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 }

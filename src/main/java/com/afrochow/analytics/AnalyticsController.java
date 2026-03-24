@@ -85,15 +85,45 @@ public class AnalyticsController {
 
     @GetMapping("/admin/platform")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Get platform analytics", description = "Get platform-wide analytics (admin only)")
-    public ResponseEntity<ApiResponse<AnalyticsService.AdminAnalytics>> getAdminAnalytics() {
-        return ResponseEntity.ok(ApiResponse.success(analyticsService.getAdminAnalytics()));
+    @Operation(
+            summary = "Get platform analytics",
+            description = "Get platform-wide analytics (admin only). " +
+                    "Pass startDate and endDate (ISO 8601) to filter transactional metrics " +
+                    "(orders, revenue, payments, reviews) to a specific window. " +
+                    "User, product and promotion counts always reflect current platform state."
+    )
+    public ResponseEntity<ApiResponse<AnalyticsService.AdminAnalytics>> getAdminAnalytics(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime startDate,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime endDate) {
+
+        return ResponseEntity.ok(ApiResponse.success(
+                analyticsService.getAdminAnalytics(startDate, endDate)));
     }
 
     @GetMapping("/admin/trends")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Get platform trends", description = "Get platform sales trends (admin only)")
-    public ResponseEntity<ApiResponse<AnalyticsService.PlatformTrends>> getPlatformTrends() {
-        return ResponseEntity.ok(ApiResponse.success(analyticsService.getPlatformTrends()));
+    @Operation(
+            summary = "Get platform trends",
+            description = "Get platform sales trends (admin only). " +
+                    "Always returns last-7-day and last-30-day buckets. " +
+                    "Pass startDate and endDate to also receive a custom-range bucket " +
+                    "(ordersInDateRange / revenueInDateRange)."
+    )
+    public ResponseEntity<ApiResponse<AnalyticsService.PlatformTrends>> getPlatformTrends(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime startDate,
+
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime endDate) {
+
+        return ResponseEntity.ok(ApiResponse.success(
+                analyticsService.getPlatformTrends(startDate, endDate)));
     }
 }

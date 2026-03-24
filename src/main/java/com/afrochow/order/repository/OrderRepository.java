@@ -110,6 +110,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status = 'DELIVERED' AND o.orderTime >= :startDate AND o.orderTime <= :endDate")
     BigDecimal calculateRevenueBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 
+    // Date-range status count (used by AdminAnalytics date filter)
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status = :status AND o.orderTime >= :startDate AND o.orderTime <= :endDate")
+    Long countByStatusAndOrderTimeBetween(@Param("status") OrderStatus status,
+                                          @Param("startDate") LocalDateTime startDate,
+                                          @Param("endDate") LocalDateTime endDate);
+
+    // Date-range active orders count
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status NOT IN ('DELIVERED', 'CANCELLED', 'REFUNDED') AND o.orderTime >= :startDate AND o.orderTime <= :endDate")
+    Long countActiveOrdersBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
     // Sum aggregation queries
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.vendor.id = :vendorId")
     BigDecimal sumTotalAmountByVendorId(@Param("vendorId") Long vendorId);
