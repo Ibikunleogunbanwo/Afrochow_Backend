@@ -1,7 +1,9 @@
 package com.afrochow.image;
 
-import com.afrochow.common.exceptions.ImageNotFoundException;
 import com.afrochow.common.exceptions.ImageValidationException;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -12,28 +14,24 @@ import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.file.*;
 import java.util.*;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ImageUploadService {
 
-    @Value("${app.upload.dir:uploads}")
-    private String uploadDir;
+    private final Cloudinary cloudinary;
 
     @Value("${app.upload.max-file-size:5242880}")
     private long maxFileSize;
 
-    @Value("${app.url:http://localhost:8080}")
-    private String appUrl;
-
-    // Whitelist of allowed categories
+    // Whitelist of allowed categories (used as Cloudinary folders)
     private static final Set<String> ALLOWED_CATEGORIES = Set.of(
             "registrations", "licenses", "logos", "banners", "profiles",
-            "vendors","VendorLogo","VendorBanner","VendorProfileImage" ,"products", "customers",
+            "vendors", "VendorLogo", "VendorBanner", "VendorProfileImage", "products", "customers",
             "documents", "CustomerProfileImage", "admins",
-            "AdminProfileImage","VendorBusinessLicense","vendors/banners","vendors/logos"
+            "AdminProfileImage", "VendorBusinessLicense", "vendors/banners", "vendors/logos"
     );
 
     private static final Set<String> ALLOWED_MIME = Set.of(
@@ -44,192 +42,130 @@ public class ImageUploadService {
             ".jpg", ".jpeg", ".png", ".gif", ".webp"
     );
 
-    private static final Map<String, String> EXTENSION_TO_MIME = Map.of(
-            ".jpg", "image/jpeg",
-            ".jpeg", "image/jpeg",
-            ".png", "image/png",
-            ".gif", "image/gif",
-            ".webp", "image/webp"
-    );
-
-    private static final int MAX_WIDTH = 10000;
-    private static final int MAX_HEIGHT = 10000;
-    private static final long MAX_PIXELS = 50_000_000L;
+    private static final int MAX_WIDTH        = 10000;
+    private static final int MAX_HEIGHT       = 10000;
+    private static final long MAX_PIXELS      = 50_000_000L;
     private static final int MAX_USERID_LENGTH = 100;
-
-    private final Object dirLock = new Object();
 
     // ============================================================
     // PUBLIC API
     // ============================================================
 
     /**
-     * Upload image for registration with UUID filename
-     *
-     * @param file     Image file to upload
-     * @param category Image category
-     * @return Relative path (category/filename)
-     * @throws ImageValidationException if validation fails
-     * @throws IOException              if upload fails
+     * Upload image to Cloudinary with a UUID public ID.
+     * Returns the full Cloudinary secure URL.
      */
     public String uploadImageForRegistration(MultipartFile file, String category) throws IOException {
         validateCategory(category);
         byte[] fileBytes = validateFileAndGetBytes(file);
-
-        Path uploadPath = prepareUploadPath(category);
-        String extension = getValidatedExtension(file.getOriginalFilename());
-        String filename = UUID.randomUUID().toString() + extension;
-
-        saveFile(uploadPath, filename, fileBytes);
-        log.info("Registration image saved: {}/{}", category, filename);
-
-        return category + "/" + filename;
+        String publicId  = UUID.randomUUID().toString();
+        return uploadToCloudinary(fileBytes, category, publicId, false);
     }
 
     /**
-     * Upload image for registration and return full URL
+     * Upload image to Cloudinary and return secure URL (same as uploadImageForRegistration).
      */
     public String uploadImageForRegistrationAndGetUrl(MultipartFile file, String category) throws IOException {
-        String relativePath = uploadImageForRegistration(file, category);
-        return getImageUrl(relativePath);
+        return uploadImageForRegistration(file, category);
     }
 
     /**
-     * Upload image using userId as filename (overwrites existing)
-     *
-     * @param file         Image file to upload
-     * @param category     Image category
-     * @param publicUserId User's public ID (becomes filename)
-     * @return Relative path (category/filename)
-     * @throws ImageValidationException if validation fails
-     * @throws IOException              if upload fails
+     * Upload image using publicUserId as the Cloudinary public ID (overwrites existing).
+     * Returns the full Cloudinary secure URL.
      */
     public String uploadImage(MultipartFile file, String category, String publicUserId) throws IOException {
         validateCategory(category);
         validateUserId(publicUserId);
         byte[] fileBytes = validateFileAndGetBytes(file);
-
-        Path uploadPath = prepareUploadPath(category);
-        String extension = getValidatedExtension(file.getOriginalFilename());
-        String filename = sanitizeUserId(publicUserId) + extension;
-
-        // Delete old image with different extension if exists
-        deleteOldUserImages(uploadPath, publicUserId, extension);
-
-        saveFile(uploadPath, filename, fileBytes);
-        log.info("User image saved: {}/{}", category, filename);
-
-        return category + "/" + filename;
+        String publicId  = sanitizeUserId(publicUserId);
+        return uploadToCloudinary(fileBytes, category, publicId, true);
     }
 
     /**
-     * Upload image with userId and return full URL
+     * Upload image with userId and return secure URL (same as uploadImage).
      */
     public String uploadImageAndGetUrl(MultipartFile file, String category, String publicUserId) throws IOException {
-        String relativePath = uploadImage(file, category, publicUserId);
-        return getImageUrl(relativePath);
+        return uploadImage(file, category, publicUserId);
     }
 
     /**
-     * Delete image by relative path
-     *
-     * @param relativePath Relative path (e.g., "vendors/abc123.jpg")
+     * Delete image from Cloudinary by its URL.
+     * Accepts both Cloudinary URLs and legacy server URLs (legacy URLs are silently skipped).
      */
-    public void deleteImage(String relativePath) {
-        if (relativePath == null || relativePath.isBlank()) {
+    public void deleteImage(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return;
+        }
+
+        String publicId = extractPublicId(imageUrl);
+        if (publicId == null) {
+            log.debug("Skipping delete — not a Cloudinary URL: {}", imageUrl);
             return;
         }
 
         try {
-            Path uploadDirPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            Path targetPath = uploadDirPath.resolve(relativePath).normalize();
+            cloudinary.uploader().destroy(publicId, ObjectUtils.asMap("invalidate", true));
+            log.info("Deleted image from Cloudinary: {}", publicId);
+        } catch (Exception e) {
+            log.error("Failed to delete image from Cloudinary: {}", publicId, e);
+        }
+    }
 
-            if (!targetPath.startsWith(uploadDirPath)) {
-                log.error("Path traversal attempt detected: {}", relativePath);
-                throw new SecurityException("Invalid path");
+    // ============================================================
+    // PRIVATE — CLOUDINARY OPERATIONS
+    // ============================================================
+
+    @SuppressWarnings("unchecked")
+    private String uploadToCloudinary(byte[] fileBytes, String folder, String publicId, boolean overwrite) throws IOException {
+        try {
+            Map<String, Object> params = ObjectUtils.asMap(
+                    "folder",    "Afrochow/" + folder,
+                    "public_id", publicId,
+                    "overwrite", overwrite,
+                    "resource_type", "image"
+            );
+
+            Map<String, Object> result = cloudinary.uploader().upload(fileBytes, params);
+            String url = (String) result.get("secure_url");
+
+            if (url == null || url.isBlank()) {
+                throw new IOException("Cloudinary upload returned no URL");
             }
 
-            boolean deleted = Files.deleteIfExists(targetPath);
-            if (deleted) {
-                log.info("Deleted image: {}", relativePath);
-            } else {
-                log.debug("Image not found for deletion: {}", relativePath);
-            }
+            log.info("Image uploaded to Cloudinary: {}", url);
+            return url;
 
-        } catch (SecurityException e) {
+        } catch (IOException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Failed to delete image: {}", relativePath, e);
+            throw new IOException("Cloudinary upload failed: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Get image bytes by relative path
-     *
-     * @param relativePath Relative path (e.g., "vendors/abc123.jpg")
-     * @return Image bytes
-     * @throws ImageNotFoundException if image not found
-     * @throws IOException            if read fails
+     * Extracts the Cloudinary public_id from a Cloudinary secure URL.
+     * Format: https://res.cloudinary.com/{cloud}/image/upload/{version?}/{folder}/{publicId}.{ext}
+     * Returns null if the URL is not a Cloudinary URL.
      */
-    public byte[] getImageBytes(String relativePath) throws IOException {
-        Path uploadDirPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-        Path targetPath = uploadDirPath.resolve(relativePath).normalize();
-
-        if (!targetPath.startsWith(uploadDirPath)) {
-            log.error("Path traversal attempt detected: {}", relativePath);
-            throw new SecurityException("Invalid path");
+    private String extractPublicId(String url) {
+        final String marker = "/image/upload/";
+        int idx = url.indexOf(marker);
+        if (idx == -1) {
+            return null; // not a Cloudinary URL
         }
 
-        if (!Files.exists(targetPath)) {
-            throw new ImageNotFoundException("Image not found: " + relativePath);
+        String rest = url.substring(idx + marker.length());
+
+        // Strip optional version prefix like "v1234567890/"
+        rest = rest.replaceFirst("^v\\d+/", "");
+
+        // Strip file extension
+        int lastDot = rest.lastIndexOf('.');
+        if (lastDot != -1) {
+            rest = rest.substring(0, lastDot);
         }
 
-        if (Files.isSymbolicLink(targetPath)) {
-            log.error("Symbolic link detected: {}", relativePath);
-            throw new SecurityException("Symbolic links not allowed");
-        }
-
-        return Files.readAllBytes(targetPath);
-    }
-
-    /**
-     * Get content type for image
-     *
-     * @param relativePath Relative path
-     * @return Content type (e.g., "image/jpeg")
-     * @throws ImageNotFoundException if file not found
-     * @throws IOException            if read fails
-     */
-    public String getContentType(String relativePath) throws IOException {
-        Path targetPath = Paths.get(uploadDir).resolve(relativePath).normalize();
-
-        if (!Files.exists(targetPath)) {
-            throw new ImageNotFoundException("Image not found: " + relativePath);
-        }
-
-        // Try to probe content type
-        String contentType = Files.probeContentType(targetPath);
-
-        // Fallback to extension-based detection
-        if (contentType == null) {
-            String extension = getExtension(relativePath).toLowerCase();
-            contentType = EXTENSION_TO_MIME.getOrDefault(extension, "application/octet-stream");
-        }
-
-        return contentType;
-    }
-
-    /**
-     * Get full URL for relative path
-     *
-     * @param relativePath Relative path
-     * @return Full URL or null if path is empty
-     */
-    public String getImageUrl(String relativePath) {
-        if (relativePath == null || relativePath.isBlank()) {
-            return null;
-        }
-        return appUrl + "/api/images/" + relativePath;
+        return rest.isBlank() ? null : rest;
     }
 
     // ============================================================
@@ -260,13 +196,9 @@ public class ImageUploadService {
             throw new ImageValidationException("Invalid file extension");
         }
 
-        // Read file bytes once
         byte[] fileBytes = file.getBytes();
 
-        // Validate magic bytes
         validateMagicBytes(fileBytes);
-
-        // Validate dimensions
         validateDimensions(fileBytes);
 
         return fileBytes;
@@ -298,7 +230,7 @@ public class ImageUploadService {
             try {
                 reader.setInput(iis, true, true);
 
-                int width = reader.getWidth(0);
+                int width  = reader.getWidth(0);
                 int height = reader.getHeight(0);
                 long pixels = (long) width * height;
 
@@ -321,7 +253,6 @@ public class ImageUploadService {
         if (category == null || category.isBlank()) {
             throw new ImageValidationException("Category is required");
         }
-
         if (!ALLOWED_CATEGORIES.contains(category)) {
             throw new ImageValidationException("Invalid category: " + category);
         }
@@ -331,74 +262,11 @@ public class ImageUploadService {
         if (userId == null || userId.isBlank()) {
             throw new ImageValidationException("User ID is required");
         }
-
         if (userId.length() > MAX_USERID_LENGTH) {
             throw new ImageValidationException("User ID too long");
         }
-
         if (!userId.matches("^[a-zA-Z0-9_-]+$")) {
             throw new ImageValidationException("User ID contains invalid characters");
-        }
-    }
-
-    // ============================================================
-    // FILE OPERATIONS
-    // ============================================================
-
-    private Path prepareUploadPath(String category) throws IOException {
-        Path basePath = Paths.get(uploadDir).toAbsolutePath().normalize();
-        Path categoryPath = basePath.resolve(category).normalize();
-
-        if (!categoryPath.startsWith(basePath)) {
-            throw new SecurityException("Invalid upload path");
-        }
-
-        synchronized (dirLock) {
-            if (!Files.exists(categoryPath)) {
-                Files.createDirectories(categoryPath);
-                log.info("Created directory: {}", category);
-            }
-        }
-
-        return categoryPath;
-    }
-
-    private void saveFile(Path uploadPath, String filename, byte[] fileBytes) throws IOException {
-        Path targetPath = uploadPath.resolve(filename).normalize();
-
-        if (!targetPath.startsWith(uploadPath)) {
-            throw new SecurityException("Invalid file path");
-        }
-
-        // Check for symlinks before writing
-        if (Files.exists(targetPath)) {
-            if (Files.isSymbolicLink(targetPath)) {
-                throw new SecurityException("Symbolic link detected at target path");
-            }
-        }
-
-        // Write file
-        Files.write(targetPath, fileBytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-
-        // Verify no symlink was created (Time-Of-Check-Time-Of-Use protection)
-        if (Files.isSymbolicLink(targetPath)) {
-            Files.deleteIfExists(targetPath);
-            throw new SecurityException("Symbolic link detected after write");
-        }
-    }
-
-    private void deleteOldUserImages(Path uploadPath, String userId, String currentExtension) {
-        String sanitizedUserId = sanitizeUserId(userId);
-
-        for (String ext : ALLOWED_EXTENSIONS) {
-            if (!ext.equals(currentExtension)) {
-                try {
-                    Path oldFile = uploadPath.resolve(sanitizedUserId + ext);
-                    Files.deleteIfExists(oldFile);
-                } catch (Exception e) {
-                    log.debug("Could not delete old image: {}", sanitizedUserId + ext);
-                }
-            }
         }
     }
 
@@ -424,19 +292,9 @@ public class ImageUploadService {
     }
 
     private String getExtension(String filename) {
-        if (filename == null) {
-            return "";
-        }
+        if (filename == null) return "";
         int lastDot = filename.lastIndexOf('.');
         return lastDot == -1 ? "" : filename.substring(lastDot).toLowerCase();
-    }
-
-    private String getValidatedExtension(String filename) {
-        String extension = getExtension(filename);
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new ImageValidationException("Invalid file extension");
-        }
-        return extension;
     }
 
     private String sanitizeUserId(String userId) {
