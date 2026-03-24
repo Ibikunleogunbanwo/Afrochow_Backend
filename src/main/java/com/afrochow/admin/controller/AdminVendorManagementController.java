@@ -17,7 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/vendors")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
 @Tag(name = "Admin Vendor Management", description = "Admin APIs for managing vendor profiles")
 public class AdminVendorManagementController {
 
