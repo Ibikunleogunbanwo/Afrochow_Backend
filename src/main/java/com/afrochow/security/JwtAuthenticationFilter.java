@@ -35,7 +35,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final List<String> PUBLIC_PATHS = List.of(
             "/api/auth/login",
-            "/api/auth/register",
+            "/api/auth/register/customer",
+            "/api/auth/register/vendor",
             "/api/auth/refresh",
             "/api/public/",
             "/api/images",                   // DELETE /api/images?imageUrl=...
@@ -44,7 +45,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/v3/api-docs",
             "/error",
             "/auth/login",
-            "/auth/register",
+            "/auth/register/customer",
+            "/auth/register/vendor",
             "/auth/refresh",
             "/auth/logout",
             "/auth/forgot-password",
