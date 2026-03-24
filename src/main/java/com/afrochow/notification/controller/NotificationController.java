@@ -134,7 +134,7 @@ public class NotificationController {
     // ========== ADMIN ENDPOINTS ==========
 
     @PostMapping("/admin/broadcast")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Broadcast notification", description = "Send notification to all users (admin only)")
     public ResponseEntity<ApiResponse<Void>> broadcastNotification(
             @Valid @RequestBody BroadcastNotificationRequestDto request) {

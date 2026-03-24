@@ -84,14 +84,14 @@ public class AnalyticsController {
     // ================= ADMIN =================
 
     @GetMapping("/admin/platform")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Get platform analytics", description = "Get platform-wide analytics (admin only)")
     public ResponseEntity<ApiResponse<AnalyticsService.AdminAnalytics>> getAdminAnalytics() {
         return ResponseEntity.ok(ApiResponse.success(analyticsService.getAdminAnalytics()));
     }
 
     @GetMapping("/admin/trends")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Get platform trends", description = "Get platform sales trends (admin only)")
     public ResponseEntity<ApiResponse<AnalyticsService.PlatformTrends>> getPlatformTrends() {
         return ResponseEntity.ok(ApiResponse.success(analyticsService.getPlatformTrends()));

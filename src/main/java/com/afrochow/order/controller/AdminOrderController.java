@@ -27,7 +27,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/orders")
 @Tag(name = "Admin Orders", description = "Admin order management endpoints")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
 @Validated
 public class AdminOrderController {
 
