@@ -1,7 +1,6 @@
 package com.afrochow.image;
 
 import com.afrochow.common.ApiResponse;
-import com.afrochow.common.exceptions.ImageNotFoundException;
 import com.afrochow.common.exceptions.ImageValidationException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -10,10 +9,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -45,47 +40,6 @@ public class ImageController {
 
     // Only alphanumeric, underscore, hyphen — no slashes or dots for individual inputs
     private static final String SAFE_INPUT_PATTERN = "^[a-zA-Z0-9_-]+$";
-
-    // Slashes and dots allowed for assembled relative paths only
-    private static final String SAFE_PATH_PATTERN = "^[a-zA-Z0-9_./-]+$";
-
-    @Value("${app.url:http://localhost:8080}")
-    private String appUrl;
-
-    // ─── Serve image ──────────────────────────────────────────────────────────
-
-    @GetMapping("/{category}/{filename:.+}")
-    @Operation(summary = "Serve image file",
-            description = "Retrieve and serve an image file by category and filename.")
-    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Image retrieved successfully",
-                    content = @Content(mediaType = "image/*")),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Image not found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error")
-    })
-    public ResponseEntity<Resource> serveImage(
-            @Parameter(description = "Image category", required = true) @PathVariable String category,
-            @Parameter(description = "Image filename", required = true) @PathVariable String filename) {
-
-        try {
-            String relativeFilePath = category + "/" + filename;
-            byte[] imageBytes = imageUploadService.getImageBytes(relativeFilePath);
-            String contentType = imageUploadService.getContentType(relativeFilePath);
-
-            return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(contentType))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
-                    .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000")
-                    .body(new ByteArrayResource(imageBytes));
-
-        } catch (ImageNotFoundException e) {
-            log.warn("Image not found: {}/{}", category, filename);
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.error("Error serving image {}/{}: {}", category, filename, e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
 
     // ─── Upload registration image ────────────────────────────────────────────
 
@@ -244,43 +198,13 @@ public class ImageController {
                     .body(ApiResponse.badRequest("Image URL is required"));
         }
 
-        String prefix1 = appUrl + "/api/images/";
-        String prefix2 = appUrl + "/images/";
-
-        String relativePath;
-        if (imageUrl.startsWith(prefix1)) {
-            relativePath = imageUrl.substring(prefix1.length());
-        } else if (imageUrl.startsWith(prefix2)) {
-            relativePath = imageUrl.substring(prefix2.length());
-        } else {
-            log.warn("Delete rejected — URL does not match server origin: {}", imageUrl);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.badRequest("Invalid image URL — must be a URL served by this application"));
-        }
-
-        if (relativePath.contains("..") || relativePath.contains("//")) {
-            log.warn("Delete rejected — path traversal attempt detected: {}", relativePath);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.badRequest("Invalid image path"));
-        }
-
-        if (!relativePath.matches(SAFE_PATH_PATTERN)) {
-            log.warn("Delete rejected — path contains disallowed characters: {}", relativePath);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.badRequest("Invalid image path"));
-        }
-
         try {
-            imageUploadService.deleteImage(relativePath);
-            log.info("Image deleted successfully: {}", relativePath);
+            imageUploadService.deleteImage(imageUrl);
+            log.info("Image deleted successfully: {}", imageUrl);
             return ResponseEntity.ok(ApiResponse.success("Image deleted successfully"));
 
-        } catch (SecurityException e) {
-            log.warn("Delete rejected — security exception for path: {}", relativePath);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.badRequest("Invalid image path"));
         } catch (Exception e) {
-            log.error("Delete failed — path: {}, error: {}", relativePath, e.getMessage());
+            log.error("Delete failed — url: {}, error: {}", imageUrl, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.internalError("Failed to delete image"));
         }
