@@ -117,7 +117,7 @@ public class PromotionController {
     // ========== ADMIN ENDPOINTS ==========
 
     @PostMapping("/admin")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Create promotion", description = "Create a new promotional code (admin only)")
     public ResponseEntity<ApiResponse<PromotionResponseDto>> createPromotion(
             @Valid @RequestBody PromotionRequestDto request) {
@@ -127,7 +127,7 @@ public class PromotionController {
     }
 
     @PutMapping("/admin/{publicPromotionId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Update promotion", description = "Update an existing promotion (admin only)")
     public ResponseEntity<ApiResponse<PromotionResponseDto>> updatePromotion(
             @PathVariable String publicPromotionId,
@@ -137,7 +137,7 @@ public class PromotionController {
     }
 
     @DeleteMapping("/admin/{publicPromotionId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Deactivate promotion", description = "Deactivate a promotion (admin only)")
     public ResponseEntity<ApiResponse<Void>> deactivatePromotion(@PathVariable String publicPromotionId) {
         promotionService.deactivatePromotion(publicPromotionId);
@@ -145,14 +145,14 @@ public class PromotionController {
     }
 
     @GetMapping("/admin")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Get all promotions", description = "List all promotions with usage stats (admin only)")
     public ResponseEntity<ApiResponse<List<PromotionResponseDto>>> getAllPromotions() {
         return ResponseEntity.ok(ApiResponse.success(promotionService.getAllPromotions()));
     }
 
     @GetMapping("/admin/{publicPromotionId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Get promotion by ID", description = "Get a single promotion with usage stats (admin only)")
     public ResponseEntity<ApiResponse<PromotionResponseDto>> getPromotion(
             @PathVariable String publicPromotionId) {
