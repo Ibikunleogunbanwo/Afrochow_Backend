@@ -236,7 +236,6 @@ com/afrochow/customer/model/CustomerProfile.class
 com/afrochow/product/dto/ProductRequestDto$ProductRequestDtoBuilder.class
 com/afrochow/address/repository/AddressRepository.class
 com/afrochow/user/dto/UserUpdateRequestDto.class
-com/afrochow/seeder/SuperAdminSeeder.class
 com/afrochow/security/model/SecurityEvent$SecurityEventBuilder.class
 com/afrochow/admin/controller/AdminUserManagementController$UserStats$UserStatsBuilder.class
 com/afrochow/order/controller/VendorOrderController$OrderCountStats.class

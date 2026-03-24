@@ -210,7 +210,6 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/security/repository/RefreshTokenRepository.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/security/repository/SecurityEventRepository.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/seeder/CompleteFinalSeeder.java
-/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/seeder/SuperAdminSeeder.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/stats/controller/StatsController.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/stats/dto/PlatformStatsDto.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/stats/service/StatsService.java
