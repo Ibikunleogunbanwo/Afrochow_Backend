@@ -1,6 +1,7 @@
 package com.afrochow.image;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.common.exceptions.ImageNotFoundException;
 import com.afrochow.common.exceptions.ImageValidationException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -9,6 +10,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +44,35 @@ public class ImageController {
 
     // Only alphanumeric, underscore, hyphen — no slashes or dots for individual inputs
     private static final String SAFE_INPUT_PATTERN = "^[a-zA-Z0-9_-]+$";
+
+    // ─── Serve image (dev / local filesystem only) ────────────────────────────
+
+    @GetMapping("/{category}/{filename:.+}")
+    @Operation(summary = "Serve image file (local dev only)",
+            description = "Retrieve and serve a locally stored image. In production, images are served directly from Cloudinary.")
+    public ResponseEntity<Resource> serveImage(
+            @PathVariable String category,
+            @PathVariable String filename) {
+
+        try {
+            String relativeFilePath = category + "/" + filename;
+            byte[] imageBytes  = imageUploadService.getImageBytes(relativeFilePath);
+            String contentType = imageUploadService.getContentType(relativeFilePath);
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                    .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000")
+                    .body(new ByteArrayResource(imageBytes));
+
+        } catch (ImageNotFoundException e) {
+            log.warn("Image not found: {}/{}", category, filename);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.error("Error serving image {}/{}: {}", category, filename, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 
     // ─── Upload registration image ────────────────────────────────────────────
 

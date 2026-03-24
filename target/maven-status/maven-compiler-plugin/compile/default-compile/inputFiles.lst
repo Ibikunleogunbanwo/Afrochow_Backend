@@ -92,6 +92,7 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/validation/CanadianPhoneValidator.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/validation/PhoneUtils.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/CacheConfig.java
+/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/CloudinaryConfig.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/DotenvConfig.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/ResendConfig.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/config/SecurityConfig.java
