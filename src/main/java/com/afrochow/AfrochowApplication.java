@@ -8,8 +8,6 @@ import io.swagger.v3.oas.annotations.info.Info;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-
 @OpenAPIDefinition(
 		info = @Info(
 				title = "Afrochow API",
@@ -24,12 +22,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 public class AfrochowApplication {
 
 	public static void main(String[] args) {
-		// Generate password hash first
-		BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
-		String hash = encoder.encode("SuperAdmin@123");
-		System.out.println("SuperAdmin@123 hash: " + hash);
-
-		// Then start the app
 		SpringApplication app = new SpringApplication(AfrochowApplication.class);
 		app.addInitializers(new DotenvConfig());
 		app.run(args);

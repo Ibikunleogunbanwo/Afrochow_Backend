@@ -328,7 +328,7 @@ public class AuthenticationService {
         User requestingAdmin = userRepository.findById(requestingAdminId)
                 .orElseThrow(() -> new UnauthorizedException("Admin user not found"));
 
-        if (requestingAdmin.getRole() != Role.ADMIN || requestingAdmin.getAdminProfile() == null) {
+        if (!requestingAdmin.isAdmin() || requestingAdmin.getAdminProfile() == null) {
             throw new InsufficientPermissionException("Only admins can create other admin accounts");
         }
         if (requestingAdmin.getAdminProfile().getAccessLevel() != AdminAccessLevel.SUPER_ADMIN) {
