@@ -168,7 +168,7 @@ public class SecurityConfig {
                         // Spring Security matches top-to-bottom and stops at first match.
 
                         // Admin — most restrictive first
-                        .requestMatchers("/promotions/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/promotions/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // Vendor — manage own promotions
                         .requestMatchers(HttpMethod.GET, "/promotions/vendor/mine").hasRole("VENDOR")
@@ -200,15 +200,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/orders/**",
                                 "/api/v1/orders/**"
-                        ).hasAnyRole("CUSTOMER", "VENDOR", "ADMIN")
+                        ).hasAnyRole("CUSTOMER", "VENDOR", "ADMIN", "SUPERADMIN")
                         .requestMatchers(HttpMethod.PUT,
                                 "/orders/**",
                                 "/api/v1/orders/**"
-                        ).hasAnyRole("CUSTOMER", "ADMIN")
+                        ).hasAnyRole("CUSTOMER", "ADMIN", "SUPERADMIN")
                         .requestMatchers(HttpMethod.DELETE,
                                 "/orders/**",
                                 "/api/v1/orders/**"
-                        ).hasRole("ADMIN")
+                        ).hasAnyRole("ADMIN", "SUPERADMIN")
 
                         // ── DEFAULT — must be last ────────────────────────
                         .anyRequest().authenticated()
