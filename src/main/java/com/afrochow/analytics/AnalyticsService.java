@@ -179,54 +179,113 @@ public class AnalyticsService {
 
     // ================= ADMIN ANALYTICS =================
 
-    public AdminAnalytics getAdminAnalytics() {
+    /**
+     * Returns platform-wide analytics. When startDate and endDate are both provided,
+     * all transactional metrics (orders, revenue, payments, reviews) are scoped to
+     * that window. User, product and promotion counts always reflect current state.
+     */
+    public AdminAnalytics getAdminAnalytics(LocalDateTime startDate, LocalDateTime endDate) {
         LocalDateTime now = LocalDateTime.now();
+        boolean isFiltered = startDate != null && endDate != null;
 
         return AdminAnalytics.builder()
-                // Users
+                // Users — always current state (not date-filtered)
                 .totalUsers(userRepository.count())
-                .totalCustomers((long) userRepository.findByRole(Role.CUSTOMER).size())
-                .totalVendors((long) userRepository.findByRole(Role.VENDOR).size())
+                .totalCustomers(userRepository.countByRole(Role.CUSTOMER))
+                .totalVendors(userRepository.countByRole(Role.VENDOR))
                 .activeUsers((long) userRepository.findByIsActive(true).size())
-                // Orders — each status separately so the dashboard has a clear pipeline view
-                .totalOrders(orderRepository.count())
-                .pendingOrders(orderRepository.countByStatus(OrderStatus.PENDING))
-                .confirmedOrders(orderRepository.countByStatus(OrderStatus.CONFIRMED))
-                .preparingOrders(orderRepository.countByStatus(OrderStatus.PREPARING))
-                .readyOrders(orderRepository.countByStatus(OrderStatus.READY_FOR_PICKUP))
-                .outForDeliveryOrders(orderRepository.countByStatus(OrderStatus.OUT_FOR_DELIVERY))
-                .deliveredOrders(orderRepository.countByStatus(OrderStatus.DELIVERED))
-                .cancelledOrders(orderRepository.countByStatus(OrderStatus.CANCELLED))
-                .refundedOrders(orderRepository.countByStatus(OrderStatus.REFUNDED))
-                .activeOrders(orderRepository.countActiveOrders())
+
+                // Orders — filtered when date range provided
+                .totalOrders(isFiltered
+                        ? orderRepository.countOrdersBetween(startDate, endDate)
+                        : orderRepository.count())
+                .pendingOrders(isFiltered
+                        ? orderRepository.countByStatusAndOrderTimeBetween(OrderStatus.PENDING, startDate, endDate)
+                        : orderRepository.countByStatus(OrderStatus.PENDING))
+                .confirmedOrders(isFiltered
+                        ? orderRepository.countByStatusAndOrderTimeBetween(OrderStatus.CONFIRMED, startDate, endDate)
+                        : orderRepository.countByStatus(OrderStatus.CONFIRMED))
+                .preparingOrders(isFiltered
+                        ? orderRepository.countByStatusAndOrderTimeBetween(OrderStatus.PREPARING, startDate, endDate)
+                        : orderRepository.countByStatus(OrderStatus.PREPARING))
+                .readyOrders(isFiltered
+                        ? orderRepository.countByStatusAndOrderTimeBetween(OrderStatus.READY_FOR_PICKUP, startDate, endDate)
+                        : orderRepository.countByStatus(OrderStatus.READY_FOR_PICKUP))
+                .outForDeliveryOrders(isFiltered
+                        ? orderRepository.countByStatusAndOrderTimeBetween(OrderStatus.OUT_FOR_DELIVERY, startDate, endDate)
+                        : orderRepository.countByStatus(OrderStatus.OUT_FOR_DELIVERY))
+                .deliveredOrders(isFiltered
+                        ? orderRepository.countByStatusAndOrderTimeBetween(OrderStatus.DELIVERED, startDate, endDate)
+                        : orderRepository.countByStatus(OrderStatus.DELIVERED))
+                .cancelledOrders(isFiltered
+                        ? orderRepository.countByStatusAndOrderTimeBetween(OrderStatus.CANCELLED, startDate, endDate)
+                        : orderRepository.countByStatus(OrderStatus.CANCELLED))
+                .refundedOrders(isFiltered
+                        ? orderRepository.countByStatusAndOrderTimeBetween(OrderStatus.REFUNDED, startDate, endDate)
+                        : orderRepository.countByStatus(OrderStatus.REFUNDED))
+                .activeOrders(isFiltered
+                        ? orderRepository.countActiveOrdersBetween(startDate, endDate)
+                        : orderRepository.countActiveOrders())
                 .todayOrders(orderRepository.countTodayOrders())
-                // Revenue
-                .totalRevenue(nvl(orderRepository.calculateTotalRevenue()))
-                // Catalog
+
+                // Revenue — filtered when date range provided
+                .totalRevenue(isFiltered
+                        ? nvl(orderRepository.calculateRevenueBetween(startDate, endDate))
+                        : nvl(orderRepository.calculateTotalRevenue()))
+
+                // Catalog — always current state
                 .totalProducts(productRepository.count())
                 .availableProducts(productRepository.countByAvailable(true))
-                // Payments
-                .successfulPayments(paymentRepository.countByStatus(PaymentStatus.COMPLETED))
-                .failedPayments(paymentRepository.countByStatus(PaymentStatus.FAILED))
-                // Reviews
-                .totalReviews(reviewRepository.count())
-                // Promotions
+
+                // Payments — filtered when date range provided
+                .successfulPayments(isFiltered
+                        ? paymentRepository.countByStatusAndPaymentTimeBetween(PaymentStatus.COMPLETED, startDate, endDate)
+                        : paymentRepository.countByStatus(PaymentStatus.COMPLETED))
+                .failedPayments(isFiltered
+                        ? paymentRepository.countByStatusAndPaymentTimeBetween(PaymentStatus.FAILED, startDate, endDate)
+                        : paymentRepository.countByStatus(PaymentStatus.FAILED))
+
+                // Reviews — filtered when date range provided
+                .totalReviews(isFiltered
+                        ? reviewRepository.countByCreatedAtBetween(startDate, endDate)
+                        : reviewRepository.count())
+
+                // Promotions — always current state
                 .totalPromotions(promotionRepository.count())
                 .activePromotions((long) promotionRepository.findAllCurrentlyActive(now).size())
                 .totalDiscountGiven(nvl(promotionUsageRepository.calculateTotalDiscountGiven()))
+
+                // Date range metadata (null when not filtered)
+                .filterStartDate(startDate)
+                .filterEndDate(endDate)
                 .build();
     }
 
-    public PlatformTrends getPlatformTrends() {
+    /**
+     * Returns platform trends. When startDate and endDate are both provided,
+     * a custom-range bucket is included alongside the standard 7/30-day windows.
+     */
+    public PlatformTrends getPlatformTrends(LocalDateTime startDate, LocalDateTime endDate) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime sevenDaysAgo = now.minusDays(7);
         LocalDateTime thirtyDaysAgo = now.minusDays(30);
+
+        boolean isFiltered = startDate != null && endDate != null;
 
         return PlatformTrends.builder()
                 .ordersLast7Days(orderRepository.countOrdersBetween(sevenDaysAgo, now))
                 .ordersLast30Days(orderRepository.countOrdersBetween(thirtyDaysAgo, now))
                 .revenueLast7Days(nvl(orderRepository.calculateRevenueBetween(sevenDaysAgo, now)))
                 .revenueLast30Days(nvl(orderRepository.calculateRevenueBetween(thirtyDaysAgo, now)))
+                // Custom range — only populated when startDate/endDate provided
+                .ordersInDateRange(isFiltered
+                        ? orderRepository.countOrdersBetween(startDate, endDate)
+                        : null)
+                .revenueInDateRange(isFiltered
+                        ? nvl(orderRepository.calculateRevenueBetween(startDate, endDate))
+                        : null)
+                .filterStartDate(startDate)
+                .filterEndDate(endDate)
                 .build();
     }
 
@@ -344,11 +403,20 @@ public class AnalyticsService {
         // Promotions
         private Long totalPromotions, activePromotions;
         private BigDecimal totalDiscountGiven;
+        // Active filter window — null when no filter applied
+        private LocalDateTime filterStartDate;
+        private LocalDateTime filterEndDate;
     }
 
     @Data @Builder
     public static class PlatformTrends {
+        // Standard rolling windows (always populated)
         private Long ordersLast7Days, ordersLast30Days;
         private BigDecimal revenueLast7Days, revenueLast30Days;
+        // Custom date range (only populated when startDate/endDate params are provided)
+        private Long ordersInDateRange;
+        private BigDecimal revenueInDateRange;
+        private LocalDateTime filterStartDate;
+        private LocalDateTime filterEndDate;
     }
 }
