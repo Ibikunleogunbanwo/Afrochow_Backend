@@ -125,7 +125,7 @@ public class AuthController {
      * @return JWT tokens and user info (no email verification needed)
      */
     @PostMapping("/register/admin")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(
             summary = "Register Admin",
             description = "Register a new admin account. Requires SUPER_ADMIN privileges. Returns JWT tokens immediately."
