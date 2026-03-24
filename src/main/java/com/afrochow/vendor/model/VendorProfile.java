@@ -18,6 +18,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -95,13 +96,21 @@ public class VendorProfile {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transient
+    private static final DateTimeFormatter HOURS_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a");
+
+    @Transient
     public Map<String, DayHours> getOperatingHours() {
         if (operatingHoursJson == null || operatingHoursJson.isEmpty()) {
             return getDefaultOperatingHours();
         }
         try {
-            return objectMapper.readValue(operatingHoursJson,
+            Map<String, DayHours> raw = objectMapper.readValue(operatingHoursJson,
                     new TypeReference<Map<String, DayHours>>() {});
+            // Normalize keys to lowercase so lookups always work regardless of how
+            // data was saved (frontend may have stored "Monday" instead of "monday").
+            Map<String, DayHours> normalized = new HashMap<>();
+            raw.forEach((k, v) -> normalized.put(k.toLowerCase(), v));
+            return normalized;
         } catch (JsonProcessingException e) {
             return getDefaultOperatingHours();
         }
@@ -110,7 +119,10 @@ public class VendorProfile {
     @Transient
     public void setOperatingHours(Map<String, DayHours> operatingHours) {
         try {
-            this.operatingHoursJson = objectMapper.writeValueAsString(operatingHours);
+            // Always persist with lowercase keys to keep data consistent.
+            Map<String, DayHours> normalized = new HashMap<>();
+            operatingHours.forEach((k, v) -> normalized.put(k.toLowerCase(), v));
+            this.operatingHoursJson = objectMapper.writeValueAsString(normalized);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize operating hours", e);
         }
@@ -256,9 +268,10 @@ public class VendorProfile {
         if (todayHours == null || !todayHours.getIsOpen()) return false;
 
         try {
-            LocalTime openTime = LocalTime.parse(todayHours.getOpenTime());
+            LocalTime openTime  = LocalTime.parse(todayHours.getOpenTime());
             LocalTime closeTime = LocalTime.parse(todayHours.getCloseTime());
 
+            // Handle overnight hours e.g. 10:00 PM - 02:00 AM
             if (closeTime.isBefore(openTime)) {
                 return now.isAfter(openTime) || now.isBefore(closeTime);
             }
@@ -269,6 +282,11 @@ public class VendorProfile {
         }
     }
 
+    /**
+     * Returns today's hours formatted as "hh:mm AM - hh:mm PM" (12-hour, AM/PM).
+     * Matches the regex expected by the frontend's computeIsOpenNow() helper.
+     * Returns "Closed today" if the vendor is marked closed, "Hours not set" as fallback.
+     */
     @Transient
     public String getTodayHoursFormatted() {
         Map<String, DayHours> hours = getOperatingHours();
@@ -281,9 +299,13 @@ public class VendorProfile {
         DayHours todayHours = hours.get(dayKey);
         if (todayHours == null || !todayHours.getIsOpen()) return "Closed today";
 
-        return String.format("Open %s - %s",
-                todayHours.getOpenTime(),
-                todayHours.getCloseTime());
+        try {
+            String open  = LocalTime.parse(todayHours.getOpenTime()).format(HOURS_FORMATTER);
+            String close = LocalTime.parse(todayHours.getCloseTime()).format(HOURS_FORMATTER);
+            return String.format("%s - %s", open, close);
+        } catch (Exception e) {
+            return "Hours not set";
+        }
     }
 
     @Transient

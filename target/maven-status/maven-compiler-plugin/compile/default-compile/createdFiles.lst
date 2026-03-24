@@ -226,6 +226,7 @@ com/afrochow/product/dto/PopularProductDto$PopularProductDtoBuilder.class
 com/afrochow/orderline/dto/OrderLineRequestDto$OrderLineRequestDtoBuilder.class
 com/afrochow/security/model/EmailVerificationToken$EmailVerificationTokenBuilder.class
 com/afrochow/notification/dto/NotificationDto$NotificationDtoBuilder.class
+com/afrochow/admin/controller/SuperAdminController.class
 com/afrochow/category/dto/CategoryUpdateRequestDto.class
 com/afrochow/admin/controller/AdminUserManagementController.class
 com/afrochow/security/repository/RefreshTokenRepository.class
@@ -235,6 +236,7 @@ com/afrochow/customer/model/CustomerProfile.class
 com/afrochow/product/dto/ProductRequestDto$ProductRequestDtoBuilder.class
 com/afrochow/address/repository/AddressRepository.class
 com/afrochow/user/dto/UserUpdateRequestDto.class
+com/afrochow/seeder/SuperAdminSeeder.class
 com/afrochow/security/model/SecurityEvent$SecurityEventBuilder.class
 com/afrochow/admin/controller/AdminUserManagementController$UserStats$UserStatsBuilder.class
 com/afrochow/order/controller/VendorOrderController$OrderCountStats.class

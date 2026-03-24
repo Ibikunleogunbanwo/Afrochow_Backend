@@ -54,15 +54,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/public/",
             "/images",
             "/images/",
-            "/swagger-ui/",
-            "/v3/api-docs",
-            "/error",
-            "/promotions",
-            "/promotions/**",
-            "/promotions/vendor/{vendorPublicId}",
-            "/promotions/validate/**",
-            "/promotions/preview",
             "/stats/**"
+            // NOTE: Promotion paths are intentionally NOT listed here.
+            // The JWT filter must run for all /promotions/** requests so that
+            // vendor/admin/authenticated rules in SecurityConfig can evaluate
+            // the caller's role. For truly public promotion endpoints, SecurityConfig
+            // already grants permitAll() — but only after the filter populates the
+            // security context (or leaves it anonymous, which is fine for permitAll).
     );
 
     private final JwtTokenProvider tokenProvider;
