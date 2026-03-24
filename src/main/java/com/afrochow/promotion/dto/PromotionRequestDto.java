@@ -34,8 +34,12 @@ public class PromotionRequestDto {
     @DecimalMin(value = "0.00", message = "Value must be 0 or greater")
     private BigDecimal value;
 
-    /** Max discount cap — only relevant for PERCENTAGE type. */
-    @DecimalMin(value = "0.01")
+    /**
+     * Max discount cap — only relevant for PERCENTAGE type.
+     * Send {@code null} or omit to mean "no cap". Sending {@code 0} is also
+     * accepted and is normalised to "no cap" in the service layer.
+     */
+    @DecimalMin(value = "0.00", message = "Max discount amount cannot be negative")
     private BigDecimal maxDiscountAmount;
 
     @DecimalMin(value = "0.00")

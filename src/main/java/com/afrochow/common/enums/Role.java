@@ -6,7 +6,8 @@ import lombok.Getter;
 public enum Role {
     CUSTOMER("CUS", "Customer who orders food"),
     VENDOR("VEN", "Restaurant/vendor who sells food"),
-    ADMIN("ADM", "Platform administrator");
+    ADMIN("ADM", "Platform administrator"),
+    SUPERADMIN("SPA", "Super administrator");
 
     private final String prefix;
     private final String description;

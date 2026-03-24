@@ -5,5 +5,6 @@ public enum Department {
     CUSTOMER_SUPPORT,
     FINANCE,
     MARKETING,
-    HR
+    HR,
+    MANAGEMENT
 }

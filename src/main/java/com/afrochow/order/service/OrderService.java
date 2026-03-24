@@ -250,7 +250,7 @@ public class OrderService {
             );
         }
 
-        notificationService.notifyVendorNewOrder(savedOrder);
+        notificationService.notifyVendorNewOrder(savedOrder.getPublicOrderId());
 
         return toResponseDto(savedOrder);
     }
@@ -302,7 +302,7 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderCancelled(updatedOrder, "Cancelled by customer", previousStatus);
+        notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus);
 
         return toResponseDto(updatedOrder);
     }
@@ -368,7 +368,7 @@ public class OrderService {
         order.updateStatus(OrderStatus.CONFIRMED);
         Order updatedOrder = orderRepository.save(order);
 
-        notificationService.notifyCustomerOrderConfirmed(updatedOrder);
+        notificationService.notifyCustomerOrderConfirmed(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -387,7 +387,7 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderCancelled(updatedOrder, "Rejected by vendor", previousStatus);
+        notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus);
         return toResponseDto(updatedOrder);
     }
 
@@ -404,7 +404,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.PREPARING);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderPreparing(updatedOrder);
+        notificationService.notifyCustomerOrderPreparing(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -421,7 +421,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.READY_FOR_PICKUP);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderReady(updatedOrder);
+        notificationService.notifyCustomerOrderReady(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -442,7 +442,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.OUT_FOR_DELIVERY);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderOutForDelivery(updatedOrder);
+        notificationService.notifyCustomerOrderOutForDelivery(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -466,7 +466,7 @@ public class OrderService {
         Order updatedOrder = orderRepository.save(order);
         vendor.recordCompletedOrder(order.getTotalAmount());
         vendorProfileRepository.save(vendor);
-        notificationService.notifyCustomerOrderDelivered(updatedOrder);
+        notificationService.notifyCustomerOrderDelivered(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 

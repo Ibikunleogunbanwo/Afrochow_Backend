@@ -31,12 +31,12 @@ public class AdminProfile {
     // ========== ADMIN INFORMATION ==========
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private Department department;
 
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     @Builder.Default
     private AdminAccessLevel accessLevel = AdminAccessLevel.MODERATOR;
 

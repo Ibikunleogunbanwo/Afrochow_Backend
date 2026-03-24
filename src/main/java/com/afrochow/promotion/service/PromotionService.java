@@ -48,10 +48,8 @@ public class PromotionService {
         if (endDate.isBefore(startDate)) {
             throw new IllegalArgumentException("End date must be after start date");
         }
-        if (request.getType() == PromotionType.PERCENTAGE &&
-                request.getValue().compareTo(BigDecimal.valueOf(100)) > 0) {
-            throw new IllegalArgumentException("Percentage value cannot exceed 100");
-        }
+
+        BigDecimal resolvedValue = resolveValue(request);
 
         VendorProfile vendor = null;
         if (request.getVendorPublicId() != null && !request.getVendorPublicId().isBlank()) {
@@ -60,12 +58,12 @@ public class PromotionService {
         }
 
         Promotion promotion = Promotion.builder()
-                .code(request.getCode())
+                .code(request.getCode().toUpperCase().trim())
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .type(request.getType())
-                .value(request.getValue())
-                .maxDiscountAmount(request.getMaxDiscountAmount())
+                .value(resolvedValue)
+                .maxDiscountAmount(resolveMaxDiscount(request.getMaxDiscountAmount()))
                 .minimumOrderAmount(request.getMinimumOrderAmount())
                 .usageLimit(request.getUsageLimit())
                 .perUserLimit(request.getPerUserLimit())
@@ -102,12 +100,12 @@ public class PromotionService {
                     .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
         }
 
-        promotion.setCode(request.getCode());
+        promotion.setCode(request.getCode().toUpperCase().trim());
         promotion.setTitle(request.getTitle());
         promotion.setDescription(request.getDescription());
         promotion.setType(request.getType());
-        promotion.setValue(request.getValue());
-        promotion.setMaxDiscountAmount(request.getMaxDiscountAmount());
+        promotion.setValue(resolveValue(request));
+        promotion.setMaxDiscountAmount(resolveMaxDiscount(request.getMaxDiscountAmount()));
         promotion.setMinimumOrderAmount(request.getMinimumOrderAmount());
         promotion.setUsageLimit(request.getUsageLimit());
         promotion.setPerUserLimit(request.getPerUserLimit());
@@ -159,18 +157,16 @@ public class PromotionService {
         if (vendorEndDate.isBefore(vendorStartDate)) {
             throw new IllegalArgumentException("End date must be after start date");
         }
-        if (request.getType() == PromotionType.PERCENTAGE &&
-                request.getValue().compareTo(BigDecimal.valueOf(100)) > 0) {
-            throw new IllegalArgumentException("Percentage value cannot exceed 100");
-        }
+
+        BigDecimal resolvedVendorValue = resolveValue(request);
 
         Promotion promotion = Promotion.builder()
-                .code(request.getCode())
+                .code(request.getCode().toUpperCase().trim())
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .type(request.getType())
-                .value(request.getValue())
-                .maxDiscountAmount(request.getMaxDiscountAmount())
+                .value(resolvedVendorValue)
+                .maxDiscountAmount(resolveMaxDiscount(request.getMaxDiscountAmount()))
                 .minimumOrderAmount(request.getMinimumOrderAmount())
                 .usageLimit(request.getUsageLimit())
                 .perUserLimit(request.getPerUserLimit())
@@ -206,12 +202,12 @@ public class PromotionService {
             throw new IllegalArgumentException("End date must be after start date");
         }
 
-        promotion.setCode(request.getCode());
+        promotion.setCode(request.getCode().toUpperCase().trim());
         promotion.setTitle(request.getTitle());
         promotion.setDescription(request.getDescription());
         promotion.setType(request.getType());
-        promotion.setValue(request.getValue());
-        promotion.setMaxDiscountAmount(request.getMaxDiscountAmount());
+        promotion.setValue(resolveValue(request));
+        promotion.setMaxDiscountAmount(resolveMaxDiscount(request.getMaxDiscountAmount()));
         promotion.setMinimumOrderAmount(request.getMinimumOrderAmount());
         promotion.setUsageLimit(request.getUsageLimit());
         promotion.setPerUserLimit(request.getPerUserLimit());
@@ -329,7 +325,7 @@ public class PromotionService {
             }
         }
 
-        BigDecimal discountAmount = computeDiscountAmount(promotion, request.getSubtotal());
+        BigDecimal discountAmount = computeDiscountAmount(promotion, request.getSubtotal(), request.getDeliveryFee());
         BigDecimal discountedSubtotal = request.getSubtotal().subtract(discountAmount);
 
         return PromotionPreviewResponseDto.builder()
@@ -420,6 +416,36 @@ public class PromotionService {
     }
 
     // ========== PRIVATE HELPERS ==========
+
+    /**
+     * Treats a {@code maxDiscountAmount} of zero as "no cap" (null).
+     * The frontend sends 0 when the user leaves the field blank.
+     */
+    private BigDecimal resolveMaxDiscount(BigDecimal raw) {
+        return (raw == null || raw.compareTo(BigDecimal.ZERO) == 0) ? null : raw;
+    }
+
+    /**
+     * Resolves the discount value for a promotion request.
+     * <ul>
+     *   <li>FREE_DELIVERY — value is not applicable; store {@code BigDecimal.ZERO}.</li>
+     *   <li>PERCENTAGE / FIXED_AMOUNT — value is mandatory; throws if absent.</li>
+     * </ul>
+     */
+    private BigDecimal resolveValue(PromotionRequestDto request) {
+        if (request.getType() == PromotionType.FREE_DELIVERY) {
+            return BigDecimal.ZERO;
+        }
+        if (request.getValue() == null) {
+            throw new IllegalArgumentException(
+                    "Value is required for " + request.getType() + " promotions");
+        }
+        if (request.getType() == PromotionType.PERCENTAGE &&
+                request.getValue().compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new IllegalArgumentException("Percentage value cannot exceed 100");
+        }
+        return request.getValue();
+    }
 
     private BigDecimal computeDiscountAmount(Promotion promotion, BigDecimal subtotal) {
         return computeDiscountAmount(promotion, subtotal, null);
