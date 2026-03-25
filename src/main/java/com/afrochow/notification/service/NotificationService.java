@@ -1,8 +1,11 @@
 package com.afrochow.notification.service;
 
 import com.afrochow.email.EmailService;
+import com.afrochow.notification.dto.BroadcastLogDto;
 import com.afrochow.notification.dto.NotificationDto;
+import com.afrochow.notification.model.BroadcastLog;
 import com.afrochow.notification.model.Notification;
+import com.afrochow.notification.repository.BroadcastLogRepository;
 import com.afrochow.order.model.Order;
 import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.user.model.User;
@@ -43,6 +46,7 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final BroadcastLogRepository broadcastLogRepository;
     private final UserRepository         userRepository;
     private final OrderRepository        orderRepository;
     private final EmailService           emailService;
@@ -399,7 +403,7 @@ public class NotificationService {
     // ========== BROADCAST (Fix 4: single SQL INSERT SELECT) ==========
 
     @Transactional
-    public void broadcastNotification(com.afrochow.notification.dto.BroadcastNotificationRequestDto dto) {
+    public void broadcastNotification(com.afrochow.notification.dto.BroadcastNotificationRequestDto dto, String sentBy) {
         List<User> recipients = switch (dto.getTargetAudience()) {
             case CUSTOMERS -> userRepository.findAllByRole(com.afrochow.common.enums.Role.CUSTOMER);
             case VENDORS   -> userRepository.findAllByRole(com.afrochow.common.enums.Role.VENDOR);
@@ -410,8 +414,33 @@ public class NotificationService {
             createInAppNotification(user, dto.getType(), dto.getTitle(), dto.getMessage(), null, null);
         }
 
+        broadcastLogRepository.save(BroadcastLog.builder()
+                .title(dto.getTitle())
+                .message(dto.getMessage())
+                .type(dto.getType())
+                .targetAudience(dto.getTargetAudience().name())
+                .recipientCount(recipients.size())
+                .sentAt(java.time.LocalDateTime.now())
+                .sentBy(sentBy)
+                .build());
+
         log.info("Broadcast notification sent to {} recipient(s) [audience={}]: [{}] {}",
                 recipients.size(), dto.getTargetAudience(), dto.getType(), dto.getTitle());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<BroadcastLogDto> getBroadcastHistory(Pageable pageable) {
+        return broadcastLogRepository.findAllByOrderBySentAtDesc(pageable)
+                .map(log -> BroadcastLogDto.builder()
+                        .id(log.getId())
+                        .title(log.getTitle())
+                        .message(log.getMessage())
+                        .type(log.getType())
+                        .targetAudience(log.getTargetAudience())
+                        .recipientCount(log.getRecipientCount())
+                        .sentAt(log.getSentAt())
+                        .sentBy(log.getSentBy())
+                        .build());
     }
 
     // ========== READ ==========

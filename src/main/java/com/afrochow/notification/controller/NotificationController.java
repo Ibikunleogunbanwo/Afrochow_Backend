@@ -1,6 +1,7 @@
 package com.afrochow.notification.controller;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.notification.dto.BroadcastLogDto;
 import com.afrochow.notification.dto.BroadcastNotificationRequestDto;
 import com.afrochow.notification.dto.NotificationDto;
 import com.afrochow.common.enums.NotificationType;
@@ -137,9 +138,20 @@ public class NotificationController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Broadcast notification", description = "Send notification to all users (admin only)")
     public ResponseEntity<ApiResponse<Void>> broadcastNotification(
-            @Valid @RequestBody BroadcastNotificationRequestDto request) {
-        notificationService.broadcastNotification(request);
+            @Valid @RequestBody BroadcastNotificationRequestDto request,
+            Authentication authentication) {
+        notificationService.broadcastNotification(request, authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Notification broadcast successfully"));
+    }
+
+    @GetMapping("/admin/broadcasts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Broadcast history", description = "Paginated list of past broadcasts (admin only)")
+    public ResponseEntity<ApiResponse<Page<BroadcastLogDto>>> getBroadcastHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Page<BroadcastLogDto> history = notificationService.getBroadcastHistory(PageRequest.of(page, size));
+        return ResponseEntity.ok(ApiResponse.success(history));
     }
 }
