@@ -37,6 +37,16 @@ public class PromotionController {
         return ResponseEntity.ok(ApiResponse.success(promotionService.getActivePromotions()));
     }
 
+    // ========== VENDOR ENDPOINTS ==========
+
+    @GetMapping("/vendor/mine")
+    @PreAuthorize("hasRole('VENDOR')")
+    @Operation(summary = "Get my promotions", description = "List all promotions created by the authenticated vendor")
+    public ResponseEntity<ApiResponse<List<PromotionResponseDto>>> getMyPromotions(Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success(
+                promotionService.getVendorOwnPromotions(authentication.getName())));
+    }
+
     @GetMapping("/vendor/{vendorPublicId}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get active promotions for vendor",
@@ -69,16 +79,6 @@ public class PromotionController {
 
         return ResponseEntity.ok(ApiResponse.success(
                 promotionService.previewDiscount(request, userPublicId)));
-    }
-
-    // ========== VENDOR ENDPOINTS ==========
-
-    @GetMapping("/vendor/mine")
-    @PreAuthorize("hasRole('VENDOR')")
-    @Operation(summary = "Get my promotions", description = "List all promotions created by the authenticated vendor")
-    public ResponseEntity<ApiResponse<List<PromotionResponseDto>>> getMyPromotions(Authentication authentication) {
-        return ResponseEntity.ok(ApiResponse.success(
-                promotionService.getVendorOwnPromotions(authentication.getName())));
     }
 
     @PostMapping("/vendor")
