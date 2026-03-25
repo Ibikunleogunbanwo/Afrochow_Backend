@@ -68,6 +68,9 @@ public class User {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(nullable = true)
+    private LocalDateTime scheduledForDeletionAt;
+
     @Builder.Default
     private Boolean emailVerified = true;
 

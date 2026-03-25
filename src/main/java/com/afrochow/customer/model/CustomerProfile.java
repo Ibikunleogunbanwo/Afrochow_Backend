@@ -47,6 +47,10 @@ public class CustomerProfile {
     @Builder.Default
     private Integer loyaltyPoints = 0;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean notificationsEnabled = true;
+
 
     // ==========================================
 // TIMESTAMPS

@@ -133,6 +133,27 @@ public class CustomerProfileService {
 
 
     /* ---------------------------------------------------------- */
+    /*  NOTIFICATION PREFERENCES                                 */
+    /* ---------------------------------------------------------- */
+    @Transactional
+    public CustomerProfileResponseDto updateNotificationPreference(String publicUserId, boolean enabled) {
+        User user = userRepository.findByPublicUserId(publicUserId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        if (!user.isCustomer()) {
+            throw new IllegalStateException("User is not a customer");
+        }
+
+        CustomerProfile profile = Optional.ofNullable(user.getCustomerProfile())
+                .orElseThrow(() -> new EntityNotFoundException("Customer profile not found"));
+
+        profile.setNotificationsEnabled(enabled);
+        customerProfileRepository.save(profile);
+
+        return toResponseDto(profile);
+    }
+
+    /* ---------------------------------------------------------- */
     /*  UPDATE PASSWORD                                           */
     /* ---------------------------------------------------------- */
     @Transactional
@@ -226,6 +247,7 @@ public class CustomerProfileService {
                 .defaultDeliveryInstructions(profile.getDefaultDeliveryInstructions())
                 .totalOrders(profile.getTotalOrders())
                 .addresses(addresses)
+                .notificationsEnabled(profile.getNotificationsEnabled())
                 .createdAt(profile.getCreatedAt())
                 .build();
     }

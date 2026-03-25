@@ -86,6 +86,26 @@ public class CustomerProfileController {
 
 
     /**
+     * Toggle notification preferences
+     */
+    @PatchMapping("/notifications")
+    @Operation(
+            summary = "Update notification preference",
+            description = "Enable or disable all notifications for the authenticated customer"
+    )
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<CustomerProfileResponseDto>> updateNotificationPreference(
+            @RequestParam boolean enabled,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomerProfileResponseDto updated =
+                customerProfileService.updateNotificationPreference(userDetails.getPublicUserId(), enabled);
+
+        String message = enabled ? "Notifications enabled" : "Notifications disabled";
+        return ResponseEntity.ok(ApiResponse.success(message, updated));
+    }
+
+    /**
      * Update customer profile password
      */
     @PutMapping("/password")

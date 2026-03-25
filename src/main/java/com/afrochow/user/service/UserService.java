@@ -7,6 +7,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 @Service
 public class UserService {
 
@@ -64,5 +66,21 @@ public class UserService {
     public User findByPublicUserId(String publicUserId) {
         return userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + publicUserId));
+    }
+
+    @Transactional
+    @CacheEvict(value = "users", key = "#user.email")
+    public void softDeleteUser(User user) {
+        user.setIsActive(false);
+        user.setScheduledForDeletionAt(LocalDateTime.now());
+        userRepository.save(user);
+    }
+
+    @Transactional
+    @CacheEvict(value = "users", key = "#user.email")
+    public void reactivateUser(User user) {
+        user.setIsActive(true);
+        user.setScheduledForDeletionAt(null);
+        userRepository.save(user);
     }
 }

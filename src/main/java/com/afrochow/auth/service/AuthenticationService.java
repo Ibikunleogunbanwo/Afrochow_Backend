@@ -55,6 +55,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -142,6 +143,9 @@ public class AuthenticationService {
 
         rateLimitService.verifyLoginLimit(clientIp + ":" + identifier);
         validateAccountNotLocked(identifier, clientIp);
+
+        // Reactivate account if within the 30-day grace period
+        reactivateIfEligible(identifier, password);
 
         try {
             Authentication authentication = authenticationManager.authenticate(
@@ -752,6 +756,25 @@ public class AuthenticationService {
         return identifier.contains("@")
                 ? userRepository.findByEmail(identifier)
                 : userRepository.findByUsername(identifier);
+    }
+
+    /**
+     * If the account was soft-deleted within the last 30 days and the supplied
+     * password is correct, reactivate it so Spring Security sees it as enabled.
+     * Must run BEFORE authenticationManager.authenticate().
+     */
+    private void reactivateIfEligible(String identifier, String password) {
+        userRepository.findByUsernameOrEmail(identifier).ifPresent(user -> {
+            if (Boolean.FALSE.equals(user.getIsActive())
+                    && user.getScheduledForDeletionAt() != null
+                    && user.getScheduledForDeletionAt().isAfter(LocalDateTime.now().minusDays(30))
+                    && passwordEncoder.matches(password, user.getPassword())) {
+                user.setIsActive(true);
+                user.setScheduledForDeletionAt(null);
+                userRepository.save(user);
+                log.info("Account reactivated on login for user: {}", user.getEmail());
+            }
+        });
     }
 
     private String getCanonicalIdentifier(String identifier) {
