@@ -16,5 +16,9 @@ public class LoginResponse {
     private String username;
     private String email;
     private String role;
+
+    // Vendor-only status fields (null for non-vendor users)
+    private Boolean vendorIsActive;
+    private Boolean vendorIsVerified;
 }
 
