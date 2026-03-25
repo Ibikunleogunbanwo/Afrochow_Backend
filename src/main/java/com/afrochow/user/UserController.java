@@ -3,6 +3,8 @@ package com.afrochow.user;
 import com.afrochow.auth.service.AuthenticationService;
 import com.afrochow.common.validation.PhoneUtils;
 import com.afrochow.common.ApiResponse;
+import com.afrochow.email.EmailService;
+import com.afrochow.user.dto.DeleteAccountRequestDto;
 import com.afrochow.user.dto.UserResponseDto;
 import com.afrochow.user.dto.UserUpdateRequestDto;
 import com.afrochow.user.model.User;
@@ -15,6 +17,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +32,8 @@ public class UserController {
     private final UserRepository userRepository;
     private final UserService userService;
     private final AuthenticationService authenticationService;
+    private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     @GetMapping("/profile")
     @PreAuthorize("isAuthenticated()")
@@ -68,21 +73,42 @@ public class UserController {
 
     @DeleteMapping("/account")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Delete account", description = "Deactivate the authenticated user's account and revoke all sessions")
+    @Operation(summary = "Delete account", description = "Permanently delete the authenticated user's account after password confirmation")
     public ResponseEntity<ApiResponse<Void>> deleteAccount(
             Authentication authentication,
+            @Valid @RequestBody DeleteAccountRequestDto request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
 
         User user = userRepository.findByUsername(authentication.getName())
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("User not found"));
 
-        user.setIsActive(false);
-        userRepository.save(user);
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Incorrect password");
+        }
 
+        // Capture details before deletion for the confirmation email
+        String email = user.getEmail();
+        String firstName = user.getFirstName();
+
+        // Revoke all sessions and clear cookies before soft-deleting
         authenticationService.logoutAllDevices(httpRequest, httpResponse);
 
-        return ResponseEntity.ok(ApiResponse.success("Account deactivated successfully"));
+        // Soft delete — sets isActive=false and records scheduledForDeletionAt timestamp
+        userService.softDeleteUser(user);
+
+        // Send confirmation email (non-blocking — failure is logged, not thrown)
+        emailService.sendNotificationEmail(
+                email,
+                firstName,
+                "Account Deletion Requested",
+                "Your account has been deactivated. You have 30 days to reactivate it by signing back in. " +
+                "After that, your profile, addresses, order history and reviews are permanently removed. " +
+                "If you did not request this, please contact our support team immediately."
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(
+                "Account scheduled for deletion. Sign back in within 30 days to reactivate."));
     }
 
     private UserResponseDto toDto(User user) {

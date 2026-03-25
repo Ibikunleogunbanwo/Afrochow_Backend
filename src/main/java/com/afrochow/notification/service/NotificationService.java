@@ -118,6 +118,7 @@ public class NotificationService {
             if (order == null) return;
 
             User customer = order.getCustomer().getUser();
+            if (!areNotificationsEnabled(customer)) return;
             String vendorName = order.getVendor().getRestaurantName();
 
             createInAppNotification(customer, NotificationType.ORDER_UPDATE,
@@ -178,6 +179,8 @@ public class NotificationService {
             Order order = loadOrder(publicOrderId);
             if (order == null) return;
 
+            if (!areNotificationsEnabled(order.getCustomer().getUser())) return;
+
             createInAppNotification(order.getCustomer().getUser(), NotificationType.ORDER_UPDATE,
                     "Order Being Prepared",
                     order.getVendor().getRestaurantName() + " is preparing your order",
@@ -201,6 +204,8 @@ public class NotificationService {
             if (order == null) return;
 
             User customer = order.getCustomer().getUser();
+            if (!areNotificationsEnabled(customer)) return;
+
             String vendorName = order.getVendor().getRestaurantName();
             String message = "PICKUP".equalsIgnoreCase(order.getFulfillmentType())
                     ? "Your order from " + vendorName + " is ready for pickup!"
@@ -230,6 +235,8 @@ public class NotificationService {
             Order order = loadOrder(publicOrderId);
             if (order == null) return;
 
+            if (!areNotificationsEnabled(order.getCustomer().getUser())) return;
+
             createInAppNotification(order.getCustomer().getUser(), NotificationType.DELIVERY_UPDATE,
                     "Order Out for Delivery",
                     "Your order is on its way!",
@@ -253,6 +260,8 @@ public class NotificationService {
             if (order == null) return;
 
             User customer = order.getCustomer().getUser();
+            if (!areNotificationsEnabled(customer)) return;
+
             String vendorName = order.getVendor().getRestaurantName();
             String previousStatus = "PICKUP".equalsIgnoreCase(order.getFulfillmentType())
                     ? "READY_FOR_PICKUP" : "OUT_FOR_DELIVERY";
@@ -284,6 +293,8 @@ public class NotificationService {
             if (order == null) return;
 
             User customer = order.getCustomer().getUser();
+            if (!areNotificationsEnabled(customer)) return;
+
             String vendorName = order.getVendor().getRestaurantName();
             String message = "Your order from " + vendorName + " has been cancelled.";
             if (reason != null && !reason.isEmpty()) message += " Reason: " + reason;
@@ -309,6 +320,7 @@ public class NotificationService {
                                      String orderPublicId, BigDecimal amount) {
         try {
             User user = resolveUser(userPublicId);
+            if (!areNotificationsEnabled(user)) return;
 
             createInAppNotification(user, NotificationType.PAYMENT_SUCCESS,
                     "Payment Successful",
@@ -330,6 +342,7 @@ public class NotificationService {
     public void notifyPaymentFailed(String userPublicId, String orderPublicId, String reason) {
         try {
             User user = resolveUser(userPublicId);
+            if (!areNotificationsEnabled(user)) return;
 
             createInAppNotification(user, NotificationType.SYSTEM_ALERT,
                     "Payment Failed",
@@ -510,6 +523,13 @@ public class NotificationService {
             throw new IllegalStateException("You can only modify your own notifications");
         }
         return n;
+    }
+
+    /** Returns false if the user is a customer who has opted out of notifications. */
+    private boolean areNotificationsEnabled(User user) {
+        if (!user.isCustomer()) return true;
+        com.afrochow.customer.model.CustomerProfile profile = user.getCustomerProfile();
+        return profile == null || Boolean.TRUE.equals(profile.getNotificationsEnabled());
     }
 
     private void createInAppNotification(User user, NotificationType type,

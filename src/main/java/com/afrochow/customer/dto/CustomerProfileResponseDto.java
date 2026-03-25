@@ -23,5 +23,6 @@ public class CustomerProfileResponseDto {
     private String defaultDeliveryInstructions;
     private Integer totalOrders;
     private List<AddressResponseDto> addresses;
+    private Boolean notificationsEnabled;
     private LocalDateTime createdAt;
 }
