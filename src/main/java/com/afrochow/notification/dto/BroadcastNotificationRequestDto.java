@@ -22,4 +22,12 @@ public class BroadcastNotificationRequestDto {
 
     @NotNull(message = "Notification type is required")
     private NotificationType type;
+
+    @NotNull
+    @Builder.Default
+    private TargetAudience targetAudience = TargetAudience.ALL;
+
+    public enum TargetAudience {
+        ALL, CUSTOMERS, VENDORS
+    }
 }

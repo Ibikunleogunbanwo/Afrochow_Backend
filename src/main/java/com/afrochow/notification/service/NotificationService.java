@@ -399,9 +399,19 @@ public class NotificationService {
     // ========== BROADCAST (Fix 4: single SQL INSERT SELECT) ==========
 
     @Transactional
-    public void broadcastNotification(String title, String message, NotificationType type) {
-        notificationRepository.insertBroadcastToAllUsers(title, message, type.name());
-        log.info("Broadcast notification sent to all users: [{}] {}", type, title);
+    public void broadcastNotification(com.afrochow.notification.dto.BroadcastNotificationRequestDto dto) {
+        List<User> recipients = switch (dto.getTargetAudience()) {
+            case CUSTOMERS -> userRepository.findAllByRole(com.afrochow.common.enums.Role.CUSTOMER);
+            case VENDORS   -> userRepository.findAllByRole(com.afrochow.common.enums.Role.VENDOR);
+            case ALL       -> userRepository.findAll();
+        };
+
+        for (User user : recipients) {
+            createInAppNotification(user, dto.getType(), dto.getTitle(), dto.getMessage(), null, null);
+        }
+
+        log.info("Broadcast notification sent to {} recipient(s) [audience={}]: [{}] {}",
+                recipients.size(), dto.getTargetAudience(), dto.getType(), dto.getTitle());
     }
 
     // ========== READ ==========
