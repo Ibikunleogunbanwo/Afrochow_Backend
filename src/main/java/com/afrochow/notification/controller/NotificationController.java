@@ -138,11 +138,7 @@ public class NotificationController {
     @Operation(summary = "Broadcast notification", description = "Send notification to all users (admin only)")
     public ResponseEntity<ApiResponse<Void>> broadcastNotification(
             @Valid @RequestBody BroadcastNotificationRequestDto request) {
-        notificationService.broadcastNotification(
-                request.getTitle(),
-                request.getMessage(),
-                request.getType()
-        );
+        notificationService.broadcastNotification(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Notification broadcast successfully"));
     }
