@@ -719,12 +719,21 @@ public class AuthenticationService {
     }
 
     private LoginResponse buildLoginResponse(User user) {
-        return LoginResponse.builder()
+        LoginResponse.LoginResponseBuilder builder = LoginResponse.builder()
                 .publicUserId(user.getPublicUserId())
                 .username(user.getUsername())
                 .email(user.getEmail())
-                .role(user.getRole().name())
-                .build();
+                .role(user.getRole().name());
+
+        // Attach vendor-specific status so the frontend can show appropriate
+        // banners for pending-approval or deactivated vendor accounts.
+        if (user.getRole() == Role.VENDOR && user.getVendorProfile() != null) {
+            VendorProfile vp = user.getVendorProfile();
+            builder.vendorIsActive(vp.getIsActive())
+                   .vendorIsVerified(vp.getIsVerified());
+        }
+
+        return builder.build();
     }
 
     private AdminProfileResponseDto adminProfileResponseDto(User user) {
