@@ -96,6 +96,9 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // ── CORS PREFLIGHT ────────────────────────────────
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                         // ── IMAGES ────────────────────────────────────────
                         .requestMatchers(HttpMethod.GET,
                                 "/api/images/**",
@@ -248,7 +251,7 @@ public class SecurityConfig {
                                         "style-src 'self' 'unsafe-inline'; " +
                                         "img-src 'self' data: https:; " +
                                         "font-src 'self' data:; " +
-                                        "connect-src 'self' https://afrochow-backendnew-production.up.railway.app; " +
+                                        "connect-src 'self' https://api.afrochow.ca; " +
                                         "frame-ancestors 'none'; " +
                                         "base-uri 'self'; " +
                                         "form-action 'self'"

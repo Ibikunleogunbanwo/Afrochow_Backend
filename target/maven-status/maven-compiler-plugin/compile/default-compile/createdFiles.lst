@@ -121,7 +121,9 @@ com/afrochow/common/enums/Role.class
 com/afrochow/common/enums/FavoriteType.class
 com/afrochow/customer/controller/CustomerProfileController.class
 com/afrochow/analytics/AnalyticsService$AdminAnalytics$AdminAnalyticsBuilder.class
+com/afrochow/notification/dto/BroadcastLogDto$BroadcastLogDtoBuilder.class
 com/afrochow/address/model/Address.class
+com/afrochow/notification/repository/BroadcastLogRepository.class
 com/afrochow/auth/dto/ResetPasswordRequestDto.class
 com/afrochow/common/exceptions/OrderNotFoundException.class
 com/afrochow/admin/controller/AdminUserManagementController$UserSummaryDto$UserSummaryDtoBuilder.class
@@ -136,6 +138,7 @@ com/afrochow/analytics/AnalyticsService$VendorSalesReport$VendorSalesReportBuild
 com/afrochow/user/dto/UserUpdateRequestDto$UserUpdateRequestDtoBuilder.class
 com/afrochow/analytics/AnalyticsService$AdminAnalytics.class
 com/afrochow/auth/dto/ChangePasswordRequestDto.class
+com/afrochow/notification/dto/BroadcastLogDto.class
 com/afrochow/common/enums/PaymentMethod.class
 com/afrochow/product/model/Product$ProductBuilder.class
 com/afrochow/common/jackson/FlexibleLocalDateTimeDeserializer.class
@@ -165,12 +168,14 @@ com/afrochow/favorite/dto/FavoriteRequestDto.class
 com/afrochow/vendor/model/VendorProfile$2.class
 com/afrochow/common/exceptions/UserNameAlreadyExistsException.class
 com/afrochow/config/ResendConfig.class
+com/afrochow/notification/model/BroadcastLog$BroadcastLogBuilder.class
 com/afrochow/security/model/RefreshToken.class
 com/afrochow/security/Services/SecurityEventService.class
 com/afrochow/security/Utils/SecurityUtils.class
 com/afrochow/common/exceptions/ImageNotFoundException.class
 com/afrochow/common/validation/CanadianPhoneValidator.class
 com/afrochow/analytics/AnalyticsService$1.class
+com/afrochow/notification/service/NotificationService$1.class
 com/afrochow/common/exceptions/VendorNotVerifiedException.class
 com/afrochow/config/SwaggerAuthConfig.class
 com/afrochow/security/JwtAuthenticationEntryPoint.class
@@ -215,6 +220,7 @@ com/afrochow/auth/dto/RegisterRequestDto$RegisterRequestDtoBuilder.class
 com/afrochow/analytics/AnalyticsService$VendorAnalytics$VendorAnalyticsBuilder.class
 com/afrochow/auth/dto/LoginResponse$LoginResponseBuilder.class
 com/afrochow/favorite/controller/FavoriteController.class
+com/afrochow/notification/model/BroadcastLog.class
 com/afrochow/notification/service/NotificationService$NotificationStats.class
 com/afrochow/seeder/CompleteFinalSeeder$VendorConfiguration.class
 com/afrochow/image/Step4Response.class
@@ -242,6 +248,7 @@ com/afrochow/admin/controller/AdminUserManagementController$UserStats$UserStatsB
 com/afrochow/order/controller/VendorOrderController$OrderCountStats.class
 com/afrochow/security/model/SecurityEvent$SecurityEventSeverity.class
 com/afrochow/favorite/service/FavoriteService.class
+com/afrochow/user/dto/DeleteAccountRequestDto.class
 com/afrochow/AfrochowApplication.class
 com/afrochow/security/Services/CustomUserDetailsService.class
 com/afrochow/security/model/RefreshToken$RefreshTokenBuilder.class
@@ -333,6 +340,7 @@ com/afrochow/user/model/User.class
 com/afrochow/common/exceptions/UserAlreadyExistsException.class
 com/afrochow/order/dto/OrderTrackingDto$OrderTrackingDtoBuilder.class
 com/afrochow/auth/dto/RegisterRequestDto.class
+com/afrochow/user/service/AccountDeletionCleanupService.class
 com/afrochow/auth/dto/LoginResponse.class
 com/afrochow/notification/service/NotificationService.class
 com/afrochow/category/controller/CategoryController.class
@@ -368,6 +376,7 @@ com/afrochow/security/Utils/CookieUtils.class
 com/afrochow/order/service/OrderService$1.class
 com/afrochow/analytics/AnalyticsService$CustomerAnalytics.class
 com/afrochow/auth/service/AuthenticationService.class
+com/afrochow/notification/dto/BroadcastNotificationRequestDto$TargetAudience.class
 com/afrochow/analytics/AnalyticsService.class
 com/afrochow/favorite/dto/FavoriteResponseDto$ProductBasicInfo.class
 com/afrochow/notification/controller/NotificationController.class
