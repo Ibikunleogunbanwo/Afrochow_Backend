@@ -275,26 +275,18 @@ public class ProductService {
     /**
      * Delete a product (vendor only, ownership check)
      */
-
+    @Transactional
     public void deleteProduct(String username, String publicProductId) {
         Product product = productRepository.findByPublicProductId(publicProductId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
 
-        // Verify ownership
-        VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
-                .orElseThrow(() -> new EntityNotFoundException("Vendor profile not found"));
-
-        // Use vendor's removeProduct method which handles bidirectional cleanup
-        boolean removed = vendor.removeProduct(product);
-
-        if (removed) {
-            // If successfully removed from vendor's collection, delete from repository
-            productRepository.delete(product);
-        } else {
-            // Product might be deactivated instead of removed (due to existing orders)
-            // Save the deactivated product
-            productRepository.save(product);
+        // Verify ownership via the product's ManyToOne vendor reference (eagerly loaded)
+        if (product.getVendor() == null ||
+                !username.equals(product.getVendor().getUser().getUsername())) {
+            throw new IllegalArgumentException("You do not own this product");
         }
+
+        productRepository.delete(product);
     }
 
     /**
