@@ -335,6 +335,7 @@ public class VendorProfile {
     public boolean removeProduct(Product product) {
         if (products.remove(product)) {
             product.setVendor(null);
+            return true;
         }
         return false;
     }
