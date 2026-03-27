@@ -1,190 +1,292 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Order Received</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background-color: #FFF8F3;
+            padding: 32px 16px;
+            color: #1a1a1a;
             line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f4f4f4;
         }
+
         .email-container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(255, 107, 53, 0.08), 0 1px 4px rgba(0,0,0,0.06);
+            border: 1px solid #FFE5D9;
         }
+
+        /* Header */
         .header {
+            background: #FF6B35;
+            padding: 40px 40px 36px;
             text-align: center;
-            padding-bottom: 20px;
-            border-bottom: 3px solid #ff9800;
+            position: relative;
+            overflow: hidden;
         }
-        .logo {
-            font-size: 32px;
-            font-weight: bold;
-            color: #ff6b35;
-            margin-bottom: 10px;
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 220px;
+            height: 220px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
         }
-        .alert-icon {
-            font-size: 64px;
-            color: #ff9800;
-            margin: 20px 0;
+
+        .header-icon {
+            font-size: 52px;
+            display: block;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
         }
-        h1 {
-            color: #2c3e50;
-            font-size: 24px;
-            margin-top: 10px;
-        }
-        .content {
-            margin: 25px 0;
-        }
-        .order-alert {
-            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-            border: 3px solid #ff9800;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
+
+        .header-logo { font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -0.5px; position: relative; z-index: 1; }
+        .header-label { font-size: 13px; color: rgba(255,255,255,0.85); font-weight: 600; margin-top: 6px; position: relative; z-index: 1; }
+
+        /* Content */
+        .content { padding: 44px 40px; }
+
+        h1 { font-size: 26px; font-weight: 800; color: #1a1a1a; margin-bottom: 16px; }
+        .lead-text { font-size: 16px; color: #555; line-height: 1.75; margin-bottom: 24px; }
+
+        /* Alert banner */
+        .alert-banner {
+            background: #FFF4EE;
+            border: 2px solid #FF6B35;
+            border-radius: 14px;
+            padding: 20px 24px;
             text-align: center;
+            margin-bottom: 24px;
         }
-        .order-detail {
+
+        .alert-banner-title { font-size: 18px; font-weight: 800; color: #CC4400; margin-bottom: 4px; }
+        .alert-banner-sub { font-size: 13px; color: #AA3300; }
+
+        /* Order details */
+        .summary-box {
+            background: #FFF8F3;
+            border: 1.5px solid #FFD5BE;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .summary-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: #FF6B35;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 16px;
+        }
+
+        .detail-row {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             padding: 10px 0;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #FFE5D9;
+            font-size: 14px;
         }
-        .order-detail:last-child {
-            border-bottom: none;
+
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: #888; font-weight: 600; }
+        .detail-value { color: #1a1a1a; font-weight: 700; text-align: right; }
+        .detail-value-big { color: #FF6B35; font-size: 22px; font-weight: 900; text-align: right; }
+
+        /* Urgent notice */
+        .urgent-card {
+            background: #FFF1F0;
+            border-left: 4px solid #EF4444;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            font-size: 14px;
         }
-        .label {
-            font-weight: bold;
-            color: #666;
-        }
-        .value {
-            color: #2c3e50;
-        }
-        .amount {
-            font-size: 28px;
-            font-weight: bold;
-            color: #4CAF50;
-            text-align: center;
-            margin: 15px 0;
-        }
-        .action-button {
+
+        .urgent-title { font-weight: 700; color: #B91C1C; margin-bottom: 6px; }
+        .urgent-text { color: #7F1D1D; line-height: 1.6; }
+
+        /* Buttons */
+        .buttons-wrap { text-align: center; margin: 24px 0; }
+
+        .btn-primary {
             display: inline-block;
-            background-color: #ff6b35;
-            color: white;
-            padding: 15px 40px;
+            background-color: #FF6B35;
+            color: #ffffff !important;
+            padding: 14px 36px;
             text-decoration: none;
-            border-radius: 5px;
-            margin: 15px 5px;
-            font-weight: bold;
-            font-size: 16px;
+            border-radius: 50px;
+            font-weight: 800;
+            font-size: 15px;
+            margin: 6px 8px;
         }
-        .action-button:hover {
-            background-color: #e55a2b;
+
+        .btn-outline {
+            display: inline-block;
+            background-color: #ffffff;
+            color: #FF6B35 !important;
+            padding: 13px 32px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 14px;
+            border: 2px solid #FF6B35;
+            margin: 6px 8px;
         }
-        .secondary-button {
-            background-color: #2196F3;
+
+        /* Next steps */
+        .steps-card {
+            background: #F8F9FA;
+            border: 1px solid #EFEFEF;
+            border-radius: 12px;
+            padding: 20px 24px;
         }
-        .secondary-button:hover {
-            background-color: #1976D2;
+
+        .steps-title { font-size: 14px; font-weight: 700; color: #1a1a1a; margin-bottom: 12px; }
+
+        .steps-list { list-style: none; padding: 0; counter-reset: step-counter; }
+
+        .steps-list li {
+            font-size: 13px;
+            color: #555;
+            padding: 6px 0 6px 28px;
+            position: relative;
+            line-height: 1.5;
+            counter-increment: step-counter;
         }
-        .urgent-notice {
-            background-color: #ffebee;
-            border-left: 5px solid #f44336;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
+
+        .steps-list li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            width: 20px;
+            height: 20px;
+            background: #FF6B35;
+            color: #fff;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            top: 7px;
         }
+
+        /* Footer */
         .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
+            background: #FAFAFA;
+            padding: 32px 40px;
             text-align: center;
-            font-size: 12px;
-            color: #777;
+            border-top: 1px solid #F0F0F0;
+        }
+
+        .footer-brand { font-size: 18px; font-weight: 800; color: #FF6B35; margin-bottom: 4px; }
+        .footer-tagline { font-size: 13px; color: #aaa; margin-bottom: 4px; }
+        .footer-meta { font-size: 12px; color: #bbb; line-height: 1.7; margin-top: 12px; }
+
+        @media only screen and (max-width: 600px) {
+            body { padding: 16px 10px; }
+            .header { padding: 32px 24px 28px; }
+            .content, .footer { padding-left: 24px; padding-right: 24px; }
+            .content { padding-top: 32px; padding-bottom: 32px; }
+            h1 { font-size: 22px; }
+            .btn-primary, .btn-outline { display: block; margin: 8px 0; }
         }
     </style>
 </head>
 <body>
-    <div class="email-container">
-        <div class="header">
-            <div class="logo" th:text="${appName}">Afrochow</div>
-            <center>
-                <div class="alert-icon">🔔</div>
-            </center>
+<div class="email-container">
+
+    <!-- Header -->
+    <div class="header">
+        <span class="header-icon">🔔</span>
+        <div class="header-logo" th:text="${appName}">Afrochow</div>
+        <div class="header-label">New Order Received!</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <h1>You have a new order! 🎉</h1>
+        <p class="lead-text">Hi <strong th:text="${vendorName}">there</strong>, a customer just placed an order. Please confirm and start preparing.</p>
+
+        <!-- Alert -->
+        <div class="alert-banner">
+            <div class="alert-banner-title">Action Required</div>
+            <div class="alert-banner-sub">Please confirm and prepare this order promptly</div>
         </div>
 
-        <center>
-            <h1>New Order Received!</h1>
-        </center>
+        <!-- Order details -->
+        <div class="summary-box">
+            <div class="summary-title">Order Details</div>
 
-        <div class="content">
-            <p>Hi <span th:text="${vendorName}">there</span>,</p>
-
-            <div class="order-alert">
-                <h2 style="margin: 0; color: #e65100;">You have a new order!</h2>
-                <p style="margin: 10px 0 0 0; font-size: 14px;">Please confirm and start preparing</p>
+            <div class="detail-row">
+                <span class="detail-label">Order Number</span>
+                <span class="detail-value" th:text="${orderPublicId}">#ORD-12345</span>
             </div>
-
-            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
-                <div class="order-detail">
-                    <span class="label">Order Number:</span>
-                    <span class="value" th:text="${orderPublicId}">#ORD-12345</span>
-                </div>
-
-                <div class="order-detail">
-                    <span class="label">Customer:</span>
-                    <span class="value" th:text="${customerName}">John Doe</span>
-                </div>
-
-                <div class="order-detail">
-                    <span class="label">Order Value:</span>
-                    <span class="value amount" th:text="${totalAmount}">$45.99</span>
-                </div>
+            <div class="detail-row">
+                <span class="detail-label">Customer</span>
+                <span class="detail-value" th:text="${customerName}">John Doe</span>
             </div>
-
-            <div class="urgent-notice">
-                <strong>⏰ Action Required</strong>
-                <p style="margin: 10px 0 0 0;">
-                    Please log in to your vendor dashboard to view order details and confirm the order.
-                    Fast confirmation leads to happy customers!
-                </p>
+            <div class="detail-row">
+                <span class="detail-label">Order Value</span>
+                <span class="detail-value-big" th:text="${totalAmount}">$45.99</span>
             </div>
-
-            <center>
-                <a th:href="${orderManagementUrl}" class="action-button">View Order Details</a>
-                <a th:href="${orderManagementUrl}" class="action-button secondary-button">Confirm Order</a>
-            </center>
-
-            <div style="background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; font-size: 14px;">
-                <strong>📋 Next Steps:</strong>
-                <ol style="margin: 10px 0 0 0; padding-left: 20px;">
-                    <li>Review the order details</li>
-                    <li>Confirm the order</li>
-                    <li>Prepare the food items</li>
-                    <li>Update the status when ready</li>
-                </ol>
-            </div>
-
-            <p style="margin-top: 25px;">Thank you for being part of <span th:text="${appName}">Afrochow</span>!</p>
         </div>
 
-        <div class="footer">
-            <p>
-                <strong th:text="${appName}">Afrochow</strong><br>
-                Bringing African flavors to your doorstep
-            </p>
-            <p style="font-size: 11px; color: #999; margin-top: 15px;">
-                Vendor notification from <span th:text="${appUrl}">afrochow.ca</span>
-            </p>
+        <!-- Urgent -->
+        <div class="urgent-card">
+            <div class="urgent-title">⏰ Act Quickly</div>
+            <div class="urgent-text">
+                Log in to your vendor dashboard to view the full order details and confirm.
+                Fast confirmation means happy customers!
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="buttons-wrap">
+            <a th:href="${orderManagementUrl}" class="btn-primary">View Order Details</a>
+            <a th:href="${orderManagementUrl}" class="btn-outline">Confirm Order</a>
+        </div>
+
+        <!-- Next steps -->
+        <div class="steps-card">
+            <div class="steps-title">📋 Next Steps</div>
+            <ol class="steps-list">
+                <li>Review the order details</li>
+                <li>Confirm the order in your dashboard</li>
+                <li>Prepare the ordered items</li>
+                <li>Update the status when ready for pickup/delivery</li>
+            </ol>
+        </div>
+
+        <p style="font-size: 14px; color: #999; text-align: center; margin-top: 24px;">
+            Thank you for being part of <span th:text="${appName}">Afrochow</span>!
+        </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-brand" th:text="${appName}">Afrochow</div>
+        <div class="footer-tagline">Your African Marketplace, Delivered</div>
+        <div class="footer-meta">
+            Vendor notification from <span th:text="${appUrl}">afrochow.ca</span>
         </div>
     </div>
+
+</div>
 </body>
 </html>

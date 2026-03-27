@@ -11,8 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/vendors")
@@ -53,6 +55,14 @@ public class AdminVendorManagementController {
                 .map(this::toSummary)
                 .toList();
         return ResponseEntity.ok(ApiResponse.success("Verified vendors retrieved", vendors));
+    }
+
+    @GetMapping("/{publicVendorId}")
+    @Operation(summary = "Get vendor detail", description = "Get full vendor profile details for admin review")
+    public ResponseEntity<ApiResponse<AdminVendorDetailDto>> getVendorDetail(
+            @PathVariable String publicVendorId) {
+        VendorProfile vendor = getVendor(publicVendorId);
+        return ResponseEntity.ok(ApiResponse.success("Vendor detail retrieved", toDetail(vendor)));
     }
 
     // ========== VERIFY / UNVERIFY ==========
@@ -133,6 +143,50 @@ public class AdminVendorManagementController {
                 .build();
     }
 
+    private AdminVendorDetailDto toDetail(VendorProfile v) {
+        com.afrochow.user.model.User u = v.getUser();
+        com.afrochow.address.model.Address a = v.getAddress();
+        return AdminVendorDetailDto.builder()
+                .publicVendorId(u != null ? u.getPublicUserId() : null)
+                // Owner / Account
+                .firstName(u != null ? u.getFirstName() : null)
+                .lastName(u != null ? u.getLastName() : null)
+                .email(u != null ? u.getEmail() : null)
+                .phone(u != null ? u.getPhone() : null)
+                // Store
+                .restaurantName(v.getRestaurantName())
+                .description(v.getDescription())
+                .cuisineType(v.getCuisineType())
+                .logoUrl(v.getLogoUrl())
+                .bannerUrl(v.getBannerUrl())
+                .taxId(v.getTaxId())
+                .businessLicenseUrl(v.getBusinessLicenseUrl())
+                // Status
+                .isVerified(v.getIsVerified())
+                .isActive(v.getIsActive())
+                .verifiedAt(v.getVerifiedAt())
+                // Operations
+                .offersDelivery(v.getOffersDelivery())
+                .offersPickup(v.getOffersPickup())
+                .preparationTime(v.getPreparationTime())
+                .deliveryFee(v.getDeliveryFee())
+                .minimumOrderAmount(v.getMinimumOrderAmount())
+                .estimatedDeliveryMinutes(v.getEstimatedDeliveryMinutes())
+                .maxDeliveryDistanceKm(v.getMaxDeliveryDistanceKm())
+                // Operating hours
+                .operatingHours(v.getOperatingHours())
+                // Address
+                .addressLine(a != null ? a.getAddressLine() : null)
+                .city(a != null ? a.getCity() : null)
+                .province(a != null && a.getProvince() != null ? a.getProvince().name() : null)
+                .postalCode(a != null ? a.getPostalCode() : null)
+                .country(a != null ? a.getCountry() : null)
+                // Timestamps
+                .createdAt(v.getCreatedAt())
+                .updatedAt(v.getUpdatedAt())
+                .build();
+    }
+
     // ========== INNER CLASS ==========
 
     @lombok.Data
@@ -145,5 +199,48 @@ public class AdminVendorManagementController {
         private Boolean isActive;
         private java.time.LocalDateTime verifiedAt;
         private java.time.LocalDateTime createdAt;
+    }
+
+    @lombok.Data
+    @lombok.Builder
+    public static class AdminVendorDetailDto {
+        // Identity
+        private String publicVendorId;
+        // Owner / Account
+        private String firstName;
+        private String lastName;
+        private String email;
+        private String phone;
+        // Store
+        private String restaurantName;
+        private String description;
+        private String cuisineType;
+        private String logoUrl;
+        private String bannerUrl;
+        private String taxId;
+        private String businessLicenseUrl;
+        // Status
+        private Boolean isVerified;
+        private Boolean isActive;
+        private LocalDateTime verifiedAt;
+        // Operations
+        private Boolean offersDelivery;
+        private Boolean offersPickup;
+        private Integer preparationTime;
+        private BigDecimal deliveryFee;
+        private BigDecimal minimumOrderAmount;
+        private Integer estimatedDeliveryMinutes;
+        private BigDecimal maxDeliveryDistanceKm;
+        // Operating hours — Map<dayName, DayHours>
+        private Map<String, VendorProfile.DayHours> operatingHours;
+        // Address (flat for easy frontend consumption)
+        private String addressLine;
+        private String city;
+        private String province;
+        private String postalCode;
+        private String country;
+        // Timestamps
+        private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
     }
 }

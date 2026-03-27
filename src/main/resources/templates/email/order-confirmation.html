@@ -223,7 +223,7 @@
                 <span class="detail-value" th:text="${orderPublicId}">#ORD-12345</span>
             </div>
             <div class="detail-row">
-                <span class="detail-label">Restaurant</span>
+                <span class="detail-label">Vendor</span>
                 <span class="detail-value" th:text="${vendorName}">African Delights</span>
             </div>
             <div class="detail-row">
@@ -240,12 +240,12 @@
 
         <!-- What's next -->
         <div class="next-card">
-            <div class="next-title">🍽️ What's Next?</div>
+            <div class="next-title">📦 What's Next?</div>
             <ul class="next-list">
-                <li>The restaurant is preparing your order</li>
+                <li>The vendor is preparing your order</li>
                 <li>You'll receive updates as your order progresses</li>
                 <li>Track your order in real-time</li>
-                <li>Estimated delivery: 30–45 minutes</li>
+                <li>Estimated fulfilment time varies by vendor</li>
             </ul>
         </div>
 
@@ -264,7 +264,7 @@
     <!-- Footer -->
     <div class="footer">
         <div class="footer-brand" th:text="${appName}">Afrochow</div>
-        <div class="footer-tagline">Bringing African Flavors to Your Doorstep</div>
+        <div class="footer-tagline">Your African Marketplace, Delivered</div>
         <div class="footer-meta">
             Order confirmation from <span th:text="${appUrl}">afrochow.ca</span>
         </div>
