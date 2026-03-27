@@ -140,6 +140,7 @@ com/afrochow/user/dto/UserUpdateRequestDto$UserUpdateRequestDtoBuilder.class
 com/afrochow/analytics/AnalyticsService$AdminAnalytics.class
 com/afrochow/auth/dto/ChangePasswordRequestDto.class
 com/afrochow/notification/dto/BroadcastLogDto.class
+com/afrochow/admin/controller/AdminVendorManagementController$RejectRequestDto.class
 com/afrochow/common/enums/PaymentMethod.class
 com/afrochow/product/model/Product$ProductBuilder.class
 com/afrochow/common/jackson/FlexibleLocalDateTimeDeserializer.class

@@ -444,7 +444,7 @@ public class EmailService {
         }
     }
 
-    // ========== VENDOR APPROVAL / REJECTION EMAILS ==========
+    // ========== VENDOR APPROVAL / REJECTION / SUSPENSION EMAILS ==========
 
     /**
      * Send approval confirmation email to a vendor whose store was verified by an admin.
@@ -472,6 +472,35 @@ public class EmailService {
 
         } catch (Exception e) {
             logger.error("Failed to send vendor approval email to: {}", toEmail, e);
+        }
+    }
+
+    /**
+     * Send suspension notification email to a verified vendor whose store has been deactivated by an admin.
+     */
+    public void sendVendorSuspensionEmail(String toEmail, String firstName, String restaurantName) {
+        if (!emailEnabled) {
+            logger.info("Email disabled. Would send vendor suspension email to: {}", toEmail);
+            return;
+        }
+
+        try {
+            validateEmail(toEmail);
+
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("restaurantName", restaurantName);
+            context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
+
+            String subject = String.format("⚠️ Your store has been suspended — %s", appName);
+            String htmlContent = processTemplate("vendor-suspended", context);
+
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            logger.info("Vendor suspension email sent to: {}", toEmail);
+
+        } catch (Exception e) {
+            logger.error("Failed to send vendor suspension email to: {}", toEmail, e);
         }
     }
 

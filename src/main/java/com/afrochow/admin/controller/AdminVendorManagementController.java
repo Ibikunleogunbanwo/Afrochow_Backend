@@ -127,8 +127,18 @@ public class AdminVendorManagementController {
             @PathVariable String publicVendorId) {
 
         VendorProfile vendor = getVendor(publicVendorId);
+        boolean wasVerified = Boolean.TRUE.equals(vendor.getIsVerified());
         vendor.setIsActive(false);
         vendorProfileRepository.save(vendor);
+
+        // Only send suspension email for verified vendors — rejected applicants
+        // go through the /reject endpoint which sends its own email.
+        if (wasVerified && vendor.getUser() != null) {
+            emailService.sendVendorSuspensionEmail(
+                    vendor.getUser().getEmail(),
+                    vendor.getUser().getFirstName(),
+                    vendor.getRestaurantName());
+        }
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Vendor deactivated successfully", toSummary(vendor)));
