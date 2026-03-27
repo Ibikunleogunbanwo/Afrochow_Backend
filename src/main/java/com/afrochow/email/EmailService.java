@@ -505,6 +505,36 @@ public class EmailService {
     }
 
     /**
+     * Send reinstatement notification email to a vendor whose store has been reactivated by an admin
+     * after a previous suspension.
+     */
+    public void sendVendorReinstatementEmail(String toEmail, String firstName, String restaurantName) {
+        if (!emailEnabled) {
+            logger.info("Email disabled. Would send vendor reinstatement email to: {}", toEmail);
+            return;
+        }
+
+        try {
+            validateEmail(toEmail);
+
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("restaurantName", restaurantName);
+            context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
+
+            String subject = String.format("✅ Your store has been reinstated — %s", appName);
+            String htmlContent = processTemplate("vendor-reinstated", context);
+
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            logger.info("Vendor reinstatement email sent to: {}", toEmail);
+
+        } catch (Exception e) {
+            logger.error("Failed to send vendor reinstatement email to: {}", toEmail, e);
+        }
+    }
+
+    /**
      * Send rejection email to a vendor whose store application was not approved.
      *
      * @param rejectionReason Human-readable reason written by the admin.

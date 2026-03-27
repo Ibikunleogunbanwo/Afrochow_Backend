@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="|Your store has been reinstated — ${appName}|">Your store has been reinstated</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background-color: #F3F8FF;
+            padding: 32px 16px;
+            color: #1a1a1a;
+            line-height: 1.6;
+        }
+
+        .email-container {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(37, 99, 235, 0.08), 0 1px 4px rgba(0,0,0,0.06);
+            border: 1px solid #DBEAFE;
+        }
+
+        .header {
+            background: #FF6B35;
+            padding: 48px 40px 40px;
+            text-align: center;
+        }
+
+        .header-logo {
+            font-size: 36px;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -1px;
+            margin-bottom: 6px;
+        }
+
+        .header-tagline {
+            font-size: 14px;
+            color: rgba(255,255,255,0.8);
+            font-weight: 500;
+        }
+
+        .badge-wrap {
+            text-align: center;
+            padding: 28px 40px 0;
+        }
+
+        .reinstated-badge {
+            display: inline-block;
+            background: #EFF6FF;
+            color: #1D4ED8;
+            border: 1.5px solid #BFDBFE;
+            border-radius: 100px;
+            padding: 8px 22px;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+
+        .content {
+            padding: 32px 40px 40px;
+        }
+
+        .greeting {
+            font-size: 28px;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 16px;
+            line-height: 1.3;
+        }
+
+        .lead-text {
+            font-size: 16px;
+            color: #374151;
+            margin-bottom: 24px;
+            line-height: 1.7;
+        }
+
+        .store-callout {
+            background: #EFF6FF;
+            border-left: 4px solid #2563EB;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+
+        .store-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #2563EB;
+            margin-bottom: 4px;
+        }
+
+        .store-name {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1E40AF;
+        }
+
+        .success-bar {
+            background: #EFF6FF;
+            border: 1px solid #BFDBFE;
+            border-radius: 10px;
+            padding: 14px 18px;
+            font-size: 14px;
+            color: #1E40AF;
+            font-weight: 600;
+            margin-bottom: 28px;
+        }
+
+        .cta-wrap {
+            text-align: center;
+            margin: 32px 0 28px;
+        }
+
+        .btn-primary {
+            display: inline-block;
+            background: #2563EB;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 16px 44px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+
+        .notice-box {
+            background: #FFFBEB;
+            border: 1px solid #FDE68A;
+            border-radius: 10px;
+            padding: 16px 18px;
+            margin-top: 24px;
+        }
+
+        .notice-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #92400E;
+            margin-bottom: 6px;
+        }
+
+        .notice-text {
+            font-size: 13px;
+            color: #78350F;
+            line-height: 1.6;
+        }
+
+        .footer {
+            background: #F9FAFB;
+            padding: 28px 40px;
+            text-align: center;
+            border-top: 1px solid #F3F4F6;
+        }
+
+        .footer-brand {
+            font-size: 18px;
+            font-weight: 800;
+            color: #FF6B35;
+            margin-bottom: 4px;
+        }
+
+        .footer-tagline {
+            font-size: 13px;
+            color: #9CA3AF;
+            margin-bottom: 12px;
+        }
+
+        .footer-legal {
+            font-size: 12px;
+            color: #D1D5DB;
+            line-height: 1.7;
+            margin-top: 16px;
+        }
+
+        @media only screen and (max-width: 600px) {
+            body { padding: 16px 10px; }
+            .header { padding: 40px 24px 36px; }
+            .header-logo { font-size: 30px; }
+            .content, .footer { padding-left: 24px; padding-right: 24px; }
+            .content { padding-top: 32px; padding-bottom: 32px; }
+            .greeting { font-size: 24px; }
+            .btn-primary { padding: 14px 36px; }
+        }
+    </style>
+</head>
+<body>
+<div class="email-container">
+
+    <!-- Hero Header -->
+    <div class="header">
+        <div class="header-logo" th:text="${appName}">Afrochow</div>
+        <div class="header-tagline">Your African Marketplace, Delivered</div>
+    </div>
+
+    <!-- Reinstated badge -->
+    <div class="badge-wrap">
+        <div class="reinstated-badge">✅ Store Reinstated</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <h1 class="greeting">Good news, <span th:text="${firstName}">there</span>!</h1>
+
+        <p class="lead-text">
+            Your store has been reviewed and <strong>reinstated</strong> on
+            <strong th:text="${appName}">Afrochow</strong>. It is now active and visible
+            to customers again.
+        </p>
+
+        <!-- Store callout -->
+        <div class="store-callout">
+            <div class="store-label">Reinstated Store</div>
+            <div class="store-name" th:text="${restaurantName}">Your Store</div>
+        </div>
+
+        <div class="success-bar">
+            🏪 Your store is active and open for orders on the marketplace.
+        </div>
+
+        <!-- CTA -->
+        <div class="cta-wrap">
+            <a th:href="|${appUrl}/vendor/dashboard|" class="btn-primary">Go to Your Dashboard →</a>
+        </div>
+
+        <!-- Notice -->
+        <div class="notice-box">
+            <div class="notice-title">⚠️ Keep in mind</div>
+            <div class="notice-text">
+                Please ensure your store details, products, and operating hours are up to date.
+                If you have any questions or need help getting started again, contact our support team
+                at <span th:text="${appUrl}">afrochow.ca</span>.
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-brand" th:text="${appName}">Afrochow</div>
+        <div class="footer-tagline">Your African Marketplace, Delivered</div>
+        <div class="footer-legal">
+            You're receiving this because you have a vendor account at <span th:text="${appUrl}">afrochow.ca</span><br>
+            © [[${currentYear}]] <span th:text="${appName}">Afrochow</span>. All rights reserved.
+        </div>
+    </div>
+
+</div>
+</body>
+</html>
