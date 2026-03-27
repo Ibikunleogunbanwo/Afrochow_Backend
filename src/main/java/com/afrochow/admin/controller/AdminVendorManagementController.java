@@ -1,6 +1,7 @@
 package com.afrochow.admin.controller;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.email.EmailService;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import org.springframework.web.bind.annotation.RequestBody;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,7 @@ import java.util.Map;
 public class AdminVendorManagementController {
 
     private final VendorProfileRepository vendorProfileRepository;
+    private final EmailService emailService;
 
     // ========== VIEW VENDORS ==========
 
@@ -77,6 +80,14 @@ public class AdminVendorManagementController {
         vendor.setVerifiedAt(LocalDateTime.now());
         vendorProfileRepository.save(vendor);
 
+        // Send approval email to vendor
+        if (vendor.getUser() != null) {
+            emailService.sendVendorApprovalEmail(
+                    vendor.getUser().getEmail(),
+                    vendor.getUser().getFirstName(),
+                    vendor.getRestaurantName());
+        }
+
         return ResponseEntity.ok(ApiResponse.success(
                 "Vendor verified successfully", toSummary(vendor)));
     }
@@ -121,6 +132,39 @@ public class AdminVendorManagementController {
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Vendor deactivated successfully", toSummary(vendor)));
+    }
+
+    // ========== REJECT (pending applicants) ==========
+
+    @lombok.Data
+    public static class RejectRequestDto {
+        private String reason;
+    }
+
+    @PostMapping("/{publicVendorId}/reject")
+    @Operation(summary = "Reject vendor application",
+               description = "Reject a pending vendor application with an optional reason sent to the vendor via email")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> rejectVendor(
+            @PathVariable String publicVendorId,
+            @RequestBody(required = false) RejectRequestDto body) {
+
+        VendorProfile vendor = getVendor(publicVendorId);
+        vendor.setIsActive(false);
+        vendor.setIsVerified(false);
+        vendorProfileRepository.save(vendor);
+
+        // Send rejection email with reason
+        if (vendor.getUser() != null) {
+            String reason = (body != null) ? body.getReason() : null;
+            emailService.sendVendorRejectionEmail(
+                    vendor.getUser().getEmail(),
+                    vendor.getUser().getFirstName(),
+                    vendor.getRestaurantName(),
+                    reason);
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(
+                "Vendor application rejected", toSummary(vendor)));
     }
 
     // ========== HELPER METHODS ==========

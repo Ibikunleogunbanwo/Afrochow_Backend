@@ -80,6 +80,7 @@ com/afrochow/security/JwtTokenProvider.class
 com/afrochow/notification/dto/NotificationDto.class
 com/afrochow/customer/dto/CustomerUpdateRequestDto.class
 com/afrochow/admin/controller/AdminVendorManagementController$VendorSummaryDto.class
+com/afrochow/admin/controller/AdminVendorManagementController$AdminVendorDetailDto$AdminVendorDetailDtoBuilder.class
 com/afrochow/search/SearchService$UniversalSearchResults.class
 com/afrochow/security/Services/RefreshTokenService.class
 com/afrochow/customer/dto/CustomerProfileRequestDto.class
@@ -159,6 +160,7 @@ com/afrochow/search/dto/PopularCuisineDto$VendorSummary$VendorSummaryBuilder.cla
 com/afrochow/auth/dto/BaseRegistrationRequest.class
 com/afrochow/email/EmailService.class
 com/afrochow/vendor/model/VendorProfile$1.class
+com/afrochow/admin/controller/AdminVendorManagementController$AdminVendorDetailDto.class
 com/afrochow/vendor/dto/VendorProfileUpdateRequestDto$OperatingHoursDto.class
 com/afrochow/vendor/dto/VendorProfileUpdateRequestDto.class
 com/afrochow/category/dto/CategoryRequestDto.class

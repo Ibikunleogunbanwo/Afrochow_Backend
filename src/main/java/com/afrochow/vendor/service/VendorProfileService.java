@@ -154,6 +154,24 @@ public class VendorProfileService {
     // ========== HELPER METHODS ==========
 
     /**
+     * Resubmit a rejected vendor application for admin review.
+     * Sets isActive back to true so the vendor appears in the admin pending queue.
+     * Throws if the vendor is already verified (no need to resubmit).
+     */
+    @Transactional
+    public VendorProfileResponseDto resubmitForReview(Long userId) {
+        VendorProfile vendorProfile = getVendorProfileByUserId(userId);
+
+        if (Boolean.TRUE.equals(vendorProfile.getIsVerified())) {
+            throw new IllegalStateException("Your store is already verified and does not need resubmission.");
+        }
+
+        vendorProfile.setIsActive(true);
+        vendorProfileRepository.save(vendorProfile);
+        return vendorMapper.toResponseDto(vendorProfile);
+    }
+
+    /**
      * Get vendor profile by user ID with validation.
      * publicVendorId is @Transient on VendorProfile — use findByUser_PublicUserId
      * from the repository for public ID lookups (handled in SearchService).
