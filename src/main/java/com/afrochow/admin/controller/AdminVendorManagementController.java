@@ -109,7 +109,7 @@ public class AdminVendorManagementController {
     // ========== ACTIVATE / DEACTIVATE ==========
 
     @PatchMapping("/{publicVendorId}/activate")
-    @Operation(summary = "Activate vendor", description = "Activate a suspended vendor profile")
+    @Operation(summary = "Activate vendor", description = "Reinstate a suspended vendor profile")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> activateVendor(
             @PathVariable String publicVendorId) {
 
@@ -117,8 +117,16 @@ public class AdminVendorManagementController {
         vendor.setIsActive(true);
         vendorProfileRepository.save(vendor);
 
+        // Notify the vendor that their store access has been restored
+        if (vendor.getUser() != null) {
+            emailService.sendVendorReinstatementEmail(
+                    vendor.getUser().getEmail(),
+                    vendor.getUser().getFirstName(),
+                    vendor.getRestaurantName());
+        }
+
         return ResponseEntity.ok(ApiResponse.success(
-                "Vendor activated successfully", toSummary(vendor)));
+                "Vendor reinstated successfully", toSummary(vendor)));
     }
 
     @PatchMapping("/{publicVendorId}/deactivate")
