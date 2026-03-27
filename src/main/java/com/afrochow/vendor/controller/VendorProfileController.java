@@ -90,6 +90,22 @@ public class VendorProfileController {
     }
 
     /**
+     * Resubmit vendor for admin review after rejection.
+     * Sets the vendor back to active (pending) so they appear in the admin's pending queue.
+     * Only works if the vendor has not yet been verified.
+     */
+    @PostMapping("/resubmit")
+    @Operation(summary = "Resubmit for review",
+               description = "Re-activates a rejected vendor application so it appears in the admin pending queue again")
+    public ResponseEntity<ApiResponse<VendorProfileResponseDto>> resubmitForReview(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        Long userId = userDetails.getUserId();
+        VendorProfileResponseDto profile = vendorProfileService.resubmitForReview(userId);
+        return ResponseEntity.ok(ApiResponse.success("Application resubmitted for review", profile));
+    }
+
+    /**
      * Upload restaurant image
      */
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

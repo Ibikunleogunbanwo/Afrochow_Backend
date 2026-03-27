@@ -444,6 +444,72 @@ public class EmailService {
         }
     }
 
+    // ========== VENDOR APPROVAL / REJECTION EMAILS ==========
+
+    /**
+     * Send approval confirmation email to a vendor whose store was verified by an admin.
+     */
+    public void sendVendorApprovalEmail(String toEmail, String firstName, String restaurantName) {
+        if (!emailEnabled) {
+            logger.info("Email disabled. Would send vendor approval email to: {}", toEmail);
+            return;
+        }
+
+        try {
+            validateEmail(toEmail);
+
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("restaurantName", restaurantName);
+            context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
+
+            String subject = String.format("🎉 Your store has been approved — %s", appName);
+            String htmlContent = processTemplate("vendor-approved", context);
+
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            logger.info("Vendor approval email sent to: {}", toEmail);
+
+        } catch (Exception e) {
+            logger.error("Failed to send vendor approval email to: {}", toEmail, e);
+        }
+    }
+
+    /**
+     * Send rejection email to a vendor whose store application was not approved.
+     *
+     * @param rejectionReason Human-readable reason written by the admin.
+     */
+    public void sendVendorRejectionEmail(String toEmail, String firstName, String restaurantName, String rejectionReason) {
+        if (!emailEnabled) {
+            logger.info("Email disabled. Would send vendor rejection email to: {}", toEmail);
+            return;
+        }
+
+        try {
+            validateEmail(toEmail);
+
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("restaurantName", restaurantName);
+            context.setVariable("rejectionReason",
+                (rejectionReason != null && !rejectionReason.isBlank())
+                    ? rejectionReason
+                    : "Your application did not meet our current requirements. Please review your details and reapply.");
+            context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
+
+            String subject = String.format("Update on your store application — %s", appName);
+            String htmlContent = processTemplate("vendor-rejected", context);
+
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            logger.info("Vendor rejection email sent to: {}", toEmail);
+
+        } catch (Exception e) {
+            logger.error("Failed to send vendor rejection email to: {}", toEmail, e);
+        }
+    }
+
     // ========== HELPER METHODS ==========
 
     /**
