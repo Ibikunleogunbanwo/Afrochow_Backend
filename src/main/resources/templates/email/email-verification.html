@@ -5,448 +5,331 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verify Your Email</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            background: #fafbfc;
-            padding: 30px 15px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background-color: #FFF8F3;
+            padding: 32px 16px;
+            color: #1a1a1a;
+            line-height: 1.6;
         }
 
         .email-container {
             max-width: 580px;
             margin: 0 auto;
             background: #ffffff;
-            border-radius: 24px;
+            border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 24px rgba(255, 107, 53, 0.08), 0 1px 4px rgba(0,0,0,0.06);
+            border: 1px solid #FFE5D9;
         }
 
-        /* Minimal Header */
+        /* Header */
         .header {
             background: #ffffff;
-            padding: 40px 40px 20px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 30px;
-        }
-
-        .brand-icon {
-            width: 56px;
-            height: 56px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            margin-right: 15px;
-            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.25);
+            padding: 36px 40px 24px;
+            text-align: center;
+            border-bottom: 2px solid #FFF0E8;
         }
 
         .brand-name {
-            font-size: 26px;
-            font-weight: 800;
-            color: #1a1a1a;
+            font-size: 30px;
+            font-weight: 900;
+            color: #FF6B35;
             letter-spacing: -0.5px;
         }
 
-        .header-title {
-            text-align: center;
-            font-size: 15px;
-            color: #666;
-            font-weight: 500;
+        .header-label {
+            font-size: 12px;
+            color: #aaa;
+            font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 1.5px;
+            margin-top: 8px;
         }
 
-        /* Content Section */
+        /* Content */
         .content {
-            padding: 50px 40px;
+            padding: 44px 40px;
         }
 
         .greeting {
-            font-size: 32px;
-            font-weight: 700;
+            font-size: 28px;
+            font-weight: 800;
             color: #1a1a1a;
-            margin-bottom: 16px;
-            line-height: 1.2;
+            margin-bottom: 12px;
         }
 
-        .message {
-            font-size: 17px;
-            color: #4a4a4a;
-            line-height: 1.7;
-            margin-bottom: 40px;
+        .lead-text {
+            font-size: 16px;
+            color: #555;
+            line-height: 1.75;
+            margin-bottom: 36px;
         }
 
-        /* Code Box - Clean Minimal Design */
-        .code-container {
-            background: #f8f9fb;
-            border: 2px dashed #667eea;
+        /* Code Box */
+        .code-wrapper {
+            background: #FFF4EE;
+            border: 2px dashed #FF6B35;
             border-radius: 16px;
-            padding: 40px 30px;
+            padding: 36px 24px;
             text-align: center;
-            margin: 40px 0;
+            margin: 0 0 36px;
         }
 
         .code-label {
-            font-size: 13px;
-            color: #667eea;
+            font-size: 11px;
+            color: #FF6B35;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 2px;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
 
         .code-box {
             background: #ffffff;
-            border: 3px solid #667eea;
+            border: 2.5px solid #FF6B35;
             border-radius: 12px;
-            padding: 24px 20px;
-            margin: 20px auto;
-            max-width: 360px;
+            padding: 22px 16px;
+            display: inline-block;
+            margin: 0 auto;
+            min-width: 280px;
         }
 
         .verification-code {
-            font-size: 44px;
+            font-size: 46px;
             font-weight: 900;
-            color: #667eea;
+            color: #FF6B35;
             letter-spacing: 14px;
-            font-family: 'SF Mono', 'Consolas', monospace;
-            user-select: all;
+            font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
             line-height: 1;
         }
 
-        .code-instruction {
-            font-size: 14px;
-            color: #666;
-            margin-top: 20px;
-            font-weight: 500;
+        .code-hint {
+            font-size: 13px;
+            color: #999;
+            margin-top: 16px;
         }
 
-        /* Simple Steps */
-        .steps-section {
-            margin: 45px 0;
-        }
-
+        /* Steps */
         .steps-title {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
             color: #1a1a1a;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
             text-align: center;
         }
 
         .step {
             display: flex;
             align-items: flex-start;
-            margin-bottom: 18px;
-            padding: 18px;
-            background: #f8f9fb;
+            gap: 14px;
+            background: #FAFAFA;
             border-radius: 12px;
-            border-left: 4px solid #667eea;
+            padding: 16px 18px;
+            margin-bottom: 10px;
+            border: 1px solid #F0F0F0;
         }
 
-        .step-number {
-            min-width: 32px;
-            height: 32px;
-            background: #667eea;
-            color: white;
+        .step-num {
+            min-width: 30px;
+            height: 30px;
+            background: #FF6B35;
+            color: #fff;
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
-            font-size: 15px;
-            margin-right: 16px;
+            font-weight: 800;
+            font-size: 14px;
+            flex-shrink: 0;
         }
 
         .step-text {
-            flex: 1;
             font-size: 15px;
-            color: #4a4a4a;
+            color: #444;
             font-weight: 500;
-            line-height: 1.6;
-            padding-top: 5px;
+            padding-top: 4px;
+            line-height: 1.5;
         }
 
-        /* Info Cards */
+        /* Info cards */
         .info-card {
             border-radius: 12px;
-            padding: 20px 24px;
-            margin: 24px 0;
+            padding: 18px 22px;
+            margin: 16px 0;
             display: flex;
             align-items: flex-start;
+            gap: 14px;
         }
 
-        .info-icon {
-            font-size: 24px;
-            margin-right: 14px;
-            line-height: 1;
+        .info-card-orange {
+            background: #FFF4EE;
+            border-left: 4px solid #FF6B35;
         }
 
-        .info-content {
-            flex: 1;
+        .info-card-green {
+            background: #F0FDF4;
+            border-left: 4px solid #22C55E;
         }
+
+        .info-icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
 
         .info-title {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 700;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
+            color: #1a1a1a;
         }
 
         .info-text {
-            font-size: 14px;
+            font-size: 13px;
+            color: #555;
             line-height: 1.6;
         }
 
-        /* Timer Card */
-        .timer-card {
-            background: #fff3e0;
-            border-left: 4px solid #ff9800;
-        }
-
-        .timer-card .info-title {
-            color: #e65100;
-        }
-
-        .timer-card .info-text {
-            color: #f57c00;
-        }
-
-        /* Security Card */
-        .security-card {
-            background: #e8f5e9;
-            border-left: 4px solid #4caf50;
-        }
-
-        .security-card .info-title {
-            color: #2e7d32;
-        }
-
-        .security-card .info-text {
-            color: #388e3c;
-        }
-
-        /* Help Box */
+        /* Help box */
         .help-box {
-            background: #f0f4ff;
+            background: #F8F9FA;
             border-radius: 12px;
-            padding: 24px;
+            padding: 22px;
             text-align: center;
-            margin-top: 40px;
+            margin-top: 28px;
+            border: 1px solid #EFEFEF;
         }
 
-        .help-title {
-            font-size: 16px;
+        .help-box-title {
+            font-size: 15px;
             font-weight: 700;
             color: #1a1a1a;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
-        .help-text {
-            font-size: 14px;
-            color: #666;
+        .help-box-text {
+            font-size: 13px;
+            color: #777;
             line-height: 1.6;
         }
 
         /* Footer */
         .footer {
-            background: #f8f9fb;
-            padding: 35px 40px;
+            background: #FAFAFA;
+            padding: 32px 40px;
             text-align: center;
-            border-top: 1px solid #e8e8e8;
+            border-top: 1px solid #F0F0F0;
         }
 
         .footer-brand {
             font-size: 18px;
-            font-weight: 700;
-            color: #1a1a1a;
-            margin-bottom: 8px;
+            font-weight: 800;
+            color: #FF6B35;
+            margin-bottom: 4px;
         }
 
         .footer-tagline {
-            font-size: 14px;
-            color: #888;
-            margin-bottom: 20px;
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 18px;
         }
 
-        .footer-links {
-            margin: 20px 0;
-        }
+        .footer-links { margin: 14px 0; }
 
         .footer-link {
-            color: #667eea;
+            color: #FF6B35;
             text-decoration: none;
             font-size: 13px;
-            margin: 0 12px;
             font-weight: 600;
+            margin: 0 10px;
         }
 
         .footer-legal {
             font-size: 12px;
-            color: #999;
+            color: #bbb;
             line-height: 1.7;
-            margin-top: 20px;
+            margin-top: 16px;
         }
 
-        /* Responsive */
         @media only screen and (max-width: 600px) {
-            body {
-                padding: 15px 10px;
-            }
-
-            .email-container {
-                border-radius: 20px;
-            }
-
-            .header {
-                padding: 30px 25px 15px;
-            }
-
-            .brand-icon {
-                width: 48px;
-                height: 48px;
-                font-size: 24px;
-            }
-
-            .brand-name {
-                font-size: 22px;
-            }
-
-            .content {
-                padding: 40px 25px;
-            }
-
-            .greeting {
-                font-size: 26px;
-            }
-
-            .message {
-                font-size: 16px;
-            }
-
-            .code-container {
-                padding: 30px 20px;
-            }
-
-            .verification-code {
-                font-size: 36px;
-                letter-spacing: 10px;
-            }
-
-            .footer {
-                padding: 30px 25px;
-            }
-
-            .footer-link {
-                display: block;
-                margin: 8px 0;
-            }
+            body { padding: 16px 10px; }
+            .header, .content, .footer { padding-left: 24px; padding-right: 24px; }
+            .content { padding-top: 32px; padding-bottom: 32px; }
+            .greeting { font-size: 24px; }
+            .verification-code { font-size: 36px; letter-spacing: 10px; }
+            .footer-link { display: block; margin: 6px 0; }
         }
     </style>
 </head>
 <body>
 <div class="email-container">
+
     <!-- Header -->
     <div class="header">
-        <div class="brand">
-            <div class="brand-icon">🍽️</div>
-            <div class="brand-name" th:text="${appName}">Afrochow</div>
-        </div>
-        <div class="header-title">Email Verification</div>
+        <div class="brand-name" th:text="${appName}">Afrochow</div>
+        <div class="header-label">Email Verification</div>
     </div>
 
-    <!-- Main Content -->
+    <!-- Content -->
     <div class="content">
-        <!-- Greeting -->
-        <h1 class="greeting">
-            Hey <span th:text="${firstName}">there</span>! 👋
-        </h1>
-
-        <p class="message">
-            Thanks for signing up! We're thrilled to have you join our community.
-            Before we get started, we need to verify your email address.
+        <h1 class="greeting">Hey <span th:text="${firstName}">there</span>! 👋</h1>
+        <p class="lead-text">
+            Thanks for signing up! We just need to verify your email address before you
+            can start discovering amazing African cuisine on <span th:text="${appName}">Afrochow</span>.
         </p>
 
-        <!-- Verification Code -->
-        <div class="code-container">
+        <!-- Code -->
+        <div class="code-wrapper">
             <div class="code-label">Your Verification Code</div>
             <div class="code-box">
                 <div class="verification-code" th:text="${verificationCode}">ABC123</div>
             </div>
-            <div class="code-instruction">
-                Click the code to select it, then copy and paste
-            </div>
+            <div class="code-hint">Click the code to select it, then copy and paste</div>
         </div>
 
         <!-- Steps -->
-        <div class="steps-section">
-            <h2 class="steps-title">Quick Setup (3 Steps)</h2>
+        <div class="steps-title">3 Quick Steps</div>
 
-            <div class="step">
-                <div class="step-number">1</div>
-                <div class="step-text">
-                    Copy the verification code shown above
-                </div>
-            </div>
-
-            <div class="step">
-                <div class="step-number">2</div>
-                <div class="step-text">
-                    Return to <span th:text="${appName}">Afrochow</span> and paste it on the verification page
-                </div>
-            </div>
-
-            <div class="step">
-                <div class="step-number">3</div>
-                <div class="step-text">
-                    Click verify and you're all set! Time to explore 🎉
-                </div>
-            </div>
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text">Copy the verification code shown above</div>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text">Return to <span th:text="${appName}">Afrochow</span> and paste it on the verification page</div>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text">Click verify and you're all set! Time to explore 🎉</div>
         </div>
 
-        <!-- Timer Warning -->
-        <div class="info-card timer-card">
+        <!-- Timer Notice -->
+        <div class="info-card info-card-orange" style="margin-top: 28px;">
             <div class="info-icon">⏰</div>
-            <div class="info-content">
-                <div class="info-title">Code Valid For Limited Time</div>
+            <div>
+                <div class="info-title">Code Expires Soon</div>
                 <div class="info-text">
-                    Your code expires in <strong th:text="${expirationMinutes}">1440</strong> minutes
-                    (about <strong th:text="${expirationMinutes / 60}">24</strong> hours).
-                    Verify soon to activate your account.
+                    Your code is valid for <strong th:text="${expirationMinutes}">1440</strong> minutes
+                    (about <strong th:text="${expirationMinutes / 60}">24</strong> hours). Verify soon to activate your account.
                 </div>
             </div>
         </div>
 
         <!-- Security Notice -->
-        <div class="info-card security-card">
+        <div class="info-card info-card-green">
             <div class="info-icon">🔒</div>
-            <div class="info-content">
-                <div class="info-title">Security First</div>
+            <div>
+                <div class="info-title">Didn't sign up?</div>
                 <div class="info-text">
-                    Didn't sign up? No worries! You can safely ignore this email.
-                    Your address may have been entered by mistake, and no account was created.
+                    You can safely ignore this email. No account was created and your address will not be used.
                 </div>
             </div>
         </div>
 
-        <!-- Help Section -->
+        <!-- Help -->
         <div class="help-box">
-            <div class="help-title">Need Help? We're Here! 💬</div>
-            <div class="help-text">
-                Having trouble with verification? Contact our support team and
-                we'll get you sorted out quickly.
+            <div class="help-box-title">Need Help? 💬</div>
+            <div class="help-box-text">
+                Having trouble verifying? Our support team is ready to help you get sorted out quickly.
             </div>
         </div>
     </div>
@@ -455,20 +338,18 @@
     <div class="footer">
         <div class="footer-brand" th:text="${appName}">Afrochow</div>
         <div class="footer-tagline">Authentic African Food Delivered</div>
-
         <div class="footer-links">
             <a th:href="${appUrl} + '/help'" class="footer-link">Help Center</a>
             <a th:href="${appUrl} + '/contact'" class="footer-link">Contact Support</a>
             <a th:href="${appUrl} + '/terms'" class="footer-link">Terms</a>
         </div>
-
         <div class="footer-legal">
-            You're receiving this email because you signed up at
-            <span th:text="${appUrl}">afrochow.ca</span><br>
+            You're receiving this because you signed up at <span th:text="${appUrl}">afrochow.ca</span><br>
             © 2025 <span th:text="${appName}">Afrochow</span>. All rights reserved.<br>
-            This is an automated message. Please do not reply directly to this email.
+            This is an automated message — please do not reply directly.
         </div>
     </div>
+
 </div>
 </body>
 </html>
