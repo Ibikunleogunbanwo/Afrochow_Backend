@@ -1,160 +1,227 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Payment Failed</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background-color: #FFF8F3;
+            padding: 32px 16px;
+            color: #1a1a1a;
             line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f4f4f4;
         }
+
         .email-container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(255, 107, 53, 0.08), 0 1px 4px rgba(0,0,0,0.06);
+            border: 1px solid #FFE5D9;
         }
+
+        /* Header */
         .header {
+            background: #ffffff;
+            padding: 36px 40px 24px;
             text-align: center;
-            padding-bottom: 20px;
-            border-bottom: 3px solid #f44336;
+            border-bottom: 2px solid #FFF0E8;
         }
-        .logo {
+
+        .error-circle {
+            width: 68px;
+            height: 68px;
+            background: #EF4444;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
             font-size: 32px;
-            font-weight: bold;
-            color: #ff6b35;
-            margin-bottom: 10px;
+            color: #fff;
+            font-weight: 900;
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
         }
-        .error-icon {
-            font-size: 64px;
-            color: #f44336;
-            margin: 20px 0;
-        }
-        h1 {
-            color: #d32f2f;
-            font-size: 24px;
-            margin-top: 10px;
-        }
-        .content {
-            margin: 25px 0;
-        }
+
+        .brand-name { font-size: 30px; font-weight: 900; color: #FF6B35; letter-spacing: -0.5px; }
+        .header-label { font-size: 12px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 8px; }
+
+        /* Content */
+        .content { padding: 44px 40px; }
+
+        h1 { font-size: 26px; font-weight: 800; color: #1a1a1a; margin-bottom: 16px; }
+        .lead-text { font-size: 16px; color: #555; line-height: 1.75; margin-bottom: 28px; }
+
+        /* Error box */
         .error-box {
-            background-color: #ffebee;
-            border: 2px solid #f44336;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
+            background: #FFF1F0;
+            border: 2px solid #EF4444;
+            border-radius: 14px;
+            padding: 22px 24px;
+            text-align: center;
+            margin-bottom: 24px;
         }
-        .reason-box {
-            background-color: #fff3e0;
-            border-left: 5px solid #ff9800;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
+
+        .error-title { font-size: 16px; font-weight: 800; color: #B91C1C; margin-bottom: 6px; }
+        .error-order { font-size: 13px; color: #7F1D1D; font-family: 'SF Mono', 'Consolas', monospace; }
+
+        /* Reason */
+        .reason-card {
+            background: #FFFBEB;
+            border-left: 4px solid #F59E0B;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
         }
-        .retry-button {
-            display: inline-block;
-            background-color: #ff6b35;
-            color: white;
-            padding: 15px 40px;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 15px 0;
+
+        .reason-title { font-size: 13px; font-weight: 700; color: #78350F; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.8px; }
+        .reason-text { font-size: 14px; color: #92400E; line-height: 1.6; }
+
+        .reassure { font-size: 15px; color: #555; line-height: 1.7; margin-bottom: 24px; }
+
+        /* Solutions */
+        .solutions-card {
+            background: #FFF4EE;
+            border-left: 4px solid #FF6B35;
+            border-radius: 12px;
+            padding: 18px 22px;
+            margin-bottom: 24px;
+        }
+
+        .solutions-title { font-size: 14px; font-weight: 700; color: #CC4400; margin-bottom: 12px; }
+
+        .solutions-list { list-style: none; padding: 0; }
+
+        .solutions-list li {
+            font-size: 13px;
+            color: #773300;
+            padding: 4px 0 4px 18px;
+            position: relative;
+            line-height: 1.5;
+        }
+
+        .solutions-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #FF6B35;
             font-weight: bold;
             font-size: 16px;
+            line-height: 1.3;
         }
-        .retry-button:hover {
-            background-color: #e55a2b;
+
+        /* CTA */
+        .cta-wrap { text-align: center; margin: 28px 0; }
+
+        .btn-primary {
+            display: inline-block;
+            background-color: #FF6B35;
+            color: #ffffff !important;
+            padding: 15px 48px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 800;
+            font-size: 15px;
         }
+
+        /* Help box */
         .help-box {
-            background-color: #e3f2fd;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
+            background: #F8F9FA;
+            border: 1px solid #EFEFEF;
+            border-radius: 12px;
+            padding: 18px 22px;
+            font-size: 14px;
+            color: #555;
         }
+
+        /* Footer */
         .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
+            background: #FAFAFA;
+            padding: 32px 40px;
             text-align: center;
-            font-size: 12px;
-            color: #777;
+            border-top: 1px solid #F0F0F0;
+        }
+
+        .footer-brand { font-size: 18px; font-weight: 800; color: #FF6B35; margin-bottom: 4px; }
+        .footer-tagline { font-size: 13px; color: #aaa; margin-bottom: 4px; }
+        .footer-meta { font-size: 12px; color: #bbb; line-height: 1.7; margin-top: 12px; }
+
+        @media only screen and (max-width: 600px) {
+            body { padding: 16px 10px; }
+            .header, .content, .footer { padding-left: 24px; padding-right: 24px; }
+            .content { padding-top: 32px; padding-bottom: 32px; }
+            h1 { font-size: 22px; }
+            .btn-primary { padding: 13px 36px; }
         }
     </style>
 </head>
 <body>
-    <div class="email-container">
-        <div class="header">
-            <div class="logo" th:text="${appName}">Afrochow</div>
-            <center>
-                <div class="error-icon">✗</div>
-            </center>
+<div class="email-container">
+
+    <!-- Header -->
+    <div class="header">
+        <div class="error-circle">✕</div>
+        <div class="brand-name" th:text="${appName}">Afrochow</div>
+        <div class="header-label">Payment Failed</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <h1>Payment Unsuccessful</h1>
+        <p class="lead-text">Hi <strong th:text="${customerName}">there</strong>, we were unable to process your payment — but don't worry, your order is still saved!</p>
+
+        <!-- Error box -->
+        <div class="error-box">
+            <div class="error-title">We could not process your payment</div>
+            <div class="error-order">Order: <span th:text="${orderPublicId}">#ORD-12345</span></div>
         </div>
 
-        <center>
-            <h1>Payment Failed</h1>
-        </center>
-
-        <div class="content">
-            <p>Hi <span th:text="${customerName}">there</span>,</p>
-
-            <div class="error-box">
-                <p style="margin: 0; font-size: 16px; text-align: center;">
-                    <strong>We were unable to process your payment</strong>
-                </p>
-                <p style="margin: 10px 0 0 0; text-align: center; color: #666;">
-                    Order: <span th:text="${orderPublicId}">#ORD-12345</span>
-                </p>
-            </div>
-
-            <div class="reason-box">
-                <strong>⚠️ Reason:</strong>
-                <p style="margin: 10px 0 0 0;" th:text="${reason}">Insufficient funds or card declined</p>
-            </div>
-
-            <p>Don't worry! Your order is still saved. You can retry the payment anytime.</p>
-
-            <div class="help-box">
-                <strong>💡 Common Solutions:</strong>
-                <ul style="margin: 10px 0 0 0; padding-left: 20px;">
-                    <li>Check your card details are correct</li>
-                    <li>Ensure you have sufficient funds</li>
-                    <li>Verify your card hasn't expired</li>
-                    <li>Contact your bank if the issue persists</li>
-                    <li>Try a different payment method</li>
-                </ul>
-            </div>
-
-            <center>
-                <a th:href="${retryUrl}" class="retry-button">Retry Payment</a>
-            </center>
-
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0; font-size: 14px;">
-                <strong>📱 Need Help?</strong>
-                <p style="margin: 5px 0 0 0;">
-                    If you continue to experience issues, please contact our support team.
-                    We're here to help!
-                </p>
-            </div>
-
-            <p style="margin-top: 25px;">We appreciate your patience and look forward to serving you!</p>
+        <!-- Reason -->
+        <div class="reason-card">
+            <div class="reason-title">⚠️ Reason</div>
+            <div class="reason-text" th:text="${reason}">Insufficient funds or card declined</div>
         </div>
 
-        <div class="footer">
-            <p>
-                <strong th:text="${appName}">Afrochow</strong><br>
-                Bringing African flavors to your doorstep
-            </p>
-            <p style="font-size: 11px; color: #999; margin-top: 15px;">
-                Payment notification from <span th:text="${appUrl}">afrochow.ca</span>
-            </p>
+        <p class="reassure">Your order is still saved. You can retry the payment anytime from the app.</p>
+
+        <!-- Solutions -->
+        <div class="solutions-card">
+            <div class="solutions-title">💡 Common Solutions</div>
+            <ul class="solutions-list">
+                <li>Check that your card details are correct</li>
+                <li>Ensure you have sufficient funds</li>
+                <li>Verify your card hasn't expired</li>
+                <li>Contact your bank if the issue persists</li>
+                <li>Try a different payment method</li>
+            </ul>
+        </div>
+
+        <!-- CTA -->
+        <div class="cta-wrap">
+            <a th:href="${retryUrl}" class="btn-primary">Retry Payment →</a>
+        </div>
+
+        <!-- Help -->
+        <div class="help-box">
+            <strong>📱 Need Help?</strong><br>
+            If you continue to experience issues, our support team is here to help you complete your order.
         </div>
     </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-brand" th:text="${appName}">Afrochow</div>
+        <div class="footer-tagline">Your African Marketplace, Delivered</div>
+        <div class="footer-meta">
+            Payment notification from <span th:text="${appUrl}">afrochow.ca</span>
+        </div>
+    </div>
+
+</div>
 </body>
 </html>

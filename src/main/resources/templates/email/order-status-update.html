@@ -193,11 +193,11 @@
             <div th:switch="${newStatus}">
                 <div th:case="'CONFIRMED'">
                     <strong>✓ Order Confirmed</strong>
-                    The restaurant has confirmed your order and is preparing your food.
+                    The vendor has confirmed your order and is getting it ready for you.
                 </div>
                 <div th:case="'PREPARING'">
-                    <strong>👨‍🍳 Order Being Prepared</strong>
-                    Your food is being freshly prepared with care.
+                    <strong>🔧 Order Being Prepared</strong>
+                    Your items are being carefully prepared by the vendor.
                 </div>
                 <div th:case="'READY'">
                     <strong>📦 Order Ready</strong>
@@ -209,7 +209,7 @@
                 </div>
                 <div th:case="'DELIVERED'">
                     <strong>🎉 Delivered!</strong>
-                    Your order has been delivered. Enjoy your meal!
+                    Your order has been delivered. We hope you love it!
                 </div>
                 <div th:case="'CANCELLED'">
                     <strong>✗ Order Cancelled</strong>
@@ -235,7 +235,7 @@
     <!-- Footer -->
     <div class="footer">
         <div class="footer-brand" th:text="${appName}">Afrochow</div>
-        <div class="footer-tagline">Bringing African Flavors to Your Doorstep</div>
+        <div class="footer-tagline">Your African Marketplace, Delivered</div>
         <div class="footer-meta">
             Order update from <span th:text="${appUrl}">afrochow.ca</span>
         </div>

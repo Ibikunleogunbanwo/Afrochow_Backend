@@ -1,186 +1,275 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Confirmation</title>
+    <title>Order Confirmed</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background-color: #FFF8F3;
+            padding: 32px 16px;
+            color: #1a1a1a;
             line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f4f4f4;
         }
+
         .email-container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(255, 107, 53, 0.08), 0 1px 4px rgba(0,0,0,0.06);
+            border: 1px solid #FFE5D9;
         }
+
+        /* Header */
         .header {
+            background: #FF6B35;
+            padding: 40px 40px 36px;
             text-align: center;
-            padding-bottom: 20px;
-            border-bottom: 3px solid #4CAF50;
+            position: relative;
+            overflow: hidden;
         }
-        .logo {
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 220px;
+            height: 220px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
+        }
+
+        .header-icon {
+            font-size: 52px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+            display: block;
+        }
+
+        .header-logo {
             font-size: 32px;
-            font-weight: bold;
-            color: #ff6b35;
-            margin-bottom: 10px;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            position: relative;
+            z-index: 1;
         }
-        .success-icon {
-            font-size: 64px;
-            color: #4CAF50;
-            margin: 20px 0;
+
+        .header-label {
+            font-size: 13px;
+            color: rgba(255,255,255,0.85);
+            font-weight: 600;
+            margin-top: 6px;
+            position: relative;
+            z-index: 1;
         }
-        h1 {
-            color: #2c3e50;
-            font-size: 24px;
-            margin-top: 10px;
+
+        /* Content */
+        .content { padding: 44px 40px; }
+
+        h1 { font-size: 26px; font-weight: 800; color: #1a1a1a; margin-bottom: 16px; }
+        .lead-text { font-size: 16px; color: #555; line-height: 1.75; margin-bottom: 28px; }
+
+        /* Order summary */
+        .summary-box {
+            background: #FFF8F3;
+            border: 1.5px solid #FFD5BE;
+            border-radius: 16px;
+            padding: 24px;
+            margin: 0 0 24px;
         }
-        .content {
-            margin: 25px 0;
+
+        .summary-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #FF6B35;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 16px;
+            text-align: center;
         }
-        .order-summary {
-            background-color: #f9f9f9;
-            border: 2px solid #4CAF50;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        .order-detail {
+
+        .detail-row {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             padding: 10px 0;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #FFE5D9;
+            font-size: 14px;
         }
-        .order-detail:last-child {
-            border-bottom: none;
-        }
-        .label {
-            font-weight: bold;
-            color: #666;
-        }
-        .value {
-            color: #2c3e50;
-        }
-        .total-amount {
-            font-size: 24px;
-            font-weight: bold;
-            color: #4CAF50;
+
+        .detail-row:last-child { border-bottom: none; }
+
+        .detail-label { color: #888; font-weight: 600; }
+        .detail-value { color: #1a1a1a; font-weight: 700; text-align: right; }
+
+        /* Total */
+        .total-box {
+            background: #FF6B35;
+            border-radius: 12px;
+            padding: 18px 24px;
             text-align: center;
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #e8f5e9;
-            border-radius: 8px;
+            margin: 24px 0;
+            color: #fff;
         }
-        .track-button {
+
+        .total-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.85; margin-bottom: 4px; }
+        .total-amount { font-size: 36px; font-weight: 900; }
+
+        /* What's next */
+        .next-card {
+            background: #FFF4EE;
+            border-left: 4px solid #FF6B35;
+            border-radius: 12px;
+            padding: 18px 22px;
+            margin: 20px 0;
+        }
+
+        .next-title { font-size: 14px; font-weight: 700; color: #CC4400; margin-bottom: 10px; }
+
+        .next-list { list-style: none; padding: 0; }
+
+        .next-list li {
+            font-size: 13px;
+            color: #773300;
+            padding: 4px 0 4px 18px;
+            position: relative;
+            line-height: 1.5;
+        }
+
+        .next-list li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #FF6B35;
+            font-weight: bold;
+        }
+
+        /* CTA */
+        .cta-wrap { text-align: center; margin: 28px 0; }
+
+        .btn-primary {
             display: inline-block;
-            background-color: #ff6b35;
-            color: white;
-            padding: 15px 40px;
+            background-color: #FF6B35;
+            color: #ffffff !important;
+            padding: 15px 48px;
             text-decoration: none;
-            border-radius: 5px;
-            margin: 20px 0;
-            font-weight: bold;
-            font-size: 16px;
+            border-radius: 50px;
+            font-weight: 800;
+            font-size: 15px;
         }
-        .track-button:hover {
-            background-color: #e55a2b;
+
+        /* Help */
+        .help-box {
+            background: #F8F9FA;
+            border: 1px solid #EFEFEF;
+            border-radius: 12px;
+            padding: 18px 22px;
+            font-size: 14px;
+            color: #555;
         }
-        .vendor-info {
-            background-color: #fff3cd;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-        }
+
+        /* Footer */
         .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
+            background: #FAFAFA;
+            padding: 32px 40px;
             text-align: center;
-            font-size: 12px;
-            color: #777;
+            border-top: 1px solid #F0F0F0;
+        }
+
+        .footer-brand { font-size: 18px; font-weight: 800; color: #FF6B35; margin-bottom: 4px; }
+        .footer-tagline { font-size: 13px; color: #aaa; margin-bottom: 14px; }
+        .footer-meta { font-size: 12px; color: #bbb; line-height: 1.7; margin-top: 8px; }
+
+        @media only screen and (max-width: 600px) {
+            body { padding: 16px 10px; }
+            .header { padding: 32px 24px 28px; }
+            .content, .footer { padding-left: 24px; padding-right: 24px; }
+            .content { padding-top: 32px; padding-bottom: 32px; }
+            h1 { font-size: 22px; }
+            .total-amount { font-size: 28px; }
+            .btn-primary { padding: 13px 36px; }
         }
     </style>
 </head>
 <body>
-    <div class="email-container">
-        <div class="header">
-            <div class="logo" th:text="${appName}">Afrochow</div>
-            <center>
-                <div class="success-icon">✓</div>
-            </center>
+<div class="email-container">
+
+    <!-- Header -->
+    <div class="header">
+        <span class="header-icon">✓</span>
+        <div class="header-logo" th:text="${appName}">Afrochow</div>
+        <div class="header-label">Order Confirmed!</div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <h1>Your order is confirmed! 🎉</h1>
+        <p class="lead-text">Hi <strong th:text="${customerName}">there</strong>, great news — your order has been confirmed and is being prepared right now.</p>
+
+        <!-- Summary -->
+        <div class="summary-box">
+            <div class="summary-title">Order Summary</div>
+
+            <div class="detail-row">
+                <span class="detail-label">Order Number</span>
+                <span class="detail-value" th:text="${orderPublicId}">#ORD-12345</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Vendor</span>
+                <span class="detail-value" th:text="${vendorName}">African Delights</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Order Time</span>
+                <span class="detail-value" th:text="${orderTime}">Nov 27, 2025 19:15</span>
+            </div>
         </div>
 
-        <center>
-            <h1>Order Confirmed!</h1>
-        </center>
-
-        <div class="content">
-            <p>Hi <span th:text="${customerName}">there</span>,</p>
-
-            <p>Great news! Your order has been confirmed and is being prepared.</p>
-
-            <div class="order-summary">
-                <h3 style="margin-top: 0; color: #2c3e50; text-align: center;">Order Summary</h3>
-
-                <div class="order-detail">
-                    <span class="label">Order Number:</span>
-                    <span class="value" th:text="${orderPublicId}">#ORD-12345</span>
-                </div>
-
-                <div class="order-detail">
-                    <span class="label">Restaurant:</span>
-                    <span class="value" th:text="${vendorName}">African Delights</span>
-                </div>
-
-                <div class="order-detail">
-                    <span class="label">Order Time:</span>
-                    <span class="value" th:text="${orderTime}">Nov 27, 2025 19:15</span>
-                </div>
-            </div>
-
-            <div class="total-amount">
-                Total: <span th:text="${totalAmount}">$45.99</span>
-            </div>
-
-            <div class="vendor-info">
-                <strong>🍽️ What's Next?</strong>
-                <ul style="margin: 10px 0 0 0; padding-left: 20px;">
-                    <li>The restaurant is preparing your order</li>
-                    <li>You'll receive updates as your order progresses</li>
-                    <li>Track your order in real-time</li>
-                    <li>Estimated delivery: 30-45 minutes</li>
-                </ul>
-            </div>
-
-            <center>
-                <a th:href="${orderTrackingUrl}" class="track-button">Track Your Order</a>
-            </center>
-
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0; font-size: 14px;">
-                <strong>📱 Need Help?</strong>
-                <p style="margin: 5px 0;">
-                    Contact our support team if you have any questions about your order.
-                </p>
-            </div>
-
-            <p style="margin-top: 25px;">Thank you for choosing <span th:text="${appName}">Afrochow</span>!</p>
+        <!-- Total -->
+        <div class="total-box">
+            <div class="total-label">Order Total</div>
+            <div class="total-amount" th:text="${totalAmount}">$45.99</div>
         </div>
 
-        <div class="footer">
-            <p>
-                <strong th:text="${appName}">Afrochow</strong><br>
-                Bringing African flavors to your doorstep
-            </p>
-            <p style="font-size: 11px; color: #999; margin-top: 15px;">
-                Order confirmation from <span th:text="${appUrl}">afrochow.ca</span>
-            </p>
+        <!-- What's next -->
+        <div class="next-card">
+            <div class="next-title">📦 What's Next?</div>
+            <ul class="next-list">
+                <li>The vendor is preparing your order</li>
+                <li>You'll receive updates as your order progresses</li>
+                <li>Track your order in real-time</li>
+                <li>Estimated fulfilment time varies by vendor</li>
+            </ul>
+        </div>
+
+        <!-- CTA -->
+        <div class="cta-wrap">
+            <a th:href="${orderTrackingUrl}" class="btn-primary">Track Your Order →</a>
+        </div>
+
+        <!-- Help -->
+        <div class="help-box">
+            <strong>📱 Need Help?</strong><br>
+            Contact our support team if you have any questions about your order.
         </div>
     </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-brand" th:text="${appName}">Afrochow</div>
+        <div class="footer-tagline">Your African Marketplace, Delivered</div>
+        <div class="footer-meta">
+            Order confirmation from <span th:text="${appUrl}">afrochow.ca</span>
+        </div>
+    </div>
+
+</div>
 </body>
 </html>
