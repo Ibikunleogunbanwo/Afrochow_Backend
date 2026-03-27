@@ -599,9 +599,11 @@ public class EmailService {
     }
 
     /**
-     * Process Thymeleaf template with context
+     * Process Thymeleaf template with context.
+     * Automatically injects {@code currentYear} so all templates can render a dynamic copyright year.
      */
     private String processTemplate(String templateName, Context context) {
+        context.setVariable("currentYear", java.time.Year.now().getValue());
         return templateEngine.process("email/" + templateName, context);
     }
 }
