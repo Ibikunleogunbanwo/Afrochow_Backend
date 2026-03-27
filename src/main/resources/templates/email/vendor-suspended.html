@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="|Your store has been suspended — ${appName}|">Your store has been suspended</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background-color: #FFF8F3;
+            padding: 32px 16px;
+            color: #1a1a1a;
+            line-height: 1.6;
+        }
+
+        .email-container {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(255, 107, 53, 0.08), 0 1px 4px rgba(0,0,0,0.06);
+            border: 1px solid #FFE5D9;
+        }
+
+        .header {
+            background: #FF6B35;
+            padding: 48px 40px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -60%;
+            right: -30%;
+            width: 280px;
+            height: 280px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -40%;
+            left: -20%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 50%;
+        }
+
+        .header-logo {
+            font-size: 36px;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -1px;
+            position: relative;
+            z-index: 1;
+            margin-bottom: 8px;
+        }
+
+        .header-tagline {
+            color: rgba(255,255,255,0.88);
+            font-size: 15px;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        .badge-wrap {
+            text-align: center;
+            margin-top: -18px;
+            margin-bottom: 8px;
+        }
+
+        .suspended-badge {
+            display: inline-block;
+            background: #ffffff;
+            color: #dc2626;
+            padding: 10px 26px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.15);
+            position: relative;
+            z-index: 1;
+        }
+
+        .content {
+            padding: 44px 40px;
+        }
+
+        .greeting {
+            font-size: 28px;
+            font-weight: 800;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .lead-text {
+            font-size: 16px;
+            color: #555;
+            line-height: 1.75;
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .store-callout {
+            background: #FFF4EE;
+            border: 1px solid #FFD5C2;
+            border-radius: 14px;
+            padding: 20px 24px;
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .store-label {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #FF6B35;
+            margin-bottom: 6px;
+        }
+
+        .store-name {
+            font-size: 22px;
+            font-weight: 900;
+            color: #1a1a1a;
+        }
+
+        .alert-bar {
+            background: #FEF2F2;
+            border: 1px solid #FECACA;
+            border-left: 4px solid #dc2626;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 32px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #7f1d1d;
+        }
+
+        .info-bar {
+            background: #FFF7ED;
+            border-left: 4px solid #f97316;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 32px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #9a3412;
+        }
+
+        .support-box {
+            background: #F8F9FA;
+            border-radius: 12px;
+            padding: 22px;
+            text-align: center;
+            margin: 20px 0;
+            border: 1px solid #EFEFEF;
+        }
+
+        .support-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 6px;
+        }
+
+        .support-text {
+            font-size: 13px;
+            color: #777;
+            line-height: 1.6;
+        }
+
+        .footer {
+            background: #FAFAFA;
+            padding: 32px 40px;
+            text-align: center;
+            border-top: 1px solid #F0F0F0;
+        }
+
+        .footer-brand {
+            font-size: 18px;
+            font-weight: 800;
+            color: #FF6B35;
+            margin-bottom: 4px;
+        }
+
+        .footer-tagline {
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 4px;
+        }
+
+        .footer-legal {
+            font-size: 12px;
+            color: #bbb;
+            line-height: 1.7;
+            margin-top: 16px;
+        }
+
+        @media only screen and (max-width: 600px) {
+            body { padding: 16px 10px; }
+            .header { padding: 40px 24px 36px; }
+            .header-logo { font-size: 30px; }
+            .content, .footer { padding-left: 24px; padding-right: 24px; }
+            .content { padding-top: 32px; padding-bottom: 32px; }
+            .greeting { font-size: 24px; }
+        }
+    </style>
+</head>
+<body>
+<div class="email-container">
+
+    <div class="header">
+        <div class="header-logo" th:text="${appName}">Afrochow</div>
+        <div class="header-tagline">Your African Marketplace, Delivered</div>
+    </div>
+
+    <div class="badge-wrap">
+        <div class="suspended-badge">⚠️ Store Suspended</div>
+    </div>
+
+    <div class="content">
+        <h1 class="greeting">Hi <span th:text="${firstName}">there</span>,</h1>
+
+        <p class="lead-text">
+            We're writing to let you know that your store on
+            <strong th:text="${appName}">Afrochow</strong> has been temporarily suspended by our admin team.
+        </p>
+
+        <div class="store-callout">
+            <div class="store-label">Suspended Store</div>
+            <div class="store-name" th:text="${restaurantName}">Your Store</div>
+        </div>
+
+        <div class="alert-bar">
+            🚫 Your store is no longer visible to customers and cannot accept orders while suspended.
+        </div>
+
+        <div class="info-bar">
+            ℹ️ Suspensions are temporary. Please contact our support team for details and to resolve any outstanding issues.
+        </div>
+
+        <div class="support-box">
+            <div class="support-title">Need to Resolve This? Contact Support 🤝</div>
+            <div class="support-text">
+                If you believe this suspension was made in error, or you'd like to understand the reason
+                and get your store reinstated, please reach out to our support team as soon as possible.
+                We're here to help.
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="footer-brand" th:text="${appName}">Afrochow</div>
+        <div class="footer-tagline">Your African Marketplace, Delivered</div>
+        <div class="footer-legal">
+            You're receiving this because you have a vendor account at <span th:text="${appUrl}">afrochow.ca</span><br>
+            © 2025 <span th:text="${appName}">Afrochow</span>. All rights reserved.
+        </div>
+    </div>
+
+</div>
+</body>
+</html>
