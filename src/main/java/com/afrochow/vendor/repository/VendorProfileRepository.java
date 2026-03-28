@@ -65,11 +65,49 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     // ========== FIND BY LOCATION ==========
 
-    @Query("SELECT v FROM VendorProfile v JOIN v.address a WHERE a.city = :city AND v.isActive = true AND v.isVerified = true")
+    @Query("""
+            SELECT v FROM VendorProfile v JOIN v.address a
+            WHERE a.city = :city
+              AND v.isActive = true
+              AND v.isVerified = true
+            ORDER BY v.averageRating DESC, v.totalOrdersCompleted DESC
+            """)
     List<VendorProfile> findByCity(@Param("city") String city);
 
     @Query("SELECT v FROM VendorProfile v JOIN v.address a WHERE a.province = :province AND v.isActive = true AND v.isVerified = true")
     List<VendorProfile> findByProvince(@Param("province") Province province);
+
+    // ========== FIND BY COORDINATES (HAVERSINE) ==========
+
+    /**
+     * Returns distinct verified+active vendors within radiusKm of the given lat/lng,
+     * ordered by ascending distance. Mirrors the Haversine logic in ProductRepository.
+     */
+    @Query("""
+            SELECT DISTINCT v FROM VendorProfile v
+            JOIN v.address a
+            WHERE v.isActive  = true
+              AND v.isVerified = true
+              AND a.latitude   IS NOT NULL
+              AND a.longitude  IS NOT NULL
+              AND (6371 * ACOS(LEAST(1.0,
+                    COS(RADIANS(:lat)) * COS(RADIANS(a.latitude))  *
+                    COS(RADIANS(a.longitude) - RADIANS(:lng)) +
+                    SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
+                  ))) <= :radiusKm
+            ORDER BY (6371 * ACOS(LEAST(1.0,
+                    COS(RADIANS(:lat)) * COS(RADIANS(a.latitude))  *
+                    COS(RADIANS(a.longitude) - RADIANS(:lng)) +
+                    SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
+                  ))) ASC,
+                  v.averageRating DESC,
+                  v.totalOrdersCompleted DESC
+            """)
+    List<VendorProfile> findVendorsNearCoordinates(
+            @Param("lat") double lat,
+            @Param("lng") double lng,
+            @Param("radiusKm") double radiusKm
+    );
 
     // ========== COUNTS ==========
 

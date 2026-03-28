@@ -216,6 +216,7 @@ com/afrochow/common/exceptions/GlobalExceptionHandler.class
 com/afrochow/security/JwtAuthenticationFilter.class
 com/afrochow/common/exceptions/EmailAlreadyExistsException.class
 com/afrochow/notification/model/Notification$NotificationBuilder.class
+com/afrochow/common/enums/CuisineType.class
 com/afrochow/admin/dto/AdminProfileRequestDto.class
 com/afrochow/admin/controller/AdminUserManagementController$UserSummaryDto.class
 com/afrochow/payment/dto/PaymentResponseDto.class

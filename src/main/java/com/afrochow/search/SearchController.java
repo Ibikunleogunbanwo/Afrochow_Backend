@@ -2,6 +2,7 @@ package com.afrochow.search;
 
 import com.afrochow.category.dto.CategoryResponseDto;
 import com.afrochow.common.ApiResponse;
+import com.afrochow.common.enums.CuisineType;
 import com.afrochow.product.dto.ProductResponseDto;
 import com.afrochow.search.dto.PopularCuisineDto;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
@@ -89,6 +90,13 @@ public class SearchController {
     public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getVerifiedVendors() {
         List<VendorProfileResponseDto> vendors = searchService.getVerifiedVendors();
         return ResponseEntity.ok(ApiResponse.success(vendors));
+    }
+
+    @GetMapping("/vendors/cuisine-types")
+    @Operation(summary = "Get allowed cuisine/product types",
+            description = "Returns the ordered list of valid cuisine type labels for the vendor profile dropdown")
+    public ResponseEntity<ApiResponse<List<String>>> getCuisineTypes() {
+        return ResponseEntity.ok(ApiResponse.success("Cuisine types retrieved", CuisineType.labels()));
     }
 
     @GetMapping("/cuisines/popular")
@@ -182,7 +190,7 @@ public class SearchController {
 
     @GetMapping("/products/featured")
     @Operation(summary = "Get featured products",
-               description = "Get top 8 featured products from verified vendors, sorted by order count and reviews")
+               description = "Get up to 16 featured products from verified vendors, trending in the last 90 days, max 2 per vendor, sorted by order count and reviews")
     public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getFeaturedProducts() {
         List<ProductResponseDto> products = searchService.getFeaturedProducts();
         return ResponseEntity.ok(ApiResponse.success("Featured products retrieved successfully", products));
@@ -245,6 +253,17 @@ public class SearchController {
         ApiResponse.PageResponse<ProductResponseDto> paginatedProducts = searchService.advancedProductSearch(
                 query, city, categoryId, minPrice, maxPrice, isVegetarian, isVegan, isGlutenFree, page, pageSize);
         return ResponseEntity.ok(ApiResponse.success("Products retrieved successfully", paginatedProducts));
+    }
+
+    @GetMapping("/vendors/near-coordinates")
+    @Operation(summary = "Get vendors near coordinates",
+            description = "Find verified active vendors within radiusKm of the given lat/lng, ordered by distance")
+    public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getVendorsNearCoordinates(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "25") double radiusKm) {
+        List<VendorProfileResponseDto> vendors = searchService.getVendorsNearCoordinates(lat, lng, radiusKm);
+        return ResponseEntity.ok(ApiResponse.success("Vendors near coordinates retrieved", vendors));
     }
 
     @GetMapping("/products/near-coordinates")

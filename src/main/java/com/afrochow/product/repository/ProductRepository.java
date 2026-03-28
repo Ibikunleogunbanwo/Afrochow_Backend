@@ -3,10 +3,13 @@ package com.afrochow.product.repository;
 import com.afrochow.product.model.Product;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.category.model.Category;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.time.LocalDateTime;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -86,12 +89,39 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     // ========== FEATURED PRODUCTS ==========
 
     /**
-     * Top products from active and verified vendors only,
-     * sorted by order count then review count.
+     * Products that had at least one order placed within the recency window (cutoff → now),
+     * ranked by recent order count then total review count.
+     * Returns a Page so the caller sets the SQL LIMIT via Pageable (no full-table scan in Java).
+     * The service passes a pool size (e.g. 32) and then applies vendor-diversity capping.
      */
-    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true AND p.vendor.isActive = true " +
-            "ORDER BY SIZE(p.orderLines) DESC, SIZE(p.reviews) DESC")
-    List<Product> findFeaturedProducts();
+    @Query("""
+            SELECT p FROM Product p
+            JOIN p.orderLines ol
+            WHERE p.available          = true
+              AND p.vendor.isVerified  = true
+              AND p.vendor.isActive    = true
+              AND ol.order.createdAt  >= :cutoff
+            GROUP BY p
+            ORDER BY COUNT(ol) DESC,
+                     SIZE(p.reviews)  DESC
+            """)
+    Page<Product> findFeaturedProducts(Pageable pageable, @Param("cutoff") LocalDateTime cutoff);
+
+    /**
+     * Broad fallback: no recency window — used when the platform is new
+     * and there aren't enough recent orders to fill the featured section.
+     * Ranked by all-time order count then review count.
+     */
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.available         = true
+              AND p.vendor.isVerified = true
+              AND p.vendor.isActive   = true
+              AND SIZE(p.orderLines)  > 0
+            ORDER BY SIZE(p.orderLines) DESC,
+                     SIZE(p.reviews)    DESC
+            """)
+    Page<Product> findFeaturedProductsBroad(Pageable pageable);
 
     // ========== PRODUCTS BY BEST RESTAURANTS NEAR ME ==========
 

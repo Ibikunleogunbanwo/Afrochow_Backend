@@ -14,11 +14,15 @@ import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -359,13 +363,53 @@ public class SearchService {
     }
 
     /**
-     * Get Featured Products — highly ordered products from active and verified vendors.
-     * Repository query already filters by isActive and isVerified.
+     * Get Featured Products — products trending in the last 90 days, spread across vendors.
+     *
+     * Strategy:
+     *  1. Fetch up to 32 products that had at least one order in the last 90 days,
+     *     ranked by recent-order count then review count (SQL LIMIT via Pageable).
+     *  2. If fewer than 4 results (platform is new / low traffic), fall back to the
+     *     all-time broad query so the section is never empty.
+     *  3. Apply vendor diversity: at most 2 products per vendor, pick the top 8.
+     *     This prevents a single popular vendor from monopolising all 8 cards.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getFeaturedProducts() {
-        return productRepository.findFeaturedProducts().stream()
-                .limit(8)
+        final int POOL_SIZE    = 50;
+        final int MAX_TOTAL    = 16;
+        final int MAX_PER_VENDOR = 2;
+        final int MIN_RECENCY_THRESHOLD = 4;
+
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(90);
+        Pageable pool = PageRequest.of(0, POOL_SIZE);
+
+        List<Product> candidates = productRepository
+                .findFeaturedProducts(pool, cutoff)
+                .getContent();
+
+        // Fallback: not enough orders in the last 90 days — use all-time ranking
+        if (candidates.size() < MIN_RECENCY_THRESHOLD) {
+            candidates = productRepository
+                    .findFeaturedProductsBroad(pool)
+                    .getContent();
+        }
+
+        // Vendor diversity: at most MAX_PER_VENDOR products per vendor, up to MAX_TOTAL
+        Map<String, Integer> vendorCount = new HashMap<>();
+        List<Product> diverse = new ArrayList<>();
+
+        for (Product p : candidates) {
+            if (p.getVendor() == null) continue;
+            String vid = p.getVendor().getPublicVendorId();
+            int count = vendorCount.getOrDefault(vid, 0);
+            if (count < MAX_PER_VENDOR) {
+                diverse.add(p);
+                vendorCount.put(vid, count + 1);
+            }
+            if (diverse.size() >= MAX_TOTAL) break;
+        }
+
+        return diverse.stream()
                 .map(this::toProductResponseDto)
                 .toList();
     }
@@ -555,13 +599,25 @@ public class SearchService {
                 .toList();
     }
 
-    // SearchService.java
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getProductsNearCoordinates(double lat, double lng, double radiusKm) {
         return productRepository.findProductsNearCoordinates(lat, lng, radiusKm)
                 .stream()
                 .limit(12)
                 .map(this::toProductResponseDto)
+                .toList();
+    }
+
+    /**
+     * Get unique verified+active vendors within radiusKm of the given GPS coordinates,
+     * ordered by distance ascending (closest first). Used by the "Popular Stores Near You" homepage section.
+     */
+    @Transactional(readOnly = true)
+    public List<VendorProfileResponseDto> getVendorsNearCoordinates(double lat, double lng, double radiusKm) {
+        return vendorProfileRepository.findVendorsNearCoordinates(lat, lng, radiusKm)
+                .stream()
+                .limit(12)
+                .map(vendorMapper::toResponseDto)
                 .toList();
     }
 
