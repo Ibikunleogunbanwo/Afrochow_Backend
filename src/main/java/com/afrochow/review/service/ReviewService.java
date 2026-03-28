@@ -19,6 +19,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.afrochow.customer.repository.CustomerProfileRepository;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -31,6 +35,7 @@ public class ReviewService {
     private final VendorProfileRepository vendorProfileRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
+    private final CustomerProfileRepository customerProfileRepository;
     private final NotificationService notificationService;
 
     // ========== PUBLIC METHODS (No Authentication Required) ==========
@@ -105,7 +110,15 @@ public class ReviewService {
     // ========== CUSTOMER METHODS (Authenticated Customers) ==========
 
     /**
-     * Create a new review (customer only)
+     * Create a new review (customer only).
+     *
+     * Rules enforced here:
+     *  1. The customer must provide a valid orderPublicId.
+     *  2. That order must belong to the authenticated customer.
+     *  3. That order must have status DELIVERED.
+     *  4. That order must be from the same vendor being reviewed.
+     *  5. The customer may not leave a second vendor-level review for the same vendor,
+     *     or a second product-level review for the same product.
      */
     @Transactional
     public ReviewResponseDto createReview(String userPublicId, ReviewRequestDto request) {
@@ -114,38 +127,46 @@ public class ReviewService {
         VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(request.getVendorPublicId())
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
 
-        // Create review entity
+        // ── 1. Order is mandatory ──────────────────────────────────────────────
+        Order order = orderRepository.findByPublicOrderId(request.getOrderPublicId())
+                .orElseThrow(() -> new EntityNotFoundException("Order not found"));
+
+        // ── 2. Order must belong to the authenticated customer ─────────────────
+        User orderOwner = order.getCustomer().getUser();
+        if (!isOwner(orderOwner, userPublicId)) {
+            throw new IllegalStateException("Order does not belong to this user");
+        }
+
+        // ── 3. Order must be delivered ─────────────────────────────────────────
+        if (order.getStatus() != OrderStatus.DELIVERED) {
+            throw new IllegalStateException("You can only review a completed (delivered) order");
+        }
+
+        // ── 4. Order must be from the vendor being reviewed ────────────────────
+        if (!order.getVendor().getUser().getPublicUserId().equals(vendor.getUser().getPublicUserId())) {
+            throw new IllegalStateException("This order was not placed with the selected vendor");
+        }
+
+        // ── 5. Duplicate review guard ──────────────────────────────────────────
+        Product product = null;
+        if (request.getProductPublicId() != null) {
+            product = productRepository.findByPublicProductId(request.getProductPublicId())
+                    .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+            if (reviewRepository.existsByUserAndProduct(user, product)) {
+                throw new IllegalStateException("You have already reviewed this product");
+            }
+        } else {
+            if (reviewRepository.existsByUserAndVendorAndProductIsNull(user, vendor)) {
+                throw new IllegalStateException("You have already reviewed this store");
+            }
+        }
+
+        // ── Build and persist ──────────────────────────────────────────────────
         Review review = toEntity(request);
         review.setUser(user);
         review.setVendor(vendor);
-
-        // Set product if provided
-        if (request.getProductPublicId() != null) {
-            Product product = productRepository.findByPublicProductId(request.getProductPublicId())
-                    .orElseThrow(() -> new EntityNotFoundException("Product not found"));
-            review.setProduct(product);
-        }
-
-        // Set order if provided
-        if (request.getOrderPublicId() != null) {
-            Order order = orderRepository.findByPublicOrderId(request.getOrderPublicId())
-                    .orElseThrow(() -> new EntityNotFoundException("Order not found"));
-
-            // Validate that the order belongs to this user
-            User orderOwner = order.getCustomer().getUser();
-            if (!orderOwner.getPublicUserId().equals(userPublicId)
-                    && !orderOwner.getEmail().equals(userPublicId)
-                    && !orderOwner.getUsername().equals(userPublicId)) {
-                throw new IllegalStateException("Order does not belong to this user");
-            }
-
-            // Validate that the order is completed
-            if (order.getStatus() != OrderStatus.DELIVERED) {
-                throw new IllegalStateException("Can only review completed orders");
-            }
-
-            review.setOrder(order);
-        }
+        review.setOrder(order);
+        if (product != null) review.setProduct(product);
 
         Review savedReview = reviewRepository.save(review);
 
@@ -347,7 +368,69 @@ public class ReviewService {
                 .build();
     }
 
+    // ========== REVIEW ELIGIBILITY ==========
+
+    /**
+     * Returns review eligibility information for an authenticated customer and a specific vendor.
+     *
+     * <ul>
+     *   <li>{@code hasOrdered}      – the customer has at least one DELIVERED order from this vendor</li>
+     *   <li>{@code alreadyReviewed} – the customer has already submitted a store-level review</li>
+     *   <li>{@code canReview}       – hasOrdered && !alreadyReviewed</li>
+     *   <li>{@code eligibleOrders}  – the DELIVERED orders available to attach to a new review</li>
+     * </ul>
+     */
+    @Transactional(readOnly = true)
+    public ReviewEligibilityDto getEligibleOrders(String userPublicId, String vendorPublicId) {
+        User user = resolveUser(userPublicId);
+
+        VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(vendorPublicId)
+                .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
+
+        com.afrochow.customer.model.CustomerProfile customerProfile =
+                customerProfileRepository.findByUser(user)
+                        .orElseThrow(() -> new EntityNotFoundException("Customer profile not found"));
+
+        List<Order> deliveredOrders = orderRepository
+                .findByCustomerAndVendorAndStatus(customerProfile, vendor, OrderStatus.DELIVERED);
+
+        boolean hasOrdered = !deliveredOrders.isEmpty();
+        boolean alreadyReviewed = reviewRepository.existsByUserAndVendorAndProductIsNull(user, vendor);
+
+        List<EligibleOrderDto> orderDtos = deliveredOrders.stream()
+                .map(o -> EligibleOrderDto.builder()
+                        .publicOrderId(o.getPublicOrderId())
+                        .orderTime(o.getOrderTime())
+                        .totalAmount(o.getTotalAmount())
+                        .build())
+                .collect(Collectors.toList());
+
+        return ReviewEligibilityDto.builder()
+                .hasOrdered(hasOrdered)
+                .alreadyReviewed(alreadyReviewed)
+                .canReview(hasOrdered && !alreadyReviewed)
+                .eligibleOrders(orderDtos)
+                .build();
+    }
+
     // ========== INNER CLASSES FOR STATISTICS ==========
+
+    @lombok.Data
+    @lombok.Builder
+    public static class EligibleOrderDto {
+        private String publicOrderId;
+        private LocalDateTime orderTime;
+        private BigDecimal totalAmount;
+    }
+
+    @lombok.Data
+    @lombok.Builder
+    public static class ReviewEligibilityDto {
+        private boolean hasOrdered;
+        private boolean alreadyReviewed;
+        private boolean canReview;
+        private List<EligibleOrderDto> eligibleOrders;
+    }
 
     @lombok.Data
     @lombok.Builder

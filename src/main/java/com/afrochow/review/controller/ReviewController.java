@@ -119,6 +119,21 @@ public class ReviewController {
         return ResponseBuilder.ok("Your reviews retrieved successfully", reviews);
     }
 
+    @GetMapping("/customer/reviews/eligible")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @Operation(
+        summary = "Check review eligibility for a vendor",
+        description = "Returns canReview (true when the customer has at least one delivered order from the vendor " +
+                      "and has not yet left a store-level review), plus the list of eligible orders.")
+    public ResponseEntity<ApiResponse<ReviewService.ReviewEligibilityDto>> getReviewEligibility(
+            Authentication authentication,
+            @RequestParam String vendorPublicId) {
+        String userPublicId = authentication.getName();
+        ReviewService.ReviewEligibilityDto eligibility =
+                reviewService.getEligibleOrders(userPublicId, vendorPublicId);
+        return ResponseBuilder.ok("Review eligibility retrieved successfully", eligibility);
+    }
+
     // ========== VENDOR ENDPOINTS ==========
 
     @GetMapping("/vendor/reviews")

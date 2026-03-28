@@ -25,6 +25,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByCustomerAndStatus(CustomerProfile customer, OrderStatus status);
 
+    /** All delivered orders placed by a specific customer at a specific vendor. Used by review eligibility checks. */
+    List<Order> findByCustomerAndVendorAndStatus(CustomerProfile customer, VendorProfile vendor, OrderStatus status);
+
     // Vendor queries
     List<Order> findByVendor(VendorProfile vendor);
 

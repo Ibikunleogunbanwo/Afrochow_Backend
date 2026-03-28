@@ -61,4 +61,11 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     // Date-range review count (used by AdminAnalytics date filter)
     @Query("SELECT COUNT(r) FROM Review r WHERE r.createdAt >= :startDate AND r.createdAt <= :endDate")
     Long countByCreatedAtBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    // Duplicate-review guards
+    /** True if the user already has a vendor-level review (no product) for this vendor. */
+    boolean existsByUserAndVendorAndProductIsNull(User user, VendorProfile vendor);
+
+    /** True if the user already has a review for this specific product. */
+    boolean existsByUserAndProduct(User user, Product product);
 }
