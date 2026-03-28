@@ -4,6 +4,7 @@ import com.afrochow.address.model.Address;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.orderline.model.OrderLine;
 import com.afrochow.payment.model.Payment;
+import com.afrochow.promotion.model.PromotionUsage;
 import com.afrochow.common.enums.OrderStatus;
 import com.afrochow.vendor.model.VendorProfile;
 import jakarta.persistence.*;
@@ -144,8 +145,11 @@ public class Order {
     @Builder.Default
     private List<OrderLine> orderLines = new ArrayList<>();
 
-    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL)
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private Payment payment;
+
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private PromotionUsage promotionUsage;
 
     // ========== LIFECYCLE HOOKS ==========
 

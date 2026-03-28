@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import java.time.LocalDateTime;
 
 @Entity
@@ -71,8 +73,11 @@ public class Review {
     private Boolean isVisible = true;
 
     // Optional: Link to order (proof of purchase)
+    // ON DELETE SET NULL: when the referenced order is deleted, this column is nulled
+    // instead of blocking deletion (avoids FK violation in cascade chains).
     @ManyToOne
     @JoinColumn(name = "order_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private Order order;
 
     // ========== TIMESTAMPS ==========

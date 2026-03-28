@@ -2,7 +2,12 @@ package com.afrochow.user.model;
 
 import com.afrochow.admin.model.AdminProfile;
 import com.afrochow.customer.model.CustomerProfile;
+import com.afrochow.notification.model.Notification;
+import com.afrochow.promotion.model.PromotionUsage;
 import com.afrochow.review.model.Review;
+import com.afrochow.security.model.EmailVerificationToken;
+import com.afrochow.security.model.PasswordResetToken;
+import com.afrochow.security.model.RefreshToken;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.common.enums.Role;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -100,6 +105,26 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Review> reviews = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Notification> notifications = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<RefreshToken> refreshTokens = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<EmailVerificationToken> emailVerificationTokens = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<PasswordResetToken> passwordResetTokens = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<PromotionUsage> promotionUsages = new ArrayList<>();
 
     // ===== AUTO-GENERATE PUBLIC ID & USERNAME =====
     @PrePersist

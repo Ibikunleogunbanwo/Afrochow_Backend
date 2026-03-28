@@ -9,6 +9,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -77,6 +79,10 @@ public class Promotion {
     @ManyToOne
     @JoinColumn(name = "vendor_profile_id")
     private VendorProfile vendor;
+
+    @OneToMany(mappedBy = "promotion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<PromotionUsage> usages = new ArrayList<>();
 
     @CreationTimestamp
     @Column(updatable = false)

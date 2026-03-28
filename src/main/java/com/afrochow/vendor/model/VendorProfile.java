@@ -1,8 +1,10 @@
 package com.afrochow.vendor.model;
 
 import com.afrochow.address.model.Address;
+import com.afrochow.favorite.model.Favorite;
 import com.afrochow.order.model.Order;
 import com.afrochow.product.model.Product;
+import com.afrochow.promotion.model.Promotion;
 import com.afrochow.review.model.Review;
 import com.afrochow.user.model.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -170,7 +172,7 @@ public class VendorProfile {
     private BigDecimal maxDeliveryDistanceKm;
 
     // ========== ADDRESS ==========
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "address_id", nullable = false)
     private Address address;
 
@@ -192,7 +194,7 @@ public class VendorProfile {
     private LocalDateTime updatedAt;
 
     // ========== RELATIONSHIPS ==========
-    @OneToMany(mappedBy = "vendor", cascade = CascadeType.ALL, orphanRemoval = false)
+    @OneToMany(mappedBy = "vendor", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Product> products = new ArrayList<>();
 
@@ -203,6 +205,14 @@ public class VendorProfile {
     @OneToMany(mappedBy = "vendor", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Review> reviews = new ArrayList<>();
+
+    @OneToMany(mappedBy = "vendor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Favorite> favorites = new ArrayList<>();
+
+    @OneToMany(mappedBy = "vendor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Promotion> promotions = new ArrayList<>();
 
     // ========== HELPER METHODS ==========
 

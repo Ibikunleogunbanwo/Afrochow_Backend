@@ -1,12 +1,15 @@
 package com.afrochow.product.model;
 
 import com.afrochow.category.model.Category;
+import com.afrochow.favorite.model.Favorite;
 import com.afrochow.orderline.model.OrderLine;
 import com.afrochow.review.model.Review;
 import com.afrochow.vendor.model.VendorProfile;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
@@ -75,8 +78,11 @@ public class Product {
     @JoinColumn(name = "vendor_profile_id", nullable = false)
     private VendorProfile vendor;
 
+    // ON DELETE SET NULL: deleting a Category nulls this column rather than deleting the product.
+    // Products are owned by VendorProfile, not Category.
     @ManyToOne
     @JoinColumn(name = "category_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
     private Category category;
 
     @OneToMany(mappedBy = "product")
@@ -86,6 +92,10 @@ public class Product {
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Review> reviews = new ArrayList<>();
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Favorite> favorites = new ArrayList<>();
 
     // ========== AUTO-GENERATE PUBLIC ID ==========
     @PrePersist
