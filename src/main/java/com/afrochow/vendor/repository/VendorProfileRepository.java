@@ -70,7 +70,7 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
             WHERE a.city = :city
               AND v.isActive = true
               AND v.isVerified = true
-            ORDER BY v.averageRating DESC, v.totalOrdersCompleted DESC
+            ORDER BY v.totalOrdersCompleted DESC
             """)
     List<VendorProfile> findByCity(@Param("city") String city);
 
@@ -100,7 +100,6 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
                     COS(RADIANS(a.longitude) - RADIANS(:lng)) +
                     SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
                   ))) ASC,
-                  v.averageRating DESC,
                   v.totalOrdersCompleted DESC
             """)
     List<VendorProfile> findVendorsNearCoordinates(
