@@ -387,10 +387,17 @@ public class SearchService {
                 .findFeaturedProducts(pool, cutoff)
                 .getContent();
 
-        // Fallback: not enough orders in the last 90 days — use all-time ranking
+        // Fallback 1: not enough orders in the last 90 days — use all-time order ranking
         if (candidates.size() < MIN_RECENCY_THRESHOLD) {
             candidates = productRepository
                     .findFeaturedProductsBroad(pool)
+                    .getContent();
+        }
+
+        // Fallback 2: platform has no orders at all yet — show newest available products
+        if (candidates.size() < MIN_RECENCY_THRESHOLD) {
+            candidates = productRepository
+                    .findAnyFeaturedProducts(pool)
                     .getContent();
         }
 

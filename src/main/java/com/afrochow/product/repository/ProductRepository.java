@@ -123,6 +123,19 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             """)
     Page<Product> findFeaturedProductsBroad(Pageable pageable);
 
+    /**
+     * Zero-order fallback: returns any available products from verified vendors,
+     * sorted by newest first. Used when the platform has no orders at all yet.
+     */
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.available         = true
+              AND p.vendor.isVerified = true
+              AND p.vendor.isActive   = true
+            ORDER BY p.createdAt DESC
+            """)
+    Page<Product> findAnyFeaturedProducts(Pageable pageable);
+
     // ========== PRODUCTS BY BEST RESTAURANTS NEAR ME ==========
 
     /**
