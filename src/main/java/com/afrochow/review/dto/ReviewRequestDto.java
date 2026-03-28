@@ -24,5 +24,6 @@ public class ReviewRequestDto {
     @Size(max = 1000, message = "Comment must not exceed 1000 characters")
     private String comment;
 
-    private String orderPublicId; // Optional - proof of purchase
+    @NotNull(message = "A completed order from this vendor is required to leave a review")
+    private String orderPublicId; // Proof of purchase — required
 }
