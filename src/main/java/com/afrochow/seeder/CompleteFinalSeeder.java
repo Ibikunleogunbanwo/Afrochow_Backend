@@ -357,8 +357,8 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                 .estimatedDeliveryMinutes(25 + (vendorIndex * 5))
                 .maxDeliveryDistanceKm(BigDecimal.valueOf(15.0))
                 .preparationTime(20 + (vendorIndex * 5))
-                .totalOrdersCompleted(50 + (vendorIndex * 20))
-                .totalRevenue(BigDecimal.valueOf(5000 + (vendorIndex * 1000)))
+                .totalOrdersCompleted(0)
+                .totalRevenue(BigDecimal.ZERO)
                 .build();
 
         // Set operating hours
