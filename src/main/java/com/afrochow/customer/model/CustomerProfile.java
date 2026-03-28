@@ -1,6 +1,7 @@
 package com.afrochow.customer.model;
 
 import com.afrochow.address.model.Address;
+import com.afrochow.favorite.model.Favorite;
 import com.afrochow.order.model.Order;
 import com.afrochow.common.enums.PaymentMethod;
 import com.afrochow.user.model.User;
@@ -74,9 +75,18 @@ public class CustomerProfile {
 
 
     @OneToMany(mappedBy = "customer",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
             fetch = FetchType.LAZY)
     @Builder.Default
     private List<Order> orders = new ArrayList<>();
+
+    @OneToMany(mappedBy = "customerProfile",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<Favorite> favorites = new ArrayList<>();
 
     // ==========================================
 // HELPER METHODS

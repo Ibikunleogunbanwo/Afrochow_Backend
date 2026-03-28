@@ -50,9 +50,11 @@ public class Category {
 
     // ========== RELATIONSHIPS ==========
 
-    // Products in this category (ONE-TO-MANY)
-    // One category contains many products
-    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true)
+    // Products in this category (ONE-TO-MANY, read-only reference)
+    // Products are owned by VendorProfile, not Category.
+    // Cascade=ALL + orphanRemoval would delete vendor products on category deletion — never do that.
+    // Deletion is handled at DB level via ON DELETE SET NULL on product.category_id.
+    @OneToMany(mappedBy = "category")
     @Builder.Default
     private List<Product> products = new ArrayList<>();
 
