@@ -47,6 +47,7 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/PasswordHashGenerator.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/ResponseBuilder.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/AdminAccessLevel.java
+/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/CuisineType.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/Department.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/FavoriteType.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/NotificationType.java
