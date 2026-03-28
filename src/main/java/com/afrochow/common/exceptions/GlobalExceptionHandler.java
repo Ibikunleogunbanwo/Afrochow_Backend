@@ -1,6 +1,7 @@
 package com.afrochow.common.exceptions;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.common.exceptions.TokenRefreshException;
 import com.afrochow.vendor.dto.ValidationErrorDto;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
@@ -48,6 +49,19 @@ public class GlobalExceptionHandler {
     // ═════════════════════════════════════════════════════════════
     //  JWT & TOKEN AUTHENTICATION EXCEPTIONS
     // ═════════════════════════════════════════════════════════════
+
+    /**
+     * Handle invalid/expired/revoked refresh tokens.
+     * Returns 401 so the frontend can clear cookies and redirect to login
+     * instead of falling through to the 500 catch-all.
+     */
+    @ExceptionHandler(TokenRefreshException.class)
+    public ResponseEntity<ApiResponse<Object>> handleTokenRefreshException(
+            TokenRefreshException ex, WebRequest request) {
+        logger.warn("Token refresh failed: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED,
+                "Your session has expired. Please log in again.", request);
+    }
 
     /**
      * Handle custom JWT Authentication Exception
