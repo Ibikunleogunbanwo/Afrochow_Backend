@@ -139,6 +139,7 @@ com/afrochow/analytics/AnalyticsService$VendorSalesReport$VendorSalesReportBuild
 com/afrochow/user/dto/UserUpdateRequestDto$UserUpdateRequestDtoBuilder.class
 com/afrochow/analytics/AnalyticsService$AdminAnalytics.class
 com/afrochow/auth/dto/ChangePasswordRequestDto.class
+com/afrochow/review/service/ReviewService$EligibleOrderDto.class
 com/afrochow/notification/dto/BroadcastLogDto.class
 com/afrochow/admin/controller/AdminVendorManagementController$RejectRequestDto.class
 com/afrochow/common/enums/PaymentMethod.class
@@ -206,6 +207,7 @@ com/afrochow/promotion/dto/PromotionPreviewRequestDto.class
 com/afrochow/security/Services/LoginAttemptService.class
 com/afrochow/product/controller/ProductController.class
 com/afrochow/seeder/CompleteFinalSeeder.class
+com/afrochow/review/service/ReviewService$ReviewEligibilityDto$ReviewEligibilityDtoBuilder.class
 com/afrochow/promotion/dto/PromotionResponseDto.class
 com/afrochow/vendor/dto/VendorProfileRequestDto$VendorProfileRequestDtoBuilder.class
 com/afrochow/search/SearchService.class
@@ -319,6 +321,7 @@ com/afrochow/common/enums/PromotionType.class
 com/afrochow/common/enums/PaymentStatus.class
 com/afrochow/orderline/dto/OrderLineRequestDto.class
 com/afrochow/user/repository/UserRepository.class
+com/afrochow/review/service/ReviewService$ReviewEligibilityDto.class
 com/afrochow/common/enums/ProvincialTax.class
 com/afrochow/customer/dto/CustomerDashboardDto.class
 com/afrochow/order/model/Order$OrderBuilder.class
@@ -393,6 +396,7 @@ com/afrochow/review/model/Review.class
 com/afrochow/config/DotenvConfig.class
 com/afrochow/auth/dto/NewPasswordRequest.class
 com/afrochow/admin/dto/AdminProfileResponseDto.class
+com/afrochow/review/service/ReviewService$EligibleOrderDto$EligibleOrderDtoBuilder.class
 com/afrochow/stats/dto/PlatformStatsDto.class
 com/afrochow/promotion/model/PromotionUsage.class
 com/afrochow/security/dto/TokenRefreshResponseDto$TokenRefreshResponseDtoBuilder.class

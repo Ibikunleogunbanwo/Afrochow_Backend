@@ -596,6 +596,8 @@ public class OrderService {
 
         return OrderSummaryResponseDto.builder()
                 .publicOrderId(order.getPublicOrderId())
+                .vendorPublicId(order.getVendor() != null
+                        ? order.getVendor().getUser().getPublicUserId() : null)
                 .vendorName(order.getVendor() != null
                         ? order.getVendor().getRestaurantName() : null)
                 .totalAmount(order.getTotalAmount())

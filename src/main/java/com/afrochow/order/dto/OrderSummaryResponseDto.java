@@ -17,6 +17,7 @@ import java.util.List;
 public class OrderSummaryResponseDto {
 
     private String publicOrderId;
+    private String vendorPublicId;
     private String vendorName;
     private String restaurantName;
     private AddressResponseDto deliveryAddress;
