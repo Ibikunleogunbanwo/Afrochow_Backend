@@ -40,3 +40,6 @@ uploads/
 
 # ===== COMPILED CLASSES =====
 *.class
+
+# ===== CLAUDE CODE =====
+.claude/
