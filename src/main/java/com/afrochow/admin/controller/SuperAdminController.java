@@ -9,6 +9,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,6 +21,7 @@ public class SuperAdminController {
 
     private final UserRepository userRepository;
 
+    @Transactional
     @PatchMapping("/users/{publicUserId}/promote")
     @Operation(summary = "Promote to SUPERADMIN", description = "Promote an existing ADMIN user to SUPERADMIN")
     public ResponseEntity<ApiResponse<Void>> promoteToSuperAdmin(
@@ -39,6 +41,7 @@ public class SuperAdminController {
         return ResponseEntity.ok(ApiResponse.success("User promoted to SUPERADMIN successfully"));
     }
 
+    @Transactional
     @PatchMapping("/users/{publicUserId}/demote")
     @Operation(summary = "Demote SUPERADMIN", description = "Demote a SUPERADMIN back to ADMIN")
     public ResponseEntity<ApiResponse<Void>> demoteToAdmin(

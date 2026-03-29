@@ -10,6 +10,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -86,6 +87,7 @@ public class AdminUserManagementController {
 
     // ========== MODIFY USERS ==========
 
+    @Transactional
     @PatchMapping("/{publicUserId}/activate")
     @Operation(summary = "Activate user", description = "Activate a suspended user account")
     public ResponseEntity<ApiResponse<UserSummaryDto>> activateUser(@PathVariable String publicUserId) {
@@ -101,6 +103,7 @@ public class AdminUserManagementController {
         return ResponseEntity.ok(ApiResponse.success("User activated successfully", toUserSummary(updatedUser)));
     }
 
+    @Transactional
     @PatchMapping("/{publicUserId}/deactivate")
     @Operation(summary = "Deactivate user", description = "Suspend/deactivate a user account")
     public ResponseEntity<ApiResponse<UserSummaryDto>> deactivateUser(@PathVariable String publicUserId) {
@@ -120,6 +123,7 @@ public class AdminUserManagementController {
         return ResponseEntity.ok(ApiResponse.success("User deactivated successfully", toUserSummary(updatedUser)));
     }
 
+    @Transactional
     @PatchMapping("/{publicUserId}/role")
     @PreAuthorize("hasRole('SUPERADMIN')")
     @Operation(summary = "Change user role", description = "Change a user's role — SUPERADMIN only")
@@ -145,6 +149,7 @@ public class AdminUserManagementController {
         return ResponseEntity.ok(ApiResponse.success("User role updated successfully", toUserSummary(updatedUser)));
     }
 
+    @Transactional
     @DeleteMapping("/{publicUserId}")
     @PreAuthorize("hasRole('SUPERADMIN')")
     @Operation(summary = "Delete user", description = "Permanently delete a user account — SUPERADMIN only")

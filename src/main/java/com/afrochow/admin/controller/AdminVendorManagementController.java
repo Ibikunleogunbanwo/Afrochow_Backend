@@ -10,6 +10,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -70,6 +71,7 @@ public class AdminVendorManagementController {
 
     // ========== VERIFY / UNVERIFY ==========
 
+    @Transactional
     @PatchMapping("/{publicVendorId}/verify")
     @Operation(summary = "Verify vendor", description = "Approve and verify a vendor's business")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> verifyVendor(
@@ -77,6 +79,7 @@ public class AdminVendorManagementController {
 
         VendorProfile vendor = getVendor(publicVendorId);
         vendor.setIsVerified(true);
+        vendor.setIsActive(true);  // ensure vendor is active (re-approval after rejection)
         vendor.setVerifiedAt(LocalDateTime.now());
         vendorProfileRepository.save(vendor);
 
@@ -92,6 +95,7 @@ public class AdminVendorManagementController {
                 "Vendor verified successfully", toSummary(vendor)));
     }
 
+    @Transactional
     @PatchMapping("/{publicVendorId}/unverify")
     @Operation(summary = "Revoke vendor verification", description = "Revoke a vendor's verified status")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> unverifyVendor(
@@ -108,6 +112,7 @@ public class AdminVendorManagementController {
 
     // ========== ACTIVATE / DEACTIVATE ==========
 
+    @Transactional
     @PatchMapping("/{publicVendorId}/activate")
     @Operation(summary = "Activate vendor", description = "Reinstate a suspended vendor profile")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> activateVendor(
@@ -129,6 +134,7 @@ public class AdminVendorManagementController {
                 "Vendor reinstated successfully", toSummary(vendor)));
     }
 
+    @Transactional
     @PatchMapping("/{publicVendorId}/deactivate")
     @Operation(summary = "Deactivate vendor", description = "Suspend a vendor profile (prevents receiving orders)")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> deactivateVendor(
@@ -159,6 +165,7 @@ public class AdminVendorManagementController {
         private String reason;
     }
 
+    @Transactional
     @PostMapping("/{publicVendorId}/reject")
     @Operation(summary = "Reject vendor application",
                description = "Reject a pending vendor application with an optional reason sent to the vendor via email")
