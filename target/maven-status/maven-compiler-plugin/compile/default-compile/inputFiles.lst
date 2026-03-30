@@ -152,6 +152,7 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/orderline/model/OrderLine.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/orderline/repository/OrderLineRepository.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/payment/controller/PaymentController.java
+/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/payment/controller/StripeWebhookController.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/payment/dto/PaymentRequestDto.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/payment/dto/PaymentResponseDto.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/payment/model/Payment.java
@@ -231,6 +232,7 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/user/service/UserService.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/VendorMapper.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/controller/VendorProfileController.java
+/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/controller/VendorStripeController.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/dto/ValidationErrorDto.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/dto/VendorDashboardDto.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/dto/VendorProfileRequestDto.java
@@ -240,4 +242,5 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/dto/VendorVerificationResponseDto.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/model/VendorProfile.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/repository/VendorProfileRepository.java
+/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/service/StripeConnectService.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/vendor/service/VendorProfileService.java

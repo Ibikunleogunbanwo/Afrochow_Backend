@@ -7,11 +7,15 @@ import com.stripe.model.Account;
 import com.stripe.net.Webhook;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Receives Stripe webhook events.
@@ -46,19 +50,21 @@ public class StripeWebhookController {
     @Operation(summary = "Receive Stripe webhook",
                description = "Processes Stripe webhook events. Endpoint must be registered in Stripe dashboard.")
     public ResponseEntity<String> handleWebhook(
-            @RequestBody String payload,
+            HttpServletRequest request,
             @RequestHeader("Stripe-Signature") String sigHeader
     ) {
+        String payload;
+        try {
+            payload = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("Failed to read Stripe webhook payload", e);
+            return ResponseEntity.badRequest().body("Cannot read payload");
+        }
+
         Event event;
 
         try {
-            if (webhookSecret == null || webhookSecret.isBlank()) {
-                // Dev mode: skip signature verification (set stripe.webhook.secret in prod)
-                event = Event.GSON.fromJson(payload, Event.class);
-                log.warn("Stripe webhook received without signature verification — set stripe.webhook.secret in production");
-            } else {
-                event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
-            }
+            event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
         } catch (SignatureVerificationException e) {
             log.warn("Stripe webhook signature verification failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body("Invalid signature");
@@ -67,6 +73,7 @@ public class StripeWebhookController {
             return ResponseEntity.badRequest().body("Invalid payload");
         }
 
+        log.info("Stripe webhook received: {}", event.getType());
         switch (event.getType()) {
             case "account.updated" -> handleAccountUpdated(event);
             default -> log.debug("Unhandled Stripe event type: {}", event.getType());
@@ -81,7 +88,6 @@ public class StripeWebhookController {
                     .getObject()
                     .ifPresent(stripeObject -> {
                         if (stripeObject instanceof Account account) {
-                            // details_submitted=true means the vendor finished the onboarding form
                             if (Boolean.TRUE.equals(account.getDetailsSubmitted())) {
                                 stripeConnectService.markOnboardingComplete(account.getId());
                                 log.info("Stripe Connect onboarding complete for account: {}", account.getId());

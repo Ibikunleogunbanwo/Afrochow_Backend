@@ -144,6 +144,7 @@ com/afrochow/notification/dto/BroadcastLogDto.class
 com/afrochow/admin/controller/AdminVendorManagementController$RejectRequestDto.class
 com/afrochow/common/enums/PaymentMethod.class
 com/afrochow/product/model/Product$ProductBuilder.class
+com/afrochow/payment/controller/StripeWebhookController.class
 com/afrochow/common/jackson/FlexibleLocalDateTimeDeserializer.class
 com/afrochow/category/model/Category.class
 com/afrochow/notification/service/PushNotificationService.class
@@ -372,11 +373,13 @@ com/afrochow/auth/dto/AuthResponseDto$AuthResponseDtoBuilder.class
 com/afrochow/order/dto/OrderUpdateRequestDto$OrderUpdateRequestDtoBuilder.class
 com/afrochow/auth/controller/AuthController.class
 com/afrochow/analytics/AnalyticsService$OrderSummary.class
+com/afrochow/vendor/controller/VendorStripeController.class
 com/afrochow/common/exceptions/PaymentProcessingException.class
 com/afrochow/review/dto/ReviewResponseDto$ReviewResponseDtoBuilder.class
 com/afrochow/order/dto/OrderStatusHistoryDto.class
 com/afrochow/common/exceptions/ResourceNotFoundException.class
 com/afrochow/common/enums/AdminAccessLevel.class
+com/afrochow/vendor/service/StripeConnectService.class
 com/afrochow/common/exceptions/TokenRefreshException.class
 com/afrochow/analytics/AnalyticsService$PlatformTrends.class
 com/afrochow/security/dto/PasswordChangeResponseDto$PasswordChangeResponseDtoBuilder.class

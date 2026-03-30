@@ -5,6 +5,7 @@ import com.afrochow.vendor.repository.VendorProfileRepository;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Account;
 import com.stripe.model.LoginLink;
+import com.stripe.param.LoginLinkCreateOnAccountParams;
 import com.stripe.model.AccountLink;
 import com.stripe.param.AccountCreateParams;
 import com.stripe.param.AccountLinkCreateParams;
@@ -53,6 +54,9 @@ public class StripeConnectService {
                         .setBusinessType(AccountCreateParams.BusinessType.INDIVIDUAL)
                         .putMetadata("vendorId", String.valueOf(vendor.getId()))
                         .putMetadata("publicVendorId", vendor.getPublicVendorId())
+                        .setBusinessProfile(AccountCreateParams.BusinessProfile.builder()
+                                .setUrl(appBaseUrl + "/restaurant/" + vendor.getPublicVendorId())
+                                .build())
                         .build();
 
                 Account account = Account.create(params);
@@ -74,8 +78,8 @@ public class StripeConnectService {
     public String generateOnboardingLink(String stripeAccountId) throws StripeException {
         AccountLinkCreateParams params = AccountLinkCreateParams.builder()
                 .setAccount(stripeAccountId)
-                .setRefreshUrl(appBaseUrl + "/vendor/settings?stripe=refresh")
-                .setReturnUrl(appBaseUrl + "/vendor/settings?stripe=return")
+                .setRefreshUrl(appBaseUrl + "/vendor/profile?stripe=refresh")
+                .setReturnUrl(appBaseUrl + "/vendor/profile?stripe=return")
                 .setType(AccountLinkCreateParams.Type.ACCOUNT_ONBOARDING)
                 .build();
 
@@ -97,7 +101,11 @@ public class StripeConnectService {
         }
 
         try {
-            LoginLink link = LoginLink.createOnAccount(stripeAccountId, null, null);
+            LoginLink link = LoginLink.createOnAccount(
+                    stripeAccountId,
+                    LoginLinkCreateOnAccountParams.builder().build(),
+                    null
+            );
             return link.getUrl();
         } catch (StripeException e) {
             throw new RuntimeException("Failed to generate Stripe dashboard link: " + e.getMessage(), e);
