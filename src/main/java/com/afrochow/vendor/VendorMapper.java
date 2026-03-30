@@ -33,6 +33,8 @@ public class VendorMapper {
                 .cuisineType(profile.getCuisineType())
                 .logoUrl(profile.getLogoUrl())
                 .bannerUrl(profile.getBannerUrl())
+                .stripeAccountId(profile.getStripeAccountId())
+                .stripeOnboardingComplete(profile.getStripeOnboardingComplete())
                 .isVerified(profile.getIsVerified())
                 .isActive(profile.getIsActive())
                 .verifiedAt(profile.getVerifiedAt())

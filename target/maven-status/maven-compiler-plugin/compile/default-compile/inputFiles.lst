@@ -59,6 +59,7 @@
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/ProvincialTax.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/RelatedEntityType.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/Role.java
+/Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/enums/ScheduleType.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/exceptions/AccountLockedException.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/exceptions/AddressNotPresentException.java
 /Users/ayoogunbanwo/software-project/Afrochow-Backend/src/main/java/com/afrochow/common/exceptions/DisabledAccountException.java

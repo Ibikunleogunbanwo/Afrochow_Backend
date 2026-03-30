@@ -29,5 +29,6 @@ public class OrderSummaryResponseDto {
     private Integer itemCount;
     private List<String> itemNames;
     private String fulfillmentType;
+    private LocalDateTime requestedFulfillmentTime;
     private Boolean canBeCancelled;
 }

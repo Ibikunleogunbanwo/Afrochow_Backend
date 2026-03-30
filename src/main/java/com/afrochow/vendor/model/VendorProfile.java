@@ -68,6 +68,10 @@ public class VendorProfile {
     @Column(length = 100)
     private String stripeAccountId;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean stripeOnboardingComplete = false;
+
     // ========== BUSINESS VERIFICATION ==========
     @Column(length = 255)
     private String businessLicenseUrl;
