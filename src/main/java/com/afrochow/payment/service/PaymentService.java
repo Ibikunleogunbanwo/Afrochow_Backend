@@ -11,6 +11,7 @@ import com.afrochow.payment.model.Payment;
 import com.afrochow.payment.repository.PaymentRepository;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
+import com.stripe.param.PaymentIntentCaptureParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,11 +54,13 @@ public class PaymentService {
     // ========== STRIPE METHODS ==========
 
     /**
-     * Charge the customer via Stripe using a paymentMethodId token.
-     * Called by OrderService.createOrder() after the order is saved.
-     * The paymentMethodId is created client-side by Stripe.js — raw card
-     * details never reach this backend.
-     * On success : updates Payment record to COMPLETED with Stripe transaction details.
+     * Authorise (but do NOT capture) the customer's card via Stripe.
+     * Uses capture_method=manual so money is only held, not moved.
+     * The actual capture happens in captureStripePayment() when the vendor accepts the order.
+     * If the vendor rejects or the customer cancels while still PENDING, the hold is released
+     * by cancelling the PaymentIntent — no refund needed.
+     *
+     * On success : updates Payment record to AUTHORIZED.
      * On failure : updates Payment record to FAILED and throws RuntimeException.
      *
      * @param order           saved Order with totalAmount already calculated
@@ -100,6 +103,8 @@ public class PaymentService {
                     .setCurrency("cad")
                     .setPaymentMethod(paymentMethodId)
                     .setConfirm(true)
+                    // Manual capture: authorise the card now, capture when vendor accepts
+                    .setCaptureMethod(PaymentIntentCreateParams.CaptureMethod.MANUAL)
                     .setDescription("Afrochow order " + order.getPublicOrderId())
                     .putMetadata("publicOrderId",    order.getPublicOrderId())
                     .putMetadata("vendorPublicId",   order.getVendor().getPublicVendorId())
@@ -118,8 +123,9 @@ public class PaymentService {
 
             PaymentIntent intent = PaymentIntent.create(paramsBuilder.build());
 
-            if ("succeeded".equals(intent.getStatus())) {
-                // Try to retrieve card details for the receipt — non-critical
+            if ("requires_capture".equals(intent.getStatus())) {
+                // Authorization succeeded — card hold placed, money not yet moved.
+                // Capture will happen in captureStripePayment() when vendor accepts.
                 String last4 = null;
                 String brand = null;
                 try {
@@ -133,20 +139,13 @@ public class PaymentService {
                     // Don't fail the order over cosmetic card details
                 }
 
-                payment.completePayment(last4, brand);
+                payment.authorizePayment(last4, brand);
                 payment.setTransactionId(intent.getId());
                 payment.setPlatformFeeAmount(
                         BigDecimal.valueOf(feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                 payment.setVendorPayout(
                         BigDecimal.valueOf(amountInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                 paymentRepository.save(payment);
-
-                notificationService.notifyPaymentSuccess(
-                        order.getCustomer().getUser().getPublicUserId(),
-                        intent.getId(),
-                        order.getPublicOrderId(),
-                        order.getTotalAmount()
-                );
 
             } else if ("requires_action".equals(intent.getStatus())) {
                 // 3D Secure required — client secret is surfaced to the frontend
@@ -177,11 +176,63 @@ public class PaymentService {
     }
 
     /**
-     * Refund a completed Stripe charge.
-     * Called by OrderService.cancelCustomerOrder() when an already-paid
-     * order is canceled. Safe to call on unpaid orders — returns silently.
+     * Capture a previously-authorised PaymentIntent.
+     * Called by OrderService.acceptOrder() when the vendor accepts the order.
+     * This is the moment money actually moves from the customer to Afrochow/vendor.
      *
-     * @param order the order to refund
+     * On success : updates Payment record to COMPLETED.
+     * On failure : throws RuntimeException — acceptOrder is @Transactional so the
+     *              status update to CONFIRMED rolls back, keeping the order PENDING.
+     *
+     * @param order the order whose payment is to be captured
+     */
+    @Transactional
+    public void captureStripePayment(Order order) {
+        Payment payment = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment record not found for order: " + order.getPublicOrderId()));
+
+        if (payment.getStatus() != PaymentStatus.AUTHORIZED) {
+            throw new IllegalStateException(
+                    "Cannot capture — payment is not in AUTHORIZED state (current: " + payment.getStatus() + ")");
+        }
+
+        if (payment.getTransactionId() == null) {
+            throw new IllegalStateException(
+                    "Cannot capture — no Stripe PaymentIntent ID on record");
+        }
+
+        try {
+            PaymentIntent intent = PaymentIntent.retrieve(payment.getTransactionId());
+            PaymentIntent captured = intent.capture(PaymentIntentCaptureParams.builder().build());
+
+            if ("succeeded".equals(captured.getStatus())) {
+                payment.completePayment(payment.getCardLast4(), payment.getCardBrand());
+                paymentRepository.save(payment);
+
+                notificationService.notifyPaymentSuccess(
+                        order.getCustomer().getUser().getPublicUserId(),
+                        captured.getId(),
+                        order.getPublicOrderId(),
+                        order.getTotalAmount()
+                );
+            } else {
+                throw new RuntimeException(
+                        "Stripe capture returned unexpected status: " + captured.getStatus());
+            }
+
+        } catch (StripeException e) {
+            throw new RuntimeException("Payment capture failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Refund a completed Stripe charge, or cancel the hold if the payment was
+     * only authorised and not yet captured.
+     * Called by OrderService.cancelCustomerOrder() / rejectOrder() / adminCancelOrder().
+     * Safe to call on unpaid/failed orders — returns silently.
+     *
+     * @param order the order to refund or cancel
      */
     @Transactional
     public void refundStripeCharge(Order order) {
@@ -189,36 +240,43 @@ public class PaymentService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Payment record not found for order: " + order.getPublicOrderId()));
 
-        if (payment.getStatus() != PaymentStatus.COMPLETED) {
-            // Nothing to refund if payment was never completed
+        if (payment.getTransactionId() == null) {
+            // No Stripe record — nothing to do
             return;
         }
 
-        if (payment.getTransactionId() == null) {
-            throw new IllegalStateException(
-                    "Cannot refund — no Stripe transaction ID on record");
-        }
-
         try {
-            boolean hasTransfer = order.getVendor().getStripeAccountId() != null
-                    && !order.getVendor().getStripeAccountId().isBlank();
-            com.stripe.param.RefundCreateParams.Builder refundBuilder =
-                    com.stripe.param.RefundCreateParams.builder()
-                            .setPaymentIntent(payment.getTransactionId());
-            if (hasTransfer) {
-                // Connected account — reverse transfer and return platform fee
-                refundBuilder
-                        .setRefundApplicationFee(true)
-                        .setReverseTransfer(true);
-            }
-            // No transfer = direct charge = plain refund, no extra params needed
-            com.stripe.model.Refund.create(refundBuilder.build());
+            if (payment.getStatus() == PaymentStatus.AUTHORIZED) {
+                // ── Payment was never captured — cancel the hold instead of refunding ──
+                // No money was moved, so no refund is needed. Cancelling the intent
+                // releases the authorisation hold on the customer's card immediately.
+                PaymentIntent intent = PaymentIntent.retrieve(payment.getTransactionId());
+                intent.cancel();
+                payment.cancelAuthorization();
+                paymentRepository.save(payment);
 
-            payment.refundPayment();
-            paymentRepository.save(payment);
+            } else if (payment.getStatus() == PaymentStatus.COMPLETED) {
+                // ── Payment was captured — issue a real Stripe refund ──
+                boolean hasTransfer = order.getVendor().getStripeAccountId() != null
+                        && !order.getVendor().getStripeAccountId().isBlank();
+                com.stripe.param.RefundCreateParams.Builder refundBuilder =
+                        com.stripe.param.RefundCreateParams.builder()
+                                .setPaymentIntent(payment.getTransactionId());
+                if (hasTransfer) {
+                    // Connected account — reverse transfer and return platform fee
+                    refundBuilder
+                            .setRefundApplicationFee(true)
+                            .setReverseTransfer(true);
+                }
+                com.stripe.model.Refund.create(refundBuilder.build());
+                payment.refundPayment();
+                paymentRepository.save(payment);
+
+            }
+            // All other statuses (PENDING, FAILED, CANCELLED, REFUNDED) — nothing to do
 
         } catch (StripeException e) {
-            throw new RuntimeException("Stripe refund failed: " + e.getMessage());
+            throw new RuntimeException("Stripe refund/cancel failed: " + e.getMessage());
         }
     }
 

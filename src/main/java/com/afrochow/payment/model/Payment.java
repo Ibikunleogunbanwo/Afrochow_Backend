@@ -104,6 +104,16 @@ public class Payment {
     }
 
     // ===== Unified helper to update status, timestamps, and card info =====
+
+    /**
+     * Card authorised — hold placed on the customer's card.
+     * Money has NOT moved yet. Call completePayment() when the intent is captured.
+     */
+    public void authorizePayment(String gatewayCardLast4, String gatewayCardBrand) {
+        this.status = PaymentStatus.AUTHORIZED;
+        setCardInfoSafely(gatewayCardLast4, gatewayCardBrand);
+    }
+
     public void completePayment(String gatewayCardLast4, String gatewayCardBrand) {
         this.status = PaymentStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
@@ -113,6 +123,15 @@ public class Payment {
     public void failPayment() {
         this.status = PaymentStatus.FAILED;
         this.failedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Authorisation cancelled before capture — the hold on the customer's
+     * card is released. No money was ever moved.
+     */
+    public void cancelAuthorization() {
+        this.status = PaymentStatus.CANCELLED;
+        this.refundedAt = LocalDateTime.now(); // reuse timestamp field — records when hold was released
     }
 
     public void refundPayment() {

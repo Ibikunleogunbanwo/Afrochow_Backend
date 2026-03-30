@@ -1,5 +1,6 @@
 package com.afrochow.product.dto;
 import com.afrochow.common.enums.Province;
+import com.afrochow.common.enums.ScheduleType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,6 +21,8 @@ public class ProductResponseDto {
     private String imageUrl;
     private Boolean available;
     private Integer preparationTimeMinutes;
+    private ScheduleType scheduleType;
+    private Integer advanceNoticeHours;
 
     private Integer calories;
     private Boolean isVegetarian;

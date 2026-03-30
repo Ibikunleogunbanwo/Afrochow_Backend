@@ -1,6 +1,7 @@
 package com.afrochow.order.dto;
 
 import com.afrochow.orderline.dto.OrderLineRequestDto;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -11,6 +12,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -54,4 +56,11 @@ public class OrderRequestDto {
     /** Optional promo code to apply a discount to this order. */
     @Size(max = 50)
     private String promoCode;
+
+    /**
+     * Required when the cart contains any ADVANCE_ORDER product.
+     * The customer's desired fulfilment date/time (ISO 8601: "yyyy-MM-dd'T'HH:mm:ss").
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime requestedFulfillmentTime;
 }

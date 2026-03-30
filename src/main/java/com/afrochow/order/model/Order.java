@@ -97,6 +97,12 @@ public class Order {
     @Builder.Default
     private String fulfillmentType = "DELIVERY";
 
+    /**
+     * Customer's requested fulfilment date/time — required when the cart contains
+     * any ADVANCE_ORDER product. Null for same-day orders.
+     */
+    private LocalDateTime requestedFulfillmentTime;
+
     // ========== ORDER STATUS ==========
 
     @Enumerated(EnumType.STRING)

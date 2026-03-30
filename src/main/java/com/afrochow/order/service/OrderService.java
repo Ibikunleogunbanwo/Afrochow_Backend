@@ -8,6 +8,7 @@ import com.afrochow.common.enums.PaymentMethod;
 import com.afrochow.common.enums.PaymentStatus;
 import com.afrochow.common.enums.Province;
 import com.afrochow.common.enums.ProvincialTax;
+import com.afrochow.common.enums.ScheduleType;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
 import com.afrochow.notification.service.NotificationService;
@@ -35,6 +36,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -159,6 +162,7 @@ public class OrderService {
         order.setTaxRate(provincialTax.getRate());
         order.setTaxLabel(provincialTax.getTaxLabel());
         order.setTaxProvince(taxProvinceCode);
+        order.setRequestedFulfillmentTime(request.getRequestedFulfillmentTime());
 
         // ── Build order lines ─────────────────────────────────────────────────
 
@@ -176,6 +180,23 @@ public class OrderService {
             if (!product.getAvailable()) {
                 throw new IllegalStateException(
                         "Product " + product.getName() + " is not available");
+            }
+
+            // ── Advance-order validation ───────────────────────────────────
+            if (product.getScheduleType() == ScheduleType.ADVANCE_ORDER) {
+                if (request.getRequestedFulfillmentTime() == null) {
+                    throw new IllegalArgumentException(
+                            "'" + product.getName() + "' requires advance notice. " +
+                            "Please provide a requestedFulfillmentTime.");
+                }
+                long hoursUntil = ChronoUnit.HOURS.between(
+                        LocalDateTime.now(), request.getRequestedFulfillmentTime());
+                int required = product.getAdvanceNoticeHours() != null ? product.getAdvanceNoticeHours() : 24;
+                if (hoursUntil < required) {
+                    throw new IllegalArgumentException(
+                            "'" + product.getName() + "' requires at least " + required +
+                            " hours advance notice. Please choose a later fulfilment time.");
+                }
             }
 
             OrderLine orderLine = OrderLine.builder()
@@ -307,6 +328,25 @@ public class OrderService {
         return toResponseDto(updatedOrder);
     }
 
+    @Transactional
+    public OrderResponseDto adminCancelOrder(String publicOrderId) {
+        Order order = orderRepository.findByPublicOrderId(publicOrderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found"));
+
+        OrderStatus status = order.getStatus();
+        if (status == OrderStatus.DELIVERED || status == OrderStatus.CANCELLED || status == OrderStatus.REFUNDED) {
+            throw new IllegalStateException("Order is already in a terminal state and cannot be cancelled");
+        }
+
+        String previousStatus = status.toString();
+        paymentService.refundStripeCharge(order);
+        order.updateStatus(OrderStatus.CANCELLED);
+        Order updatedOrder = orderRepository.save(order);
+        notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus);
+
+        return toResponseDto(updatedOrder);
+    }
+
     // ========== VENDOR METHODS ==========
 
     @Transactional(readOnly = true)
@@ -367,6 +407,10 @@ public class OrderService {
 
         order.updateStatus(OrderStatus.CONFIRMED);
         Order updatedOrder = orderRepository.save(order);
+
+        // Capture the previously-authorised payment now that the vendor has confirmed.
+        // If capture fails, @Transactional rolls back the status update — order stays PENDING.
+        paymentService.captureStripePayment(updatedOrder);
 
         notificationService.notifyCustomerOrderConfirmed(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
@@ -535,6 +579,8 @@ public class OrderService {
                 .discount(order.getDiscount())
                 .appliedPromoCode(order.getAppliedPromoCode())
                 .totalAmount(order.getTotalAmount())
+                .fulfillmentType(order.getFulfillmentType())
+                .requestedFulfillmentTime(order.getRequestedFulfillmentTime())
                 .status(order.getStatus())
                 .statusLabel(resolveStatusLabel(order.getStatus(), order.getFulfillmentType()))
                 .specialInstructions(order.getSpecialInstructions())

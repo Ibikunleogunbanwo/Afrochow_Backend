@@ -1,6 +1,7 @@
 package com.afrochow.product.model;
 
 import com.afrochow.category.model.Category;
+import com.afrochow.common.enums.ScheduleType;
 import com.afrochow.favorite.model.Favorite;
 import com.afrochow.orderline.model.OrderLine;
 import com.afrochow.review.model.Review;
@@ -57,6 +58,23 @@ public class Product {
     @Column(nullable = false)
     @Builder.Default
     private Integer preparationTimeMinutes = 20;
+
+    // ========== FULFILMENT SCHEDULE ==========
+
+    /**
+     * SAME_DAY: order any time, ready in preparationTimeMinutes.
+     * ADVANCE_ORDER: must be placed advanceNoticeHours before the requested fulfilment time.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private ScheduleType scheduleType = ScheduleType.SAME_DAY;
+
+    /**
+     * Required when scheduleType = ADVANCE_ORDER.
+     * Minimum hours of notice the vendor needs before the requested fulfilment time (e.g. 24, 48).
+     */
+    private Integer advanceNoticeHours;
 
     // ========== NUTRITIONAL INFO ==========
     private Integer calories;
