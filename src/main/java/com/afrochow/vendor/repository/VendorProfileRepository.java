@@ -19,6 +19,8 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     Optional<VendorProfile> findByUser_UserId(Long userId);
 
+    Optional<VendorProfile> findByStripeAccountId(String stripeAccountId);
+
     Optional<VendorProfile> findByUser_PublicUserId(String publicUserId);
 
     Optional<VendorProfile> findByUser_Username(String username);

@@ -320,6 +320,7 @@ com/afrochow/vendor/dto/VendorProfileResponseDto$OperatingHoursDto.class
 com/afrochow/common/enums/PromotionType.class
 com/afrochow/common/enums/PaymentStatus.class
 com/afrochow/orderline/dto/OrderLineRequestDto.class
+com/afrochow/common/enums/ScheduleType.class
 com/afrochow/user/repository/UserRepository.class
 com/afrochow/review/service/ReviewService$ReviewEligibilityDto.class
 com/afrochow/common/enums/ProvincialTax.class

@@ -651,6 +651,7 @@ public class OrderService {
                 .statusLabel(resolveStatusLabel(order.getStatus(), order.getFulfillmentType()))
                 .orderTime(order.getOrderTime())
                 .fulfillmentType(order.getFulfillmentType())
+                .requestedFulfillmentTime(order.getRequestedFulfillmentTime())
                 .canBeCancelled(order.canBeCancelled())
                 .itemCount(itemNames.size())
                 .itemNames(itemNames)

@@ -23,6 +23,10 @@ public class VendorProfileResponseDto {
     private String logoUrl;
     private String bannerUrl;
 
+    // Stripe Connect
+    private String stripeAccountId;
+    private Boolean stripeOnboardingComplete;
+
     // Verification Status
     private Boolean isVerified;
     private Boolean isActive;
