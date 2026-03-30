@@ -81,6 +81,9 @@ public class AdminVendorManagementController {
         vendor.setIsVerified(true);
         vendor.setIsActive(true);  // ensure vendor is active (re-approval after rejection)
         vendor.setVerifiedAt(LocalDateTime.now());
+        if (vendor.getUser() != null) {
+            vendor.getUser().setIsActive(true);
+        }
         vendorProfileRepository.save(vendor);
 
         // Send approval email to vendor
@@ -120,6 +123,9 @@ public class AdminVendorManagementController {
 
         VendorProfile vendor = getVendor(publicVendorId);
         vendor.setIsActive(true);
+        if (vendor.getUser() != null) {
+            vendor.getUser().setIsActive(true);
+        }
         vendorProfileRepository.save(vendor);
 
         // Notify the vendor that their store access has been restored
@@ -143,6 +149,9 @@ public class AdminVendorManagementController {
         VendorProfile vendor = getVendor(publicVendorId);
         boolean wasVerified = Boolean.TRUE.equals(vendor.getIsVerified());
         vendor.setIsActive(false);
+        if (vendor.getUser() != null) {
+            vendor.getUser().setIsActive(false);
+        }
         vendorProfileRepository.save(vendor);
 
         // Only send suspension email for verified vendors — rejected applicants
@@ -176,6 +185,9 @@ public class AdminVendorManagementController {
         VendorProfile vendor = getVendor(publicVendorId);
         vendor.setIsActive(false);
         vendor.setIsVerified(false);
+        if (vendor.getUser() != null) {
+            vendor.getUser().setIsActive(false);
+        }
         vendorProfileRepository.save(vendor);
 
         // Send rejection email with reason
