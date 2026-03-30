@@ -128,6 +128,23 @@ public class PromotionService {
         promotionRepository.save(promotion);
     }
 
+    @Transactional
+    public PromotionResponseDto activatePromotion(String publicPromotionId) {
+        Promotion promotion = promotionRepository.findByPublicPromotionId(publicPromotionId)
+                .orElseThrow(() -> new EntityNotFoundException("Promotion not found"));
+        promotion.setIsActive(true);
+        long usageCount = promotionUsageRepository.countByPromotion(promotion);
+        return toDto(promotionRepository.save(promotion), usageCount);
+    }
+
+    @Transactional
+    public void deletePromotion(String publicPromotionId) {
+        Promotion promotion = promotionRepository.findByPublicPromotionId(publicPromotionId)
+                .orElseThrow(() -> new EntityNotFoundException("Promotion not found"));
+        promotionUsageRepository.deleteByPromotion(promotion);
+        promotionRepository.delete(promotion);
+    }
+
     @Transactional(readOnly = true)
     public List<PromotionResponseDto> getAllPromotions() {
         return promotionRepository.findAll().stream()

@@ -40,6 +40,9 @@ public class OrderResponseDto {
     private List<OrderLineResponseDto> orderLines;
     private PaymentResponseDto payment;
 
+    private String fulfillmentType;
+    private LocalDateTime requestedFulfillmentTime;
+
     private LocalDateTime orderTime;
     private LocalDateTime createdAt;
     private LocalDateTime confirmedAt;

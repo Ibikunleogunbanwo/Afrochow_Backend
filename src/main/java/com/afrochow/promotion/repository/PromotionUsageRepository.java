@@ -15,6 +15,8 @@ public interface PromotionUsageRepository extends JpaRepository<PromotionUsage, 
 
     long countByPromotion(Promotion promotion);
 
+    void deleteByPromotion(Promotion promotion);
+
     long countByPromotionAndUser(Promotion promotion, User user);
 
     List<PromotionUsage> findByUser(User user);

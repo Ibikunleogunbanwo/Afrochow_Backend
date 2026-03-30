@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
+import com.afrochow.common.enums.ScheduleType;
 
 @Data
 @Builder
@@ -23,4 +24,6 @@ public class ProductUpdateRequestDto {
     private Boolean isGlutenFree;
     private Boolean isSpicy;
     private Long categoryId;
+    private ScheduleType scheduleType;
+    private Integer advanceNoticeHours;
 }

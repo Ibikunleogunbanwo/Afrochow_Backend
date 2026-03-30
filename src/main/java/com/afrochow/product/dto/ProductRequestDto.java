@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
+import com.afrochow.common.enums.ScheduleType;
 
 @Data
 @Builder
@@ -46,4 +47,16 @@ public class ProductRequestDto {
 
     @NotNull(message = "Category ID is required")
     private Long categoryId;
+
+    /** SAME_DAY (default) or ADVANCE_ORDER */
+    @Builder.Default
+    private ScheduleType scheduleType = ScheduleType.SAME_DAY;
+
+    /**
+     * Required when scheduleType = ADVANCE_ORDER.
+     * Minimum hours of advance notice required (1–168).
+     */
+    @Min(value = 1, message = "Advance notice must be at least 1 hour")
+    @Max(value = 168, message = "Advance notice cannot exceed 168 hours (7 days)")
+    private Integer advanceNoticeHours;
 }

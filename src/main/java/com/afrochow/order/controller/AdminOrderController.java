@@ -91,4 +91,13 @@ public class AdminOrderController {
         OrderResponseDto order = orderService.getOrderById(publicOrderId);
         return ResponseEntity.ok(ApiResponse.success(order));
     }
+
+    @PostMapping("/{publicOrderId}/cancel")
+    @Operation(summary = "Cancel order (admin)", description = "Admin override to cancel any non-terminal order")
+    public ResponseEntity<ApiResponse<OrderResponseDto>> cancelOrder(
+            @PathVariable @NotBlank(message = "Order ID cannot be blank") String publicOrderId
+    ) {
+        OrderResponseDto order = orderService.adminCancelOrder(publicOrderId);
+        return ResponseEntity.ok(ApiResponse.success("Order cancelled successfully", order));
+    }
 }

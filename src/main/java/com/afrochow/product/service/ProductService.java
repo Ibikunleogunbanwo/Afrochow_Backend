@@ -1,5 +1,6 @@
 package com.afrochow.product.service;
 
+import com.afrochow.common.enums.ScheduleType;
 import com.afrochow.product.dto.ProductRequestDto;
 import com.afrochow.product.dto.ProductUpdateRequestDto;
 import com.afrochow.product.dto.ProductResponseDto;
@@ -374,6 +375,8 @@ public class ProductService {
                 .imageUrl(product.getImageUrl())
                 .available(product.getAvailable())
                 .preparationTimeMinutes(product.getPreparationTimeMinutes())
+                .scheduleType(product.getScheduleType())
+                .advanceNoticeHours(product.getAdvanceNoticeHours())
                 .calories(product.getCalories())
                 .isVegetarian(product.getIsVegetarian())
                 .isVegan(product.getIsVegan())
@@ -413,6 +416,8 @@ public class ProductService {
                 .imageUrl(dto.getImageUrl())
                 .available(dto.getAvailable())
                 .preparationTimeMinutes(dto.getPreparationTimeMinutes())
+                .scheduleType(dto.getScheduleType() != null ? dto.getScheduleType() : ScheduleType.SAME_DAY)
+                .advanceNoticeHours(dto.getAdvanceNoticeHours())
                 .calories(dto.getCalories())
                 .isVegetarian(dto.getIsVegetarian())
                 .isVegan(dto.getIsVegan())
@@ -433,5 +438,7 @@ public class ProductService {
         if (dto.getIsVegan() != null) product.setIsVegan(dto.getIsVegan());
         if (dto.getIsGlutenFree() != null) product.setIsGlutenFree(dto.getIsGlutenFree());
         if (dto.getIsSpicy() != null) product.setIsSpicy(dto.getIsSpicy());
+        if (dto.getScheduleType() != null) product.setScheduleType(dto.getScheduleType());
+        if (dto.getAdvanceNoticeHours() != null) product.setAdvanceNoticeHours(dto.getAdvanceNoticeHours());
     }
 }

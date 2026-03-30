@@ -144,6 +144,22 @@ public class PromotionController {
         return ResponseEntity.ok(ApiResponse.success("Promotion deactivated"));
     }
 
+    @PatchMapping("/admin/{publicPromotionId}/activate")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Activate promotion", description = "Reactivate a deactivated promotion (admin only)")
+    public ResponseEntity<ApiResponse<PromotionResponseDto>> activatePromotion(@PathVariable String publicPromotionId) {
+        PromotionResponseDto updated = promotionService.activatePromotion(publicPromotionId);
+        return ResponseEntity.ok(ApiResponse.success("Promotion activated", updated));
+    }
+
+    @DeleteMapping("/admin/{publicPromotionId}/permanent")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @Operation(summary = "Delete promotion", description = "Permanently delete a promotion (admin only)")
+    public ResponseEntity<ApiResponse<Void>> deletePromotion(@PathVariable String publicPromotionId) {
+        promotionService.deletePromotion(publicPromotionId);
+        return ResponseEntity.ok(ApiResponse.success("Promotion deleted"));
+    }
+
     @GetMapping("/admin")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Get all promotions", description = "List all promotions with usage stats (admin only)")
