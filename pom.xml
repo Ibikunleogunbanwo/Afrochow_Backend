@@ -160,11 +160,17 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- pom.xml -->
+		<!-- Stripe -->
 		<dependency>
 			<groupId>com.stripe</groupId>
 			<artifactId>stripe-java</artifactId>
 			<version>25.3.0</version>
+		</dependency>
+
+		<!-- Gson -->
+		<dependency>
+			<groupId>com.google.code.gson</groupId>
+			<artifactId>gson</artifactId>
 		</dependency>
 
 		<!-- Environment Variables Support (.env file) -->

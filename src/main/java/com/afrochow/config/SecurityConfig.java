@@ -134,7 +134,7 @@ public class SecurityConfig {
                         .requestMatchers("/stats/**").permitAll()
 
                         // ── STRIPE WEBHOOK (Stripe calls this directly, no JWT) ───
-                        .requestMatchers(HttpMethod.POST, "/stripe/webhook").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/stripe/webhook", "/api/stripe/webhook").permitAll()
 
                         // ── AUTH ──────────────────────────────────────────
                         .requestMatchers(
