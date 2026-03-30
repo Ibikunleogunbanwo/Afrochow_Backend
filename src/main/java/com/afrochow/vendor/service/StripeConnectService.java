@@ -47,14 +47,42 @@ public class StripeConnectService {
             String stripeAccountId = vendor.getStripeAccountId();
 
             if (stripeAccountId == null || stripeAccountId.isBlank()) {
-                // Create a new Express account
+                // Pre-fill every field we already have so vendors skip those steps on Stripe's form
+                var user    = vendor.getUser();
+                var address = vendor.getAddress();
+
+                AccountCreateParams.Individual.Builder individual = AccountCreateParams.Individual.builder()
+                        .setEmail(user.getEmail());
+
+                if (user.getFirstName() != null && !user.getFirstName().isBlank())
+                    individual.setFirstName(user.getFirstName());
+                if (user.getLastName() != null && !user.getLastName().isBlank())
+                    individual.setLastName(user.getLastName());
+                if (user.getPhone() != null && !user.getPhone().isBlank())
+                    individual.setPhone(user.getPhone());
+
+                if (address != null) {
+                    AccountCreateParams.Individual.Address.Builder addr =
+                            AccountCreateParams.Individual.Address.builder()
+                                    .setCountry("CA");
+                    if (address.getAddressLine() != null) addr.setLine1(address.getAddressLine());
+                    if (address.getCity()        != null) addr.setCity(address.getCity());
+                    if (address.getPostalCode()  != null) addr.setPostalCode(address.getPostalCode());
+                    if (address.getProvince()    != null) addr.setState(address.getProvince().name());
+                    individual.setAddress(addr.build());
+                }
+
                 AccountCreateParams params = AccountCreateParams.builder()
                         .setType(AccountCreateParams.Type.EXPRESS)
-                        .setEmail(vendor.getUser().getEmail())
+                        .setCountry("CA")
+                        .setDefaultCurrency("cad")
+                        .setEmail(user.getEmail())
                         .setBusinessType(AccountCreateParams.BusinessType.INDIVIDUAL)
+                        .setIndividual(individual.build())
                         .putMetadata("vendorId", String.valueOf(vendor.getId()))
                         .putMetadata("publicVendorId", vendor.getPublicVendorId())
                         .setBusinessProfile(AccountCreateParams.BusinessProfile.builder()
+                                .setName(vendor.getRestaurantName())
                                 .setUrl(appBaseUrl + "/restaurant/" + vendor.getPublicVendorId())
                                 .build())
                         .build();
