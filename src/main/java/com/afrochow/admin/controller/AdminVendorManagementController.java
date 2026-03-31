@@ -13,6 +13,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import com.stripe.exception.InvalidRequestException;
+import com.stripe.exception.StripeException;
+import com.stripe.model.Account;
 import java.math.BigDecimal;
 import org.springframework.web.bind.annotation.RequestBody;
 import java.time.LocalDateTime;
@@ -204,6 +207,60 @@ public class AdminVendorManagementController {
                 "Vendor application rejected", toSummary(vendor)));
     }
 
+    // ========== STRIPE ACCOUNT LINKING ==========
+
+    @lombok.Data
+    public static class LinkStripeAccountDto {
+        private String stripeAccountId;
+    }
+
+    @Transactional
+    @PatchMapping("/{publicVendorId}/stripe-account")
+    @Operation(summary = "Link Stripe account", description = "Link or replace a vendor's Stripe Connect account ID")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> linkStripeAccount(
+            @PathVariable String publicVendorId,
+            @RequestBody LinkStripeAccountDto body) {
+
+        String accountId = body.getStripeAccountId();
+        if (accountId == null || accountId.isBlank() || !accountId.trim().startsWith("acct_")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.<VendorSummaryDto>builder()
+                            .success(false)
+                            .message("Invalid Stripe account ID — must start with 'acct_'")
+                            .build());
+        }
+
+        // Verify the account actually exists in Stripe and belongs to our platform
+        Account stripeAccount;
+        try {
+            stripeAccount = Account.retrieve(accountId.trim());
+        } catch (InvalidRequestException e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.<VendorSummaryDto>builder()
+                            .success(false)
+                            .message("Stripe account not found: " + accountId.trim())
+                            .build());
+        } catch (StripeException e) {
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.<VendorSummaryDto>builder()
+                            .success(false)
+                            .message("Could not verify Stripe account: " + e.getMessage())
+                            .build());
+        }
+
+        boolean onboardingComplete = Boolean.TRUE.equals(stripeAccount.getDetailsSubmitted());
+
+        VendorProfile vendor = getVendor(publicVendorId);
+        vendor.setStripeAccountId(accountId.trim());
+        vendor.setStripeOnboardingComplete(onboardingComplete);
+        vendorProfileRepository.save(vendor);
+
+        String msg = onboardingComplete
+                ? "Stripe account linked and marked as fully onboarded"
+                : "Stripe account linked — onboarding not yet complete on Stripe";
+        return ResponseEntity.ok(ApiResponse.success(msg, toSummary(vendor)));
+    }
+
     // ========== HELPER METHODS ==========
 
     private VendorProfile getVendor(String publicVendorId) {
@@ -221,6 +278,7 @@ public class AdminVendorManagementController {
                 .isActive(vendor.getIsActive())
                 .verifiedAt(vendor.getVerifiedAt())
                 .createdAt(vendor.getCreatedAt())
+                .stripeOnboardingComplete(vendor.getStripeOnboardingComplete())
                 .build();
     }
 
@@ -265,6 +323,9 @@ public class AdminVendorManagementController {
                 // Timestamps
                 .createdAt(v.getCreatedAt())
                 .updatedAt(v.getUpdatedAt())
+                // Stripe
+                .stripeAccountId(v.getStripeAccountId())
+                .stripeOnboardingComplete(v.getStripeOnboardingComplete())
                 .build();
     }
 
@@ -280,6 +341,7 @@ public class AdminVendorManagementController {
         private Boolean isActive;
         private java.time.LocalDateTime verifiedAt;
         private java.time.LocalDateTime createdAt;
+        private Boolean stripeOnboardingComplete;
     }
 
     @lombok.Data
@@ -323,5 +385,8 @@ public class AdminVendorManagementController {
         // Timestamps
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
+        // Stripe
+        private String stripeAccountId;
+        private Boolean stripeOnboardingComplete;
     }
 }

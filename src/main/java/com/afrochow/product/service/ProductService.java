@@ -405,6 +405,9 @@ public class ProductService {
                 .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
                 .averageRating(product.getAverageRating())
                 .reviewCount(product.getReviewCount())
+                .scheduleType(product.getScheduleType())
+                .preparationTimeMinutes(product.getPreparationTimeMinutes())
+                .advanceNoticeHours(product.getAdvanceNoticeHours())
                 .build();
     }
 

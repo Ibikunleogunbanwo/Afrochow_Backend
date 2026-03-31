@@ -531,6 +531,7 @@ public class SearchService {
             Boolean isVegetarian,
             Boolean isVegan,
             Boolean isGlutenFree,
+            com.afrochow.common.enums.ScheduleType scheduleType,
             int page,
             int size) {
 
@@ -549,12 +550,20 @@ public class SearchService {
                 isGlutenFree
         );
 
-        long totalElements = matched.size();
+        // Apply scheduleType filter in Java — Hibernate 6 cannot reliably evaluate
+        // `:enumParam IS NULL` for typed enum parameters in JPQL
+        List<Product> filtered = scheduleType == null
+                ? matched
+                : matched.stream()
+                         .filter(p -> scheduleType.equals(p.getScheduleType()))
+                         .toList();
+
+        long totalElements = filtered.size();
         int  totalPages    = (int) Math.ceil((double) totalElements / size);
         int  startIndex    = Math.min(page * size, (int) totalElements);
         int  endIndex      = Math.min(startIndex + size, (int) totalElements);
 
-        List<ProductResponseDto> pageContent = matched
+        List<ProductResponseDto> pageContent = filtered
                 .subList(startIndex, endIndex)
                 .stream()
                 .map(this::toProductResponseDto)
