@@ -245,13 +245,14 @@ public class SearchController {
             @RequestParam(required = false) Boolean isVegetarian,
             @RequestParam(required = false) Boolean isVegan,
             @RequestParam(required = false) Boolean isGlutenFree,
+            @RequestParam(required = false) com.afrochow.common.enums.ScheduleType scheduleType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         int pageSize = Math.min(size, 100);
 
         ApiResponse.PageResponse<ProductResponseDto> paginatedProducts = searchService.advancedProductSearch(
-                query, city, categoryId, minPrice, maxPrice, isVegetarian, isVegan, isGlutenFree, page, pageSize);
+                query, city, categoryId, minPrice, maxPrice, isVegetarian, isVegan, isGlutenFree, scheduleType, page, pageSize);
         return ResponseEntity.ok(ApiResponse.success("Products retrieved successfully", paginatedProducts));
     }
 

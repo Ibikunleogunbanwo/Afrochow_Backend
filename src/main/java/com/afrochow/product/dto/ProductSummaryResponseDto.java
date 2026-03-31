@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.afrochow.common.enums.ScheduleType;
 import java.math.BigDecimal;
 
 @Data
@@ -22,4 +23,7 @@ public class ProductSummaryResponseDto {
     private String categoryName;
     private Double averageRating;
     private Integer reviewCount;
+    private ScheduleType scheduleType;
+    private Integer preparationTimeMinutes;
+    private Integer advanceNoticeHours;
 }

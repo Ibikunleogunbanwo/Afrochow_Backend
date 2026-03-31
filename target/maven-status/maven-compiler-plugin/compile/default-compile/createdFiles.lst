@@ -292,6 +292,7 @@ com/afrochow/notification/model/Notification.class
 com/afrochow/product/dto/ProductRequestDto.class
 com/afrochow/search/dto/PopularCuisineDto.class
 com/afrochow/common/exceptions/ProductUnavailableException.class
+com/afrochow/admin/controller/AdminVendorManagementController$LinkStripeAccountDto.class
 com/afrochow/review/service/ReviewService$VendorReviewStats$VendorReviewStatsBuilder.class
 com/afrochow/security/model/LoginAttempt$LoginAttemptBuilder.class
 com/afrochow/analytics/AnalyticsService$OrderSummary$OrderSummaryBuilder.class

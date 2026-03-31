@@ -195,6 +195,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /**
      * Search available products by name only, from active and verified vendors.
      * Optionally filter by city — pass null to skip city filter.
+     * scheduleType filtering is handled in the service layer (Hibernate 6 enum IS NULL limitation).
      */
     @Query("""
         SELECT p FROM Product p
