@@ -40,8 +40,8 @@ public class StatsService {
 
         // Vendor stats
         Long totalVendors = vendorProfileRepository.count();
-        Long totalActiveVendors = vendorProfileRepository.countByIsActiveTrue();
-        Long totalVerifiedVendors = vendorProfileRepository.countByIsVerifiedTrueAndIsActiveTrue();
+        Long totalActiveVendors = vendorProfileRepository.countActiveVendors();
+        Long totalVerifiedVendors = vendorProfileRepository.countActiveAndVerifiedVendors();
 
         // Customer stats (verified customers only)
         Long totalCustomers = userRepository.countByRoleAndEmailVerifiedTrue(Role.CUSTOMER);

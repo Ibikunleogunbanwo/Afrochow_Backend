@@ -20,6 +20,7 @@ public class ProductSummaryResponseDto {
     private BigDecimal price;
     private String imageUrl;
     private Boolean available;
+    private Long categoryId;
     private String categoryName;
     private Double averageRating;
     private Integer reviewCount;
