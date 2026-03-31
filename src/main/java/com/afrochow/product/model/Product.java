@@ -66,7 +66,7 @@ public class Product {
      * ADVANCE_ORDER: must be placed advanceNoticeHours before the requested fulfilment time.
      */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 20, columnDefinition = "VARCHAR(20) NOT NULL DEFAULT 'SAME_DAY'")
     @Builder.Default
     private ScheduleType scheduleType = ScheduleType.SAME_DAY;
 
