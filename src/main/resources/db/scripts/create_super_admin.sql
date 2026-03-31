@@ -6,23 +6,23 @@
 -- create all other admins via:
 --   POST /api/auth/register/admin
 --
--- DEFAULT CREDENTIALS (change immediately after login):
---   Email    : admin@example.com
---   Password : REDACTED
---
--- BCrypt hash (12 rounds) for REDACTED:
---   REDACTED_HASH
+-- Before running:
+--   1. Generate a BCrypt hash (12 rounds) for your chosen password:
+--      ./mvnw compile exec:java -Dexec.mainClass="util.com.afrochow.PasswordHashGenerator"
+--   2. Replace <BCRYPT_HASH_HERE> below with the generated hash.
+--   3. Replace <YOUR_ADMIN_EMAIL> with the real admin email.
 --
 -- SECURITY REMINDERS:
---   1. Change the password immediately after first login.
+--   1. Never commit real credentials or hashes to version control.
 --   2. Run this script only once.
---   3. Delete or restrict access to this file after use.
+--   3. Change the password immediately after first login.
+--   4. Delete or restrict access to this file after use.
 -- =====================================================
 
 -- =====================================================
 -- SAFETY GUARD — skip silently if already exists
 -- =====================================================
-SET @exists = (SELECT COUNT(*) FROM users WHERE email = 'admin@example.com');
+SET @exists = (SELECT COUNT(*) FROM users WHERE email = '<YOUR_ADMIN_EMAIL>');
 
 -- =====================================================
 -- 1. INSERT USER ROW
@@ -50,13 +50,13 @@ INSERT INTO users (
     updated_at
 )
 SELECT
-    'SPA-000000000001',                                                        -- 16 chars: "SPA-" + 12 digits
+    'SPA-000000000001',        -- 16 chars: "SPA-" + 12 digits
     'systemadmin',
-    'admin@example.com',
-    'REDACTED_HASH',         -- REDACTED
+    '<YOUR_ADMIN_EMAIL>',
+    '<BCRYPT_HASH_HERE>',      -- generate with PasswordHashGenerator utility
     'System',
     'Administrator',
-    '15870000000',                                                             -- stored as digits only (setPhone strips formatting)
+    '15870000000',             -- stored as digits only (setPhone strips formatting)
     'SUPERADMIN',
     true,
     true,
@@ -91,7 +91,7 @@ SELECT
     u.user_id,
     'MANAGEMENT',
     'SUPER_ADMIN',
-    '10000001',                   -- 8 numeric digits
+    '10000001',   -- 8 numeric digits
     true,
     true,
     true,
@@ -102,7 +102,7 @@ SELECT
     NOW(),
     NOW()
 FROM users u
-WHERE u.email = 'admin@example.com'
+WHERE u.email = '<YOUR_ADMIN_EMAIL>'
   AND NOT EXISTS (
       SELECT 1 FROM admin_profile ap WHERE ap.user_id = u.user_id
   );
@@ -129,7 +129,7 @@ WHERE u.email = 'admin@example.com'
 --     ap.can_resolve_disputes
 -- FROM users u
 -- JOIN admin_profile ap ON u.user_id = ap.user_id
--- WHERE u.email = 'admin@example.com';
+-- WHERE u.email = '<YOUR_ADMIN_EMAIL>';
 
 -- =====================================================
 -- HOW TO RUN
@@ -150,7 +150,7 @@ WHERE u.email = 'admin@example.com'
 -- =====================================================
 -- AFTER FIRST LOGIN
 -- =====================================================
--- 1. POST /api/auth/login  { "email": "admin@example.com", "password": "REDACTED" }
+-- 1. POST /api/auth/login  { "email": "<YOUR_ADMIN_EMAIL>", "password": "<your-chosen-password>" }
 -- 2. Use the returned JWT to call:
 --    POST /api/auth/register/admin   (Authorization: Bearer <token>)
 --    to create real admin accounts for your team.
