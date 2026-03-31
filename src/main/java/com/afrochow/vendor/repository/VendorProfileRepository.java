@@ -26,7 +26,8 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
     Optional<VendorProfile> findByUser_Username(String username);
 
     // ========== FIND BY PUBLIC VENDOR ID ==========
-    // Alias used by AdminVendorManagementController
+    // publicVendorId is @Transient (delegates to user.publicUserId) — no DB column,
+    // so a derived query is not possible; delegate to the user path instead.
     default Optional<VendorProfile> findByPublicVendorId(String publicVendorId) {
         return findByUser_PublicUserId(publicVendorId);
     }
@@ -49,10 +50,19 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     List<VendorProfile> findByCuisineTypeContainingIgnoreCase(String cuisineType);
 
-    // ========== FIND OPEN VENDORS ==========
+    // ========== ACTIVE + VERIFIED ==========
 
+    // Name reflects the query accurately — the actual open-now check is @Transient
+    // and must be evaluated in-memory in SearchService.getOpenVendors().
     @Query("SELECT v FROM VendorProfile v WHERE v.isActive = true AND v.isVerified = true")
-    List<VendorProfile> findOpenVendors();
+    List<VendorProfile> findActiveAndVerifiedVendors();
+
+    // ========== JOIN FETCH (prevents N+1) ==========
+
+    // Used by getPopularCuisines() — loads vendors + their products in one query.
+    // LEFT JOIN FETCH keeps vendors with zero products; DISTINCT removes join duplicates.
+    @Query("SELECT DISTINCT v FROM VendorProfile v LEFT JOIN FETCH v.products WHERE v.isActive = :isActive")
+    List<VendorProfile> findByIsActiveWithProducts(@Param("isActive") Boolean isActive);
 
     // ========== TOP RATED VENDORS ==========
 
@@ -81,29 +91,30 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     // ========== FIND BY COORDINATES (HAVERSINE) ==========
 
-    /**
-     * Returns distinct verified+active vendors within radiusKm of the given lat/lng,
-     * ordered by ascending distance. Mirrors the Haversine logic in ProductRepository.
-     */
-    @Query("""
-            SELECT DISTINCT v FROM VendorProfile v
-            JOIN v.address a
-            WHERE v.isActive  = true
-              AND v.isVerified = true
-              AND a.latitude   IS NOT NULL
-              AND a.longitude  IS NOT NULL
+    // Native SQL: JPQL has no alias support for computed expressions, so the
+    // Haversine formula would have to be duplicated in both WHERE and ORDER BY
+    // when written as JPQL. Native SQL is identical in behaviour but is testable
+    // directly in a DB client and allows a derived-table refactor in the future.
+    @Query(value = """
+            SELECT DISTINCT v.*
+            FROM vendor_profile v
+            JOIN address a ON a.id = v.address_id
+            WHERE v.is_active   = true
+              AND v.is_verified = true
+              AND a.latitude    IS NOT NULL
+              AND a.longitude   IS NOT NULL
               AND (6371 * ACOS(LEAST(1.0,
-                    COS(RADIANS(:lat)) * COS(RADIANS(a.latitude))  *
-                    COS(RADIANS(a.longitude) - RADIANS(:lng)) +
-                    SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
+                    COS(RADIANS(:lat)) * COS(RADIANS(a.latitude))
+                    * COS(RADIANS(a.longitude) - RADIANS(:lng))
+                    + SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
                   ))) <= :radiusKm
             ORDER BY (6371 * ACOS(LEAST(1.0,
-                    COS(RADIANS(:lat)) * COS(RADIANS(a.latitude))  *
-                    COS(RADIANS(a.longitude) - RADIANS(:lng)) +
-                    SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
+                    COS(RADIANS(:lat)) * COS(RADIANS(a.latitude))
+                    * COS(RADIANS(a.longitude) - RADIANS(:lng))
+                    + SIN(RADIANS(:lat)) * SIN(RADIANS(a.latitude))
                   ))) ASC,
-                  v.totalOrdersCompleted DESC
-            """)
+                  v.total_orders_completed DESC
+            """, nativeQuery = true)
     List<VendorProfile> findVendorsNearCoordinates(
             @Param("lat") double lat,
             @Param("lng") double lng,
@@ -115,16 +126,6 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
     @Query("SELECT COUNT(v) FROM VendorProfile v WHERE v.isActive = true")
     long countActiveVendors();
 
-    // Alias used by StatsService
-    default long countByIsActiveTrue() {
-        return countActiveVendors();
-    }
-
     @Query("SELECT COUNT(v) FROM VendorProfile v WHERE v.isActive = true AND v.isVerified = true")
     long countActiveAndVerifiedVendors();
-
-    // Alias used by StatsService
-    default long countByIsVerifiedTrueAndIsActiveTrue() {
-        return countActiveAndVerifiedVendors();
-    }
 }

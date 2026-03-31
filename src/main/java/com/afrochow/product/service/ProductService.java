@@ -402,6 +402,7 @@ public class ProductService {
                 .price(product.getPrice())
                 .imageUrl(product.getImageUrl())
                 .available(product.getAvailable())
+                .categoryId(product.getCategory() != null ? product.getCategory().getCategoryId() : null)
                 .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
                 .averageRating(product.getAverageRating())
                 .reviewCount(product.getReviewCount())
