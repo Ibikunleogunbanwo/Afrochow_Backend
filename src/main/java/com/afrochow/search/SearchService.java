@@ -648,7 +648,6 @@ public class SearchService {
         // ========== MAPPING ==========
 
         private ProductResponseDto toProductResponseDto(Product product) {
-        private ProductResponseDto toProductResponseDto(Product product) {
                 VendorProfile vendor   = product.getVendor();
                 Category category = product.getCategory();
 
