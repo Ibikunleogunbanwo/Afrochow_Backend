@@ -14,6 +14,8 @@ import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCaptureParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
@@ -146,6 +150,13 @@ public class PaymentService {
                 payment.setVendorPayout(
                         BigDecimal.valueOf(amountInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                 paymentRepository.save(payment);
+                log.info("payment.authorized publicOrderId={} paymentId={} transactionId={} amount={} fee={} vendorPayout={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId(),
+                        payment.getAmount(),
+                        payment.getPlatformFeeAmount(),
+                        payment.getVendorPayout());
 
             } else if ("requires_action".equals(intent.getStatus())) {
                 // 3D Secure required — client secret is surfaced to the frontend
@@ -153,6 +164,10 @@ public class PaymentService {
                 payment.setTransactionId(intent.getId());
                 payment.setNotes("Requires 3D Secure authentication");
                 paymentRepository.save(payment);
+                log.info("payment.requires_action publicOrderId={} paymentId={} transactionId={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId());
                 throw new RuntimeException("3DS_REQUIRED:" + intent.getClientSecret());
 
             } else {
@@ -164,6 +179,10 @@ public class PaymentService {
             payment.failPayment();
             payment.setNotes("Stripe error: " + e.getMessage());
             paymentRepository.save(payment);
+            log.warn("payment.failed publicOrderId={} paymentId={} message={}",
+                    order.getPublicOrderId(),
+                    payment.getPaymentId(),
+                    e.getMessage());
 
             notificationService.notifyPaymentFailed(
                     order.getCustomer().getUser().getPublicUserId(),
@@ -209,6 +228,11 @@ public class PaymentService {
             if ("succeeded".equals(captured.getStatus())) {
                 payment.completePayment(payment.getCardLast4(), payment.getCardBrand());
                 paymentRepository.save(payment);
+                log.info("payment.captured publicOrderId={} paymentId={} transactionId={} amount={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId(),
+                        payment.getAmount());
 
                 notificationService.notifyPaymentSuccess(
                         order.getCustomer().getUser().getPublicUserId(),
@@ -222,6 +246,11 @@ public class PaymentService {
             }
 
         } catch (StripeException e) {
+            log.warn("payment.capture.failed publicOrderId={} paymentId={} transactionId={} message={}",
+                    order.getPublicOrderId(),
+                    payment.getPaymentId(),
+                    payment.getTransactionId(),
+                    e.getMessage());
             throw new RuntimeException("Payment capture failed: " + e.getMessage());
         }
     }
@@ -254,6 +283,10 @@ public class PaymentService {
                 intent.cancel();
                 payment.cancelAuthorization();
                 paymentRepository.save(payment);
+                log.info("payment.authorization.cancelled publicOrderId={} paymentId={} transactionId={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId());
 
             } else if (payment.getStatus() == PaymentStatus.COMPLETED) {
                 // ── Payment was captured — issue a real Stripe refund ──
@@ -271,11 +304,21 @@ public class PaymentService {
                 com.stripe.model.Refund.create(refundBuilder.build());
                 payment.refundPayment();
                 paymentRepository.save(payment);
+                log.info("payment.refunded publicOrderId={} paymentId={} transactionId={} amount={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId(),
+                        payment.getAmount());
 
             }
             // All other statuses (PENDING, FAILED, CANCELLED, REFUNDED) — nothing to do
 
         } catch (StripeException e) {
+            log.warn("payment.refund_or_cancel.failed publicOrderId={} paymentId={} transactionId={} message={}",
+                    order.getPublicOrderId(),
+                    payment.getPaymentId(),
+                    payment.getTransactionId(),
+                    e.getMessage());
             throw new RuntimeException("Stripe refund/cancel failed: " + e.getMessage());
         }
     }
