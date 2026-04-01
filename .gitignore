@@ -40,3 +40,4 @@ uploads/
 
 # ===== COMPILED CLASSES =====
 *.class
+.claude/
