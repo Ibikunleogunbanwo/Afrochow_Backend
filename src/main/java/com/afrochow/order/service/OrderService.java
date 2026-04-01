@@ -32,6 +32,8 @@ import com.afrochow.user.repository.UserRepository;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +46,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     private final OrderRepository orderRepository;
     private final CustomerProfileRepository customerProfileRepository;
@@ -239,6 +243,12 @@ public class OrderService {
         // ── Save order ────────────────────────────────────────────────────────
 
         Order savedOrder = orderRepository.save(order);
+        log.info("order.created publicOrderId={} customerUserId={} vendorPublicId={} totalAmount={} status={}",
+                savedOrder.getPublicOrderId(),
+                customerUserId,
+                request.getVendorPublicId(),
+                savedOrder.getTotalAmount(),
+                savedOrder.getStatus());
 
         // ── Create pending payment record ─────────────────────────────────────
 
@@ -249,12 +259,19 @@ public class OrderService {
                 .paymentMethod(PaymentMethod.CREDIT_CARD)
                 .build();
         paymentRepository.save(payment);
+        log.info("payment.record.created publicOrderId={} paymentId={} paymentStatus={}",
+                savedOrder.getPublicOrderId(),
+                payment.getPaymentId(),
+                payment.getStatus());
 
         // ── Charge via Stripe ─────────────────────────────────────────────────
 
         try {
             paymentService.chargeOrder(savedOrder, request.getPaymentMethodId());
         } catch (RuntimeException e) {
+            log.warn("payment.charge.failed publicOrderId={} message={}",
+                    savedOrder.getPublicOrderId(),
+                    e.getMessage());
             throw new IllegalStateException("Payment failed: " + e.getMessage());
         }
 
@@ -323,6 +340,11 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
+        log.info("order.cancelled publicOrderId={} actor=customer customerUserId={} fromStatus={} toStatus={}",
+                updatedOrder.getPublicOrderId(),
+                customerUserId,
+                previousStatus,
+                updatedOrder.getStatus());
         notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus);
 
         return toResponseDto(updatedOrder);
@@ -342,6 +364,10 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
+        log.info("order.cancelled publicOrderId={} actor=admin fromStatus={} toStatus={}",
+                updatedOrder.getPublicOrderId(),
+                previousStatus,
+                updatedOrder.getStatus());
         notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus);
 
         return toResponseDto(updatedOrder);
@@ -407,6 +433,11 @@ public class OrderService {
 
         order.updateStatus(OrderStatus.CONFIRMED);
         Order updatedOrder = orderRepository.save(order);
+        log.info("order.accepted publicOrderId={} actor=vendor username={} fromStatus={} toStatus={}",
+                updatedOrder.getPublicOrderId(),
+                username,
+                OrderStatus.PENDING,
+                updatedOrder.getStatus());
 
         // Capture the previously-authorised payment now that the vendor has confirmed.
         // If capture fails, @Transactional rolls back the status update — order stays PENDING.
@@ -431,6 +462,11 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
+        log.info("order.rejected publicOrderId={} actor=vendor username={} fromStatus={} toStatus={}",
+                updatedOrder.getPublicOrderId(),
+                username,
+                previousStatus,
+                updatedOrder.getStatus());
         notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus);
         return toResponseDto(updatedOrder);
     }

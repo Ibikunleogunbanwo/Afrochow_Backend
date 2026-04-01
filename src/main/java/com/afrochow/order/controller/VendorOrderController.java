@@ -52,8 +52,6 @@ public class VendorOrderController {
     private String getUsername(UserDetails userDetails) {
         if (userDetails == null) {
             throw new IllegalStateException("User authentication details are missing");
-        } else {
-            userDetails.getUsername();
         }
         return userDetails.getUsername();
     }
