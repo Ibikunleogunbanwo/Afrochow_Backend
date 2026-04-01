@@ -40,6 +40,9 @@ uploads/
 
 # ===== COMPILED CLASSES =====
 *.class
+<<<<<<< HEAD
 
 # ===== CLAUDE CODE =====
+=======
+>>>>>>> dev
 .claude/
