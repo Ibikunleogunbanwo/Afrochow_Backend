@@ -32,6 +32,7 @@ import com.afrochow.user.repository.UserRepository;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
+
+    @Value("${order.sla.accept-window-minutes:10}")
+    private int slaAcceptWindowMinutes;
 
     private final OrderRepository orderRepository;
     private final CustomerProfileRepository customerProfileRepository;
@@ -435,6 +439,25 @@ public class OrderService {
         return toResponseDto(updatedOrder);
     }
 
+    /**
+     * Called by {@link com.afrochow.order.service.OrderSlaService} when a PENDING order
+     * exceeds the vendor acceptance window.  Uses the same refund + cancel path as
+     * {@link #rejectOrder} but does not require a vendor principal — the scheduler acts
+     * as the system actor.
+     */
+    @Transactional
+    public void autoExpireOrder(Order order) {
+        if (order.getStatus() != OrderStatus.PENDING) return; // guard: job may race
+        paymentService.refundStripeCharge(order);
+        order.updateStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+        notificationService.notifyCustomerOrderCancelled(
+                order.getPublicOrderId(),
+                "Vendor did not respond in time — your order has been automatically cancelled and refunded.",
+                "PENDING"
+        );
+    }
+
     @Transactional
     public OrderResponseDto startPreparingOrder(String username, String publicOrderId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
@@ -614,6 +637,11 @@ public class OrderService {
                         && order.getStatus() == OrderStatus.DELIVERED)
                 .isActive(order.getStatus() != null
                         && order.getStatus() != OrderStatus.CANCELLED)
+                .slaExpiresAt(order.getStatus() == OrderStatus.PENDING && order.getOrderTime() != null
+                        ? order.getOrderTime().plusMinutes(slaAcceptWindowMinutes) : null)
+                .slaRemainingSeconds(order.getStatus() == OrderStatus.PENDING && order.getOrderTime() != null
+                        ? ChronoUnit.SECONDS.between(LocalDateTime.now(),
+                                order.getOrderTime().plusMinutes(slaAcceptWindowMinutes)) : null)
                 .build();
     }
 

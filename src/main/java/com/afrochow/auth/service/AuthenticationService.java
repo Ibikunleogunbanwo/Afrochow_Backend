@@ -390,6 +390,9 @@ public class AuthenticationService {
 
         User user = tokenEntity.getUser();
 
+        // Enforce same password policy as registration
+        passwordPolicyService.validatePassword(request.getNewPassword());
+
         // Revoke all reset tokens for this user — prevents reuse of other outstanding links
         passwordResetTokenRepository.revokeAllUserTokens(user.getUserId());
 
@@ -412,6 +415,9 @@ public class AuthenticationService {
 
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        // Enforce same password policy as registration
+        passwordPolicyService.validatePassword(newPassword);
 
         if (passwordEncoder.matches(newPassword, user.getPassword())) {
             throw new IllegalArgumentException("New password must be different from the current password");

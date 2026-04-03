@@ -19,8 +19,8 @@ public abstract class BaseRegistrationRequest {
     @NotBlank(message = "Password is required")
     @Size(min = 8, max = 128, message = "Password must be between 8 and 128 characters")
     @Pattern(
-            regexp = "^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?]).+$",
-            message = "Password must contain at least one uppercase letter, one number, and one special character"
+            regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?]).+$",
+            message = "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
     )
     protected String password;
 
