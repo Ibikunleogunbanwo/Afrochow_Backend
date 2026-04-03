@@ -31,6 +31,8 @@ desktop.ini
 # ===== LOGS =====
 *.log
 logs/
+*.zip
+*.tmp
 
 # ===== SPRING BOOT =====
 spring.log
