@@ -63,7 +63,7 @@ public class FulfillmentSafetyNetScheduler {
     @SchedulerLock(
             name            = "FulfillmentSafetyNetScheduler",
             lockAtMostFor   = "PT10M",
-            lockAtLeastFor  = "PT25M"
+            lockAtLeastFor  = "PT1M"
     )
     public void runSafetyNet() {
         log.info("SAFETY_NET_START — beginning fulfillment safety net run");
