@@ -1,6 +1,7 @@
 package com.afrochow.order.controller;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.order.dto.MarkDeliveredRequestDto;
 import com.afrochow.order.dto.OrderResponseDto;
 import com.afrochow.order.dto.OrderSummaryResponseDto;
 import com.afrochow.common.enums.OrderStatus;
@@ -52,8 +53,6 @@ public class VendorOrderController {
     private String getUsername(UserDetails userDetails) {
         if (userDetails == null) {
             throw new IllegalStateException("User authentication details are missing");
-        } else {
-            userDetails.getUsername();
         }
         return userDetails.getUsername();
     }
@@ -239,10 +238,12 @@ public class VendorOrderController {
     })
     public ResponseEntity<ApiResponse<OrderResponseDto>> markDelivered(
             @PathVariable @NotBlank(message = "Order ID cannot be blank") String publicOrderId,
+            @RequestBody(required = false) MarkDeliveredRequestDto request,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         String username = getUsername(userDetails);
-        OrderResponseDto order = orderService.markOrderDelivered(username, publicOrderId);
+        BigDecimal finalAmount = request != null ? request.getFinalAmount() : null;
+        OrderResponseDto order = orderService.markOrderDelivered(username, publicOrderId, finalAmount);
         return ResponseEntity.ok(ApiResponse.success("Order marked as delivered", order));
     }
 

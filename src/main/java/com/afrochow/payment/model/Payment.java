@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Entity
 @Table(name = "payment", indexes = {
@@ -27,6 +28,9 @@ public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long paymentId;
+
+    @Column(name = "public_payment_id", nullable = false, unique = true, length = 36)
+    private String publicPaymentId;
 
     @OneToOne
     @JoinColumn(name = "order_id", nullable = false, unique = true)
@@ -67,6 +71,13 @@ public class Payment {
     private LocalDateTime completedAt;
     private LocalDateTime failedAt;
     private LocalDateTime refundedAt;
+
+    @PrePersist
+    void ensurePublicPaymentId() {
+        if (publicPaymentId == null || publicPaymentId.isBlank()) {
+            publicPaymentId = UUID.randomUUID().toString();
+        }
+    }
 
     @Transient
     public Map<String, Boolean> getStatusFlags() {

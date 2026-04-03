@@ -404,14 +404,45 @@ public class NotificationService {
 
     @Transactional
     public void broadcastNotification(com.afrochow.notification.dto.BroadcastNotificationRequestDto dto, String sentBy) {
-        List<User> recipients = switch (dto.getTargetAudience()) {
-            case CUSTOMERS -> userRepository.findAllByRole(com.afrochow.common.enums.Role.CUSTOMER);
-            case VENDORS   -> userRepository.findAllByRole(com.afrochow.common.enums.Role.VENDOR);
-            case ALL       -> userRepository.findAll();
+        final int batchSize = 500;
+
+        long recipientCount = switch (dto.getTargetAudience()) {
+            case CUSTOMERS -> userRepository.countByRole(com.afrochow.common.enums.Role.CUSTOMER);
+            case VENDORS   -> userRepository.countByRole(com.afrochow.common.enums.Role.VENDOR);
+            case ALL       -> userRepository.count();
         };
 
-        for (User user : recipients) {
-            createInAppNotification(user, dto.getType(), dto.getTitle(), dto.getMessage(), null, null);
+        Pageable pageable = PageRequest.of(0, batchSize);
+        while (true) {
+            Page<User> page = switch (dto.getTargetAudience()) {
+                case CUSTOMERS -> userRepository.findAllByRole(com.afrochow.common.enums.Role.CUSTOMER, pageable);
+                case VENDORS   -> userRepository.findAllByRole(com.afrochow.common.enums.Role.VENDOR, pageable);
+                case ALL       -> userRepository.findAll(pageable);
+            };
+
+            if (page.isEmpty()) {
+                break;
+            }
+
+            List<Notification> notifications = page.getContent().stream()
+                    .map(user -> Notification.builder()
+                            .user(user)
+                            .title(dto.getTitle())
+                            .message(dto.getMessage())
+                            .type(dto.getType())
+                            .relatedEntityType(null)
+                            .relatedEntityId(null)
+                            .createdAt(LocalDateTime.now())
+                            .isRead(false)
+                            .build())
+                    .toList();
+
+            notificationRepository.saveAll(notifications);
+
+            if (!page.hasNext()) {
+                break;
+            }
+            pageable = page.nextPageable();
         }
 
         broadcastLogRepository.save(BroadcastLog.builder()
@@ -419,13 +450,13 @@ public class NotificationService {
                 .message(dto.getMessage())
                 .type(dto.getType())
                 .targetAudience(dto.getTargetAudience().name())
-                .recipientCount(recipients.size())
+                .recipientCount((int) recipientCount)
                 .sentAt(java.time.LocalDateTime.now())
                 .sentBy(sentBy)
                 .build());
 
         log.info("Broadcast notification sent to {} recipient(s) [audience={}]: [{}] {}",
-                recipients.size(), dto.getTargetAudience(), dto.getType(), dto.getTitle());
+                recipientCount, dto.getTargetAudience(), dto.getType(), dto.getTitle());
     }
 
     @Transactional(readOnly = true)

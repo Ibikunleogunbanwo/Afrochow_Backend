@@ -13,12 +13,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
  * Receives Stripe webhook events.
@@ -43,12 +45,14 @@ public class StripeWebhookController {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final StripeConnectService stripeConnectService;
+    private final Environment environment;
 
     @Value("${stripe.webhook.secret:}")
     private String webhookSecret;
 
-    public StripeWebhookController(StripeConnectService stripeConnectService) {
+    public StripeWebhookController(StripeConnectService stripeConnectService, Environment environment) {
         this.stripeConnectService = stripeConnectService;
+        this.environment = environment;
     }
 
     @PostMapping
@@ -56,7 +60,7 @@ public class StripeWebhookController {
                description = "Processes Stripe webhook events. Endpoint must be registered in Stripe dashboard.")
     public ResponseEntity<String> handleWebhook(
             HttpServletRequest request,
-            @RequestHeader("Stripe-Signature") String sigHeader
+            @RequestHeader(value = "Stripe-Signature", required = false) String sigHeader
     ) {
         String payload;
         try {
@@ -69,7 +73,24 @@ public class StripeWebhookController {
         Event event;
 
         try {
-            event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
+            boolean isProd = Arrays.asList(environment.getActiveProfiles()).contains("prod");
+            boolean verificationDisabled = webhookSecret == null || webhookSecret.isBlank();
+
+            if (isProd && verificationDisabled) {
+                log.error("Stripe webhook secret is missing in production; refusing to process webhooks");
+                return ResponseEntity.status(500).body("Webhook misconfigured");
+            }
+
+            if (verificationDisabled) {
+                // application.properties documents this behavior for local development/testing
+                log.warn("Stripe webhook verification disabled (stripe.webhook.secret is blank). Do not use in production.");
+                event = Event.GSON.fromJson(payload, Event.class);
+            } else {
+                if (sigHeader == null || sigHeader.isBlank()) {
+                    return ResponseEntity.badRequest().body("Missing Stripe-Signature header");
+                }
+                event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
+            }
         } catch (SignatureVerificationException e) {
             log.warn("Stripe webhook signature verification failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body("Invalid signature");

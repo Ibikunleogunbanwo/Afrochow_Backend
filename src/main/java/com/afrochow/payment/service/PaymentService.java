@@ -11,9 +11,12 @@ import com.afrochow.payment.model.Payment;
 import com.afrochow.payment.repository.PaymentRepository;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
+import com.stripe.net.RequestOptions;
 import com.stripe.param.PaymentIntentCaptureParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +33,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
@@ -74,6 +79,16 @@ public class PaymentService {
 
         if (payment.getStatus() != PaymentStatus.PENDING) {
             throw new IllegalStateException("Payment is not in pending status");
+        }
+
+        if (payment.getTransactionId() != null && !payment.getTransactionId().isBlank()) {
+            // Defensive guard against creating multiple PaymentIntents for the same order.
+            // chargeOrder is expected to be called once per order; if it is retried, Stripe idempotency is also used below.
+            log.warn("payment.charge.skipped_existing_intent publicOrderId={} paymentId={} transactionId={}",
+                    order.getPublicOrderId(),
+                    payment.getPaymentId(),
+                    payment.getTransactionId());
+            return;
         }
 
         String vendorStripeAccountId = order.getVendor().getStripeAccountId();
@@ -121,7 +136,10 @@ public class PaymentService {
                         );
             }
 
-            PaymentIntent intent = PaymentIntent.create(paramsBuilder.build());
+            RequestOptions requestOptions = RequestOptions.builder()
+                    .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":authorize")
+                    .build();
+            PaymentIntent intent = PaymentIntent.create(paramsBuilder.build(), requestOptions);
 
             if ("requires_capture".equals(intent.getStatus())) {
                 // Authorization succeeded — card hold placed, money not yet moved.
@@ -146,6 +164,13 @@ public class PaymentService {
                 payment.setVendorPayout(
                         BigDecimal.valueOf(amountInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                 paymentRepository.save(payment);
+                log.info("payment.authorized publicOrderId={} paymentId={} transactionId={} amount={} fee={} vendorPayout={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId(),
+                        payment.getAmount(),
+                        payment.getPlatformFeeAmount(),
+                        payment.getVendorPayout());
 
             } else if ("requires_action".equals(intent.getStatus())) {
                 // 3D Secure required — client secret is surfaced to the frontend
@@ -153,6 +178,10 @@ public class PaymentService {
                 payment.setTransactionId(intent.getId());
                 payment.setNotes("Requires 3D Secure authentication");
                 paymentRepository.save(payment);
+                log.info("payment.requires_action publicOrderId={} paymentId={} transactionId={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId());
                 throw new RuntimeException("3DS_REQUIRED:" + intent.getClientSecret());
 
             } else {
@@ -164,6 +193,10 @@ public class PaymentService {
             payment.failPayment();
             payment.setNotes("Stripe error: " + e.getMessage());
             paymentRepository.save(payment);
+            log.warn("payment.failed publicOrderId={} paymentId={} message={}",
+                    order.getPublicOrderId(),
+                    payment.getPaymentId(),
+                    e.getMessage());
 
             notificationService.notifyPaymentFailed(
                     order.getCustomer().getUser().getPublicUserId(),
@@ -177,17 +210,18 @@ public class PaymentService {
 
     /**
      * Capture a previously-authorised PaymentIntent.
-     * Called by OrderService.acceptOrder() when the vendor accepts the order.
+     * Called when the vendor marks an order delivered, or by the safety net scheduler.
      * This is the moment money actually moves from the customer to Afrochow/vendor.
      *
      * On success : updates Payment record to COMPLETED.
-     * On failure : throws RuntimeException — acceptOrder is @Transactional so the
-     *              status update to CONFIRMED rolls back, keeping the order PENDING.
+     * On failure : throws RuntimeException.
      *
-     * @param order the order whose payment is to be captured
+     * @param order       the order whose payment is to be captured
+     * @param finalAmount optional partial capture amount (e.g. item substituted).
+     *                    Pass null to capture the full authorized amount.
      */
     @Transactional
-    public void captureStripePayment(Order order) {
+    public void captureStripePayment(Order order, BigDecimal finalAmount) {
         Payment payment = paymentRepository.findByOrder(order)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Payment record not found for order: " + order.getPublicOrderId()));
@@ -204,11 +238,29 @@ public class PaymentService {
 
         try {
             PaymentIntent intent = PaymentIntent.retrieve(payment.getTransactionId());
-            PaymentIntent captured = intent.capture(PaymentIntentCaptureParams.builder().build());
+            RequestOptions requestOptions = RequestOptions.builder()
+                    .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":capture")
+                    .build();
+
+            PaymentIntentCaptureParams.Builder captureParamsBuilder = PaymentIntentCaptureParams.builder();
+            if (finalAmount != null) {
+                long finalAmountCents = finalAmount
+                        .multiply(BigDecimal.valueOf(100))
+                        .setScale(0, java.math.RoundingMode.HALF_UP)
+                        .longValueExact();
+                captureParamsBuilder.setAmountToCapture(finalAmountCents);
+            }
+
+            PaymentIntent captured = intent.capture(captureParamsBuilder.build(), requestOptions);
 
             if ("succeeded".equals(captured.getStatus())) {
                 payment.completePayment(payment.getCardLast4(), payment.getCardBrand());
                 paymentRepository.save(payment);
+                log.info("payment.captured publicOrderId={} paymentId={} transactionId={} amount={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId(),
+                        payment.getAmount());
 
                 notificationService.notifyPaymentSuccess(
                         order.getCustomer().getUser().getPublicUserId(),
@@ -222,6 +274,11 @@ public class PaymentService {
             }
 
         } catch (StripeException e) {
+            log.warn("payment.capture.failed publicOrderId={} paymentId={} transactionId={} message={}",
+                    order.getPublicOrderId(),
+                    payment.getPaymentId(),
+                    payment.getTransactionId(),
+                    e.getMessage());
             throw new RuntimeException("Payment capture failed: " + e.getMessage());
         }
     }
@@ -251,9 +308,16 @@ public class PaymentService {
                 // No money was moved, so no refund is needed. Cancelling the intent
                 // releases the authorisation hold on the customer's card immediately.
                 PaymentIntent intent = PaymentIntent.retrieve(payment.getTransactionId());
-                intent.cancel();
+                RequestOptions requestOptions = RequestOptions.builder()
+                        .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":cancel_auth")
+                        .build();
+                intent.cancel(requestOptions);
                 payment.cancelAuthorization();
                 paymentRepository.save(payment);
+                log.info("payment.authorization.cancelled publicOrderId={} paymentId={} transactionId={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId());
 
             } else if (payment.getStatus() == PaymentStatus.COMPLETED) {
                 // ── Payment was captured — issue a real Stripe refund ──
@@ -268,14 +332,27 @@ public class PaymentService {
                             .setRefundApplicationFee(true)
                             .setReverseTransfer(true);
                 }
-                com.stripe.model.Refund.create(refundBuilder.build());
+                RequestOptions requestOptions = RequestOptions.builder()
+                        .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":refund")
+                        .build();
+                com.stripe.model.Refund.create(refundBuilder.build(), requestOptions);
                 payment.refundPayment();
                 paymentRepository.save(payment);
+                log.info("payment.refunded publicOrderId={} paymentId={} transactionId={} amount={}",
+                        order.getPublicOrderId(),
+                        payment.getPaymentId(),
+                        payment.getTransactionId(),
+                        payment.getAmount());
 
             }
             // All other statuses (PENDING, FAILED, CANCELLED, REFUNDED) — nothing to do
 
         } catch (StripeException e) {
+            log.warn("payment.refund_or_cancel.failed publicOrderId={} paymentId={} transactionId={} message={}",
+                    order.getPublicOrderId(),
+                    payment.getPaymentId(),
+                    payment.getTransactionId(),
+                    e.getMessage());
             throw new RuntimeException("Stripe refund/cancel failed: " + e.getMessage());
         }
     }

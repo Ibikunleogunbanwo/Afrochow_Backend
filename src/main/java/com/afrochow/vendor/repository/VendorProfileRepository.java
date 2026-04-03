@@ -98,7 +98,7 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
     @Query(value = """
             SELECT DISTINCT v.*
             FROM vendor_profile v
-            JOIN address a ON a.id = v.address_id
+            JOIN address a ON a.address_id = v.address_id
             WHERE v.is_active   = true
               AND v.is_verified = true
               AND a.latitude    IS NOT NULL
