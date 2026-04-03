@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
  * - At least one uppercase letter
  * - At least one lowercase letter
  * - At least one digit
- * - At least one special character (@$!%*?&)
+ * - At least one special character (!@#$%^&*()_+-=[]{}|;':",.<>/?\ etc.)
  */
 @Slf4j
 @Service
@@ -27,7 +27,9 @@ public class PasswordPolicyService {
     private static final Pattern UPPERCASE_PATTERN = Pattern.compile("[A-Z]");
     private static final Pattern LOWERCASE_PATTERN = Pattern.compile("[a-z]");
     private static final Pattern DIGIT_PATTERN = Pattern.compile("[0-9]");
-    private static final Pattern SPECIAL_CHAR_PATTERN = Pattern.compile("[@$!%*?&]");
+    // Broad special-character set — mirrors the frontend Zod schema and the @Pattern annotation
+    // on BaseRegistrationRequest so all three layers accept the same characters.
+    private static final Pattern SPECIAL_CHAR_PATTERN = Pattern.compile("[!@#$%^&*()+\\-=\\[\\]{}|;':\"\\\\,.<>/?_]");
 
     /**
      * Validate password against all policy requirements
@@ -64,7 +66,7 @@ public class PasswordPolicyService {
 
         // Check for special character
         if (!SPECIAL_CHAR_PATTERN.matcher(password).find()) {
-            errors.add("Password must contain at least one special character (@$!%*?&)");
+            errors.add("Password must contain at least one special character (!@#$%^&* etc.)");
         }
 
         // Throw exception if there are any errors
@@ -102,7 +104,7 @@ public class PasswordPolicyService {
                 "At least one uppercase letter",
                 "At least one lowercase letter",
                 "At least one digit",
-                "At least one special character (@$!%*?&)"
+                "At least one special character (!@#$%^&* etc.)"
         );
     }
 }

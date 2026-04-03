@@ -92,6 +92,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COUNT(o) FROM Order o WHERE o.vendor = :vendor AND DATE(o.orderTime) = CURRENT_DATE")
     Long countVendorTodayOrders(@Param("vendor") VendorProfile vendor);
 
+    // SLA — find PENDING orders whose accept window has expired
+    @Query("SELECT o FROM Order o WHERE o.status = 'PENDING' AND o.orderTime < :cutoff")
+    List<Order> findExpiredPendingOrders(@Param("cutoff") LocalDateTime cutoff);
+
     // Count queries — by customer and status
     Long countByCustomerAndStatus(CustomerProfile customer, OrderStatus status);
 

@@ -3,6 +3,7 @@ package com.afrochow.admin.controller;
 import com.afrochow.common.ApiResponse;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.Role;
+import com.afrochow.security.Services.LoginAttemptService;
 import com.afrochow.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,7 +23,8 @@ import java.util.List;
 @Tag(name = "Admin User Management", description = "Admin APIs for managing all users")
 public class AdminUserManagementController {
 
-    private final UserRepository userRepository;
+    private final UserRepository       userRepository;
+    private final LoginAttemptService  loginAttemptService;
 
     // ========== VIEW USERS ==========
 
@@ -124,6 +126,22 @@ public class AdminUserManagementController {
     }
 
     @Transactional
+    @PatchMapping("/{publicUserId}/unlock")
+    @Operation(summary = "Unlock user account", description = "Clear a login lockout caused by too many failed attempts")
+    public ResponseEntity<ApiResponse<UserSummaryDto>> unlockUserAccount(@PathVariable String publicUserId) {
+        User user = userRepository.findByPublicUserId(publicUserId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        if (user.getRole() == Role.SUPERADMIN) {
+            throw new IllegalStateException("Cannot modify a SUPERADMIN account");
+        }
+
+        boolean wasLocked = loginAttemptService.unlockAccount(user.getEmail());
+        String message = wasLocked ? "Account unlocked successfully" : "Account was not locked";
+        return ResponseEntity.ok(ApiResponse.success(message, toUserSummary(user)));
+    }
+
+    @Transactional
     @PatchMapping("/{publicUserId}/role")
     @PreAuthorize("hasRole('SUPERADMIN')")
     @Operation(summary = "Change user role", description = "Change a user's role — SUPERADMIN only")
@@ -206,6 +224,7 @@ public class AdminUserManagementController {
                 .fullName(user.getFullName())
                 .role(user.getRole())
                 .isActive(user.getIsActive())
+                .isLocked(loginAttemptService.isAccountLocked(user.getEmail()))
                 .createdAt(user.getCreatedAt())
                 .build();
     }
@@ -234,6 +253,7 @@ public class AdminUserManagementController {
         private String fullName;
         private Role role;
         private Boolean isActive;
+        private boolean isLocked;
         private java.time.LocalDateTime createdAt;
     }
 

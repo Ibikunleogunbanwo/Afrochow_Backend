@@ -111,9 +111,13 @@ public class RateLimitService {
         if (saved != null && saved.count > maxAttempts) {
             long elapsed = now.getEpochSecond() - saved.startTime.getEpochSecond();
             long secondsLeft = Math.max(0, windowSeconds - elapsed);
-            String message = String.format(
-                    "Too many attempts. Try again in %d seconds.", secondsLeft
-            );
+
+            // Show seconds for very short waits, minutes (rounded up) for anything longer
+            String waitLabel = secondsLeft < 60
+                    ? secondsLeft + " seconds"
+                    : ((secondsLeft + 59) / 60) + " minute" + ((secondsLeft + 59) / 60 == 1 ? "" : "s");
+
+            String message = "Too many attempts. Try again in " + waitLabel + ".";
             log.warn("Rate limit exceeded — action={} identifier={} secondsLeft={}",
                     action, identifier, secondsLeft);
             throw new RateLimitExceededException(message, secondsLeft);

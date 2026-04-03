@@ -57,5 +57,18 @@ public class OrderResponseDto {
     private Boolean isCompleted;
     private Boolean isActive;
 
+    /**
+     * When the vendor's acceptance window closes (orderTime + SLA).
+     * Only populated for PENDING orders — null otherwise.
+     */
+    private LocalDateTime slaExpiresAt;
+
+    /**
+     * Seconds remaining until the SLA window closes.
+     * Negative means the window has already passed.
+     * Only populated for PENDING orders — null otherwise.
+     */
+    private Long slaRemainingSeconds;
+
     private LocalDateTime updatedAt;
 }
