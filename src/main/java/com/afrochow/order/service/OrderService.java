@@ -32,6 +32,8 @@ import com.afrochow.user.repository.UserRepository;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +47,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     @Value("${order.sla.accept-window-minutes:10}")
     private int slaAcceptWindowMinutes;
@@ -243,6 +247,12 @@ public class OrderService {
         // ── Save order ────────────────────────────────────────────────────────
 
         Order savedOrder = orderRepository.save(order);
+        log.info("order.created publicOrderId={} customerUserId={} vendorPublicId={} totalAmount={} status={}",
+                savedOrder.getPublicOrderId(),
+                customerUserId,
+                request.getVendorPublicId(),
+                savedOrder.getTotalAmount(),
+                savedOrder.getStatus());
 
         // ── Create pending payment record ─────────────────────────────────────
 
@@ -253,12 +263,19 @@ public class OrderService {
                 .paymentMethod(PaymentMethod.CREDIT_CARD)
                 .build();
         paymentRepository.save(payment);
+        log.info("payment.record.created publicOrderId={} paymentId={} paymentStatus={}",
+                savedOrder.getPublicOrderId(),
+                payment.getPaymentId(),
+                payment.getStatus());
 
         // ── Charge via Stripe ─────────────────────────────────────────────────
 
         try {
             paymentService.chargeOrder(savedOrder, request.getPaymentMethodId());
         } catch (RuntimeException e) {
+            log.warn("payment.charge.failed publicOrderId={} message={}",
+                    savedOrder.getPublicOrderId(),
+                    e.getMessage());
             throw new IllegalStateException("Payment failed: " + e.getMessage());
         }
 
@@ -327,6 +344,11 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
+        log.info("order.cancelled publicOrderId={} actor=customer customerUserId={} fromStatus={} toStatus={}",
+                updatedOrder.getPublicOrderId(),
+                customerUserId,
+                previousStatus,
+                updatedOrder.getStatus());
         notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus);
 
         return toResponseDto(updatedOrder);
@@ -346,6 +368,10 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
+        log.info("order.cancelled publicOrderId={} actor=admin fromStatus={} toStatus={}",
+                updatedOrder.getPublicOrderId(),
+                previousStatus,
+                updatedOrder.getStatus());
         notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus);
 
         return toResponseDto(updatedOrder);
@@ -411,10 +437,15 @@ public class OrderService {
 
         order.updateStatus(OrderStatus.CONFIRMED);
         Order updatedOrder = orderRepository.save(order);
+        log.info("order.accepted publicOrderId={} actor=vendor username={} fromStatus={} toStatus={}",
+                updatedOrder.getPublicOrderId(),
+                username,
+                OrderStatus.PENDING,
+                updatedOrder.getStatus());
 
         // Capture the previously-authorised payment now that the vendor has confirmed.
         // If capture fails, @Transactional rolls back the status update — order stays PENDING.
-        paymentService.captureStripePayment(updatedOrder);
+        paymentService.captureStripePayment(updatedOrder, null);
 
         notificationService.notifyCustomerOrderConfirmed(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
@@ -435,6 +466,11 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         Order updatedOrder = orderRepository.save(order);
+        log.info("order.rejected publicOrderId={} actor=vendor username={} fromStatus={} toStatus={}",
+                updatedOrder.getPublicOrderId(),
+                username,
+                previousStatus,
+                updatedOrder.getStatus());
         notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus);
         return toResponseDto(updatedOrder);
     }
@@ -456,6 +492,35 @@ public class OrderService {
                 "Vendor did not respond in time — your order has been automatically cancelled and refunded.",
                 "PENDING"
         );
+    }
+
+    /**
+     * Called by {@link com.afrochow.order.service.FulfillmentSafetyNetScheduler}
+     * when an order is still OUT_FOR_DELIVERY or READY_FOR_PICKUP past the 2-hour
+     * grace period. Marks the order as DELIVERED and captures payment.
+     * The scheduler acts as the system actor — no vendor principal required.
+     */
+    @Transactional
+    public void autoDeliverOrder(Order order) {
+        if (order.getStatus() != OrderStatus.OUT_FOR_DELIVERY &&
+            order.getStatus() != OrderStatus.READY_FOR_PICKUP) return; // guard: scheduler may race
+        order.updateStatus(OrderStatus.DELIVERED);
+        orderRepository.save(order);
+        paymentService.captureStripePayment(order, null);
+        VendorProfile vendor = order.getVendor();
+        vendor.recordCompletedOrder(order.getTotalAmount());
+        vendorProfileRepository.save(vendor);
+        notificationService.notifyCustomerOrderDelivered(order.getPublicOrderId());
+    }
+
+    /**
+     * Called by {@link com.afrochow.order.service.FulfillmentSafetyNetScheduler}
+     * to retry a Stripe capture for an order that was marked DELIVERED but whose
+     * payment was never captured — e.g. due to a transient network failure.
+     */
+    @Transactional
+    public void retryCaptureForDeliveredOrder(Order order) {
+        paymentService.captureStripePayment(order, null);
     }
 
     @Transactional
@@ -513,8 +578,18 @@ public class OrderService {
         return toResponseDto(updatedOrder);
     }
 
+    /**
+     * Mark an order as delivered and capture the Stripe payment.
+     *
+     * @param username      authenticated vendor's username
+     * @param publicOrderId order reference
+     * @param finalAmount   optional — if provided, captures this amount instead of the
+     *                      full authorization (e.g. an item was substituted or removed).
+     *                      Must be > 0 and ≤ the originally authorized amount.
+     *                      Pass null to capture the full amount.
+     */
     @Transactional
-    public OrderResponseDto markOrderDelivered(String username, String publicOrderId) {
+    public OrderResponseDto markOrderDelivered(String username, String publicOrderId, java.math.BigDecimal finalAmount) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
         VendorProfile vendor = getVendorByUsername(username);
@@ -531,7 +606,8 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.DELIVERED);
         Order updatedOrder = orderRepository.save(order);
-        vendor.recordCompletedOrder(order.getTotalAmount());
+        paymentService.captureStripePayment(updatedOrder, finalAmount);
+        vendor.recordCompletedOrder(updatedOrder.getTotalAmount());
         vendorProfileRepository.save(vendor);
         notificationService.notifyCustomerOrderDelivered(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);

@@ -96,6 +96,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.status = 'PENDING' AND o.orderTime < :cutoff")
     List<Order> findExpiredPendingOrders(@Param("cutoff") LocalDateTime cutoff);
 
+    // Safety Net — find orders still out-for-delivery or ready past the cutoff time
+    @Query("SELECT o FROM Order o WHERE o.status IN ('OUT_FOR_DELIVERY', 'READY_FOR_PICKUP') " +
+           "AND o.requestedFulfillmentTime IS NOT NULL AND o.requestedFulfillmentTime < :cutoff")
+    List<Order> findOverdueActiveOrders(@Param("cutoff") LocalDateTime cutoff);
+
+    // Safety Net — find orders marked DELIVERED but whose payment was never captured
+    @Query("SELECT o FROM Order o JOIN o.payment p " +
+           "WHERE o.status = 'DELIVERED' AND p.status = 'AUTHORIZED'")
+    List<Order> findDeliveredWithUnCapturedPayment();
+
     // Count queries — by customer and status
     Long countByCustomerAndStatus(CustomerProfile customer, OrderStatus status);
 
