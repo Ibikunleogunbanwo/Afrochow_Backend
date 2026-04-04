@@ -43,5 +43,25 @@ uploads/
 # ===== COMPILED CLASSES =====
 *.class
 
-# ===== CLAUDE CODE =====
-.claude/
+# ===== AI / CLAUDE =====
+.ai/**
+.claude/**
+
+# ===== LOCAL DOCS =====
+*.docx
+
+# ===== NODE / NEXT.JS =====
+node_modules/
+.next/
+out/
+dist/
+
+# ===== EDITOR TEMP FILES =====
+*.swp
+*.swo
+*~
+
+# ===== OPTIONAL DB FILES =====
+*.sql
+*.dump
+*.db
