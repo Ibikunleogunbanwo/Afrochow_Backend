@@ -18,6 +18,7 @@ public final class CookieUtils {
      * @param maxAgeSec  TTL in seconds
      * @param secure     Secure flag (HTTPS only)
      * @param sameSite   SameSite attribute ("Lax", "Strict", or "None")
+     * @param domain     Cookie domain (e.g. ".afrochow.ca"); blank or null = let browser default to request host
      */
     public static void addHttpOnlyCookie(
             HttpServletResponse response,
@@ -25,16 +26,20 @@ public final class CookieUtils {
             String value,
             long maxAgeSec,
             boolean secure,
-            String sameSite
+            String sameSite,
+            String domain
     ) {
-        ResponseCookie cookie = ResponseCookie.from(name, value)
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, value)
                 .httpOnly(true)
                 .secure(secure)
                 .path("/")
                 .maxAge(Duration.ofSeconds(maxAgeSec))
-                .sameSite(sameSite)
-                .build();
+                .sameSite(sameSite);
 
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        if (domain != null && !domain.isBlank()) {
+            builder.domain(domain);
+        }
+
+        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
     }
 }
