@@ -197,10 +197,12 @@ public class OrderService {
                             "'" + product.getName() + "' requires advance notice. " +
                             "Please provide a requestedFulfillmentTime.");
                 }
-                long hoursUntil = ChronoUnit.HOURS.between(
+                // Compare in MINUTES (not HOURS) to avoid ChronoUnit.HOURS truncation:
+                // e.g. 47h 59m would truncate to 47 hours and incorrectly fail a 48h requirement.
+                long minutesUntil = ChronoUnit.MINUTES.between(
                         LocalDateTime.now(), request.getRequestedFulfillmentTime());
                 int required = product.getAdvanceNoticeHours() != null ? product.getAdvanceNoticeHours() : 24;
-                if (hoursUntil < required) {
+                if (minutesUntil < (long) required * 60) {
                     throw new IllegalArgumentException(
                             "'" + product.getName() + "' requires at least " + required +
                             " hours advance notice. Please choose a later fulfilment time.");
