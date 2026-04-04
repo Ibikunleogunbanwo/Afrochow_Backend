@@ -245,7 +245,7 @@ GET     /api/admin/stats                        - Get platform statistics
 
 - JWT authentication with encrypted payloads
 - Refresh token rotation
-- BCrypt password hashing (configurable cost factor)
+- Bcrypt password hashing (configurable cost factor)
 - Account lockout after 5 failed login attempts (15-minute lockout)
 - Email verification on registration
 - HSTS, CSP, X-Frame-Options, and Referrer-Policy headers

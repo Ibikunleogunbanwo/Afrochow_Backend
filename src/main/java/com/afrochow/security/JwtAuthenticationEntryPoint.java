@@ -39,17 +39,34 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
+    // Paths where unauthenticated requests are expected (e.g. frontend polling before login)
+    private static final java.util.List<String> EXPECTED_UNAUTH_PATHS = java.util.List.of(
+            "/api/notifications/"
+    );
+
     @Override
     public void commence(
             HttpServletRequest request,
             HttpServletResponse response,
             AuthenticationException authException) throws IOException {
 
-        // SECURITY: Log detailed error server-side for monitoring
-        logger.warn("Authentication failed for request to {} from IP {}: {}",
-                request.getRequestURI(),
-                SecurityUtils.getClientIP(request),
-                authException.getMessage());
+        // SECURITY: Log detailed error server-side for monitoring.
+        // Downgrade to DEBUG for endpoints that are polled before auth is established
+        // (e.g. notification polling on page load) to reduce log noise.
+        String uri = request.getRequestURI();
+        boolean isExpectedUnauthPath = EXPECTED_UNAUTH_PATHS.stream().anyMatch(uri::startsWith);
+
+        if (isExpectedUnauthPath) {
+            logger.debug("Unauthenticated request to {} from IP {} (expected pre-auth poll): {}",
+                    uri,
+                    SecurityUtils.getClientIP(request),
+                    authException.getMessage());
+        } else {
+            logger.warn("Authentication failed for request to {} from IP {}: {}",
+                    uri,
+                    SecurityUtils.getClientIP(request),
+                    authException.getMessage());
+        }
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

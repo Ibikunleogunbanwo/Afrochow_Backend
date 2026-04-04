@@ -93,6 +93,9 @@ public class AuthenticationService {
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
+    @Value("${app.cookie.domain:}")
+    private String cookieDomain;
+
 
     /* ==========================================================
        GET CURRENT USER
@@ -172,9 +175,9 @@ public class AuthenticationService {
             String accessToken  = jwtTokenProvider.createToken(user);
 
             CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE,
-                    accessToken, jwtTokenProvider.getAccessTokenExpirationSeconds(), true, "None");
+                    accessToken, jwtTokenProvider.getAccessTokenExpirationSeconds(), true, "None", cookieDomain);
             CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE,
-                    refreshToken, refreshTokenService.getRefreshTokenExpirationSeconds(), true, "None");
+                    refreshToken, refreshTokenService.getRefreshTokenExpirationSeconds(), true, "None", cookieDomain);
 
             loginAttemptService.loginSucceeded(user.getEmail(), httpRequest);
 
@@ -216,9 +219,9 @@ public class AuthenticationService {
         String newAccessToken   = jwtTokenProvider.createToken(user);
 
         CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE,
-                newAccessToken, jwtTokenProvider.getAccessTokenExpirationSeconds(), true, "None");
+                newAccessToken, jwtTokenProvider.getAccessTokenExpirationSeconds(), true, "None", cookieDomain);
         CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE,
-                newRefreshToken, refreshTokenService.getRefreshTokenExpirationSeconds(), true, "None");
+                newRefreshToken, refreshTokenService.getRefreshTokenExpirationSeconds(), true, "None", cookieDomain);
 
         log.info("Token refreshed for user: {} from IP: {}", user.getPublicUserId(), clientIp);
 
@@ -720,8 +723,8 @@ public class AuthenticationService {
     }
 
     private void clearAuthCookies(HttpServletResponse httpResponse) {
-        CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE, "", 0, true, "None");
-        CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE, "", 0, true, "None");
+        CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE, "", 0, true, "None", cookieDomain);
+        CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE, "", 0, true, "None", cookieDomain);
     }
 
     private LoginResponse buildLoginResponse(User user) {
