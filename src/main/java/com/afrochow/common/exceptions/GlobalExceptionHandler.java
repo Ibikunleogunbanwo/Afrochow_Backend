@@ -11,9 +11,11 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -362,6 +364,32 @@ public class GlobalExceptionHandler {
             PaymentProcessingException ex, WebRequest request) {
         logger.error("Payment processing error: {}", ex.getMessage(), ex);
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    /**
+     * Handle DB constraint violations (e.g. ENUM truncation, unique key conflicts,
+     * FK violations) that escape the service layer.
+     * Returns 500 with a user-friendly message — the raw SQL detail is logged only.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex, WebRequest request) {
+        logger.error("Data integrity violation: {}", ex.getMostSpecificCause().getMessage(), ex);
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
+                "We were unable to complete your request due to a data error. Please try again.", request);
+    }
+
+    /**
+     * Handle JPA/Hibernate system exceptions (e.g. failed flush, bad SQL from a
+     * native query) that are not caused by a business-rule violation.
+     * Returns 500 with a user-friendly message.
+     */
+    @ExceptionHandler(JpaSystemException.class)
+    public ResponseEntity<ApiResponse<Object>> handleJpaSystemException(
+            JpaSystemException ex, WebRequest request) {
+        logger.error("JPA system error: {}", ex.getMostSpecificCause().getMessage(), ex);
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
+                "We were unable to complete your request. Please try again.", request);
     }
 
     // ═════════════════════════════════════════════════════════════

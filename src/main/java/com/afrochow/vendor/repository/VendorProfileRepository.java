@@ -95,8 +95,14 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
     // Haversine formula would have to be duplicated in both WHERE and ORDER BY
     // when written as JPQL. Native SQL is identical in behaviour but is testable
     // directly in a DB client and allows a derived-table refactor in the future.
+    //
+    // NOTE: DISTINCT is intentionally omitted. vendor_profile has a single address_id
+    // FK, making the JOIN 1-to-1 — each vendor appears exactly once in the result.
+    // Using DISTINCT with ORDER BY on a computed expression referencing a joined table
+    // column triggers a MySQL strict-mode error:
+    //   "Expression #1 of ORDER BY clause is not in SELECT list, references column ..."
     @Query(value = """
-            SELECT DISTINCT v.*
+            SELECT v.*
             FROM vendor_profile v
             JOIN address a ON a.address_id = v.address_id
             WHERE v.is_active   = true
