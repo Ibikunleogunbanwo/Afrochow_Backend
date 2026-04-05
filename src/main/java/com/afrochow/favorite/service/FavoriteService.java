@@ -7,7 +7,8 @@ import com.afrochow.favorite.dto.FavoriteRequestDto;
 import com.afrochow.favorite.dto.FavoriteResponseDto;
 import com.afrochow.favorite.model.Favorite;
 import com.afrochow.favorite.repository.FavoriteRepository;
-import com.afrochow.notification.service.NotificationService;
+import com.afrochow.favorite.event.VendorFavouritedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import com.afrochow.product.model.Product;
 import com.afrochow.product.repository.ProductRepository;
 import com.afrochow.user.model.User;
@@ -35,7 +36,7 @@ public class FavoriteService {
     private final VendorProfileRepository vendorProfileRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Add a favorite (vendor or product)
@@ -70,10 +71,10 @@ public class FavoriteService {
             Favorite savedFavorite = favoriteRepository.save(favorite);
 
             // Notify vendor (in-app only)
-            notificationService.notifyVendorFavorited(
+            eventPublisher.publishEvent(new VendorFavouritedEvent(
                     vendor.getUser().getPublicUserId(),
                     customer.getUser().getFirstName() + " " + customer.getUser().getLastName()
-            );
+            ));
 
             log.info("Customer {} added vendor {} to favorites", customer.getCustomerProfileId(), vendor.getId());
             return toResponseDto(savedFavorite);

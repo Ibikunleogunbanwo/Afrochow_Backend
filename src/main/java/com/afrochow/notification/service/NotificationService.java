@@ -22,6 +22,20 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.event.TransactionPhase;
+import com.afrochow.favorite.event.VendorFavouritedEvent;
+import com.afrochow.order.event.CustomerOrderReceivedEvent;
+import com.afrochow.order.event.OrderCancelledEvent;
+import com.afrochow.order.event.OrderConfirmedEvent;
+import com.afrochow.order.event.OrderDeliveredEvent;
+import com.afrochow.order.event.OrderOutForDeliveryEvent;
+import com.afrochow.order.event.OrderPlacedEvent;
+import com.afrochow.order.event.OrderPreparingEvent;
+import com.afrochow.order.event.OrderReadyEvent;
+import com.afrochow.payment.event.PaymentCapturedEvent;
+import com.afrochow.payment.event.PaymentFailedEvent;
+import com.afrochow.review.event.VendorReviewedEvent;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -110,6 +124,98 @@ public class NotificationService {
 
     // ========== ORDER LIFECYCLE NOTIFICATIONS (Fix 5: accept publicOrderId, load fresh) ==========
 
+    // ── Event-driven entry points ──────────────────────────────────────────────────────────────────
+    // These listeners fire AFTER the publishing transaction commits, guaranteeing the order/payment
+    // records are visible in the DB before the async notification thread tries to load them.
+    // @Async ensures they don't block the HTTP response; @Transactional opens a fresh read context.
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderPlaced(OrderPlacedEvent event) {
+        notifyVendorNewOrder(event.publicOrderId());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderConfirmed(OrderConfirmedEvent event) {
+        notifyCustomerOrderConfirmed(event.publicOrderId());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onPaymentCaptured(PaymentCapturedEvent event) {
+        notifyPaymentSuccess(event.userPublicId(), event.paymentId(),
+                event.publicOrderId(), event.amount());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onCustomerOrderReceived(CustomerOrderReceivedEvent event) {
+        notifyCustomerOrderReceived(event.publicOrderId());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderCancelled(OrderCancelledEvent event) {
+        notifyCustomerOrderCancelled(event.publicOrderId(), event.reason(), event.previousStatus());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderPreparing(OrderPreparingEvent event) {
+        notifyCustomerOrderPreparing(event.publicOrderId());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderReady(OrderReadyEvent event) {
+        notifyCustomerOrderReady(event.publicOrderId());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderOutForDelivery(OrderOutForDeliveryEvent event) {
+        notifyCustomerOrderOutForDelivery(event.publicOrderId());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderDelivered(OrderDeliveredEvent event) {
+        notifyCustomerOrderDelivered(event.publicOrderId());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onPaymentFailed(PaymentFailedEvent event) {
+        notifyPaymentFailed(event.userPublicId(), event.publicOrderId(), event.reason());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onVendorReviewed(VendorReviewedEvent event) {
+        notifyVendorNewReview(event.vendorPublicId(), event.reviewerName(), event.rating(), event.reviewType());
+    }
+
+    @Async
+    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onVendorFavourited(VendorFavouritedEvent event) {
+        notifyVendorFavorited(event.vendorPublicId(), event.customerName());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────────────────────
+
     /**
      * Notify customer when order is confirmed (after payment).
      * Channels: In-App + Email
@@ -169,6 +275,39 @@ public class NotificationService {
             log.info("New order notifications sent to vendor for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to send new order notifications to vendor for order: {}", publicOrderId, e);
+        }
+    }
+
+    /**
+     * Notify customer immediately after their order is placed and payment authorised.
+     * Fires before the vendor has acted — reassures the customer the order was received.
+     * Channels: In-App only (email confirmation comes later when vendor accepts)
+     */
+    @Async
+    @Transactional
+    public void notifyCustomerOrderReceived(String publicOrderId) {
+        try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
+            User customer = order.getCustomer().getUser();
+            if (!areNotificationsEnabled(customer)) return;
+
+            String vendorName = order.getVendor().getRestaurantName();
+
+            createInAppNotification(customer, NotificationType.ORDER_UPDATE,
+                    "Order Received",
+                    "Your order from " + vendorName + " has been received and is waiting for confirmation.",
+                    RelatedEntityType.ORDER, publicOrderId);
+
+            emailService.sendOrderReceivedEmail(
+                    customer.getEmail(), customer.getFirstName(),
+                    publicOrderId, vendorName,
+                    order.getTotalAmount(), order.getCreatedAt());
+
+            log.info("Customer order received notifications sent for order: {}", publicOrderId);
+        } catch (Exception e) {
+            log.error("Failed to send customer order received notifications for order: {}", publicOrderId, e);
         }
     }
 

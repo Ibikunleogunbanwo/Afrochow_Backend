@@ -36,7 +36,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
+import com.afrochow.order.event.CustomerOrderReceivedEvent;
+import com.afrochow.order.event.OrderCancelledEvent;
+import com.afrochow.order.event.OrderConfirmedEvent;
+import com.afrochow.order.event.OrderDeliveredEvent;
+import com.afrochow.order.event.OrderOutForDeliveryEvent;
+import com.afrochow.order.event.OrderPlacedEvent;
+import com.afrochow.order.event.OrderPreparingEvent;
+import com.afrochow.order.event.OrderReadyEvent;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -63,6 +72,7 @@ public class OrderService {
     private final NotificationService notificationService;
     private final PaymentService paymentService;
     private final PromotionService promotionService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -74,7 +84,8 @@ public class OrderService {
             PaymentRepository paymentRepository,
             NotificationService notificationService,
             PaymentService paymentService,
-            PromotionService promotionService
+            PromotionService promotionService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.orderRepository           = orderRepository;
         this.customerProfileRepository = customerProfileRepository;
@@ -86,6 +97,7 @@ public class OrderService {
         this.userRepository            = userRepository;
         this.paymentService            = paymentService;
         this.promotionService          = promotionService;
+        this.eventPublisher            = eventPublisher;
     }
 
     // ========== HELPER METHODS ==========
@@ -294,7 +306,8 @@ public class OrderService {
             );
         }
 
-        notificationService.notifyVendorNewOrder(savedOrder.getPublicOrderId());
+        eventPublisher.publishEvent(new OrderPlacedEvent(savedOrder.getPublicOrderId()));
+        eventPublisher.publishEvent(new CustomerOrderReceivedEvent(savedOrder.getPublicOrderId()));
 
         return toResponseDto(savedOrder);
     }
@@ -351,7 +364,7 @@ public class OrderService {
                 customerUserId,
                 previousStatus,
                 updatedOrder.getStatus());
-        notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus);
+        eventPublisher.publishEvent(new OrderCancelledEvent(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus));
 
         return toResponseDto(updatedOrder);
     }
@@ -374,7 +387,7 @@ public class OrderService {
                 updatedOrder.getPublicOrderId(),
                 previousStatus,
                 updatedOrder.getStatus());
-        notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus);
+        eventPublisher.publishEvent(new OrderCancelledEvent(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus));
 
         return toResponseDto(updatedOrder);
     }
@@ -449,7 +462,7 @@ public class OrderService {
         // If capture fails, @Transactional rolls back the status update — order stays PENDING.
         paymentService.captureStripePayment(updatedOrder, null);
 
-        notificationService.notifyCustomerOrderConfirmed(updatedOrder.getPublicOrderId());
+        eventPublisher.publishEvent(new OrderConfirmedEvent(updatedOrder.getPublicOrderId()));
         return toResponseDto(updatedOrder);
     }
 
@@ -473,7 +486,7 @@ public class OrderService {
                 username,
                 previousStatus,
                 updatedOrder.getStatus());
-        notificationService.notifyCustomerOrderCancelled(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus);
+        eventPublisher.publishEvent(new OrderCancelledEvent(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus));
         return toResponseDto(updatedOrder);
     }
 
@@ -489,11 +502,11 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
-        notificationService.notifyCustomerOrderCancelled(
+        eventPublisher.publishEvent(new OrderCancelledEvent(
                 order.getPublicOrderId(),
                 "Vendor did not respond in time — your order has been automatically cancelled and refunded.",
                 "PENDING"
-        );
+        ));
     }
 
     /**
@@ -512,7 +525,7 @@ public class OrderService {
         VendorProfile vendor = order.getVendor();
         vendor.recordCompletedOrder(order.getTotalAmount());
         vendorProfileRepository.save(vendor);
-        notificationService.notifyCustomerOrderDelivered(order.getPublicOrderId());
+        eventPublisher.publishEvent(new OrderDeliveredEvent(order.getPublicOrderId()));
     }
 
     /**
@@ -538,7 +551,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.PREPARING);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderPreparing(updatedOrder.getPublicOrderId());
+        eventPublisher.publishEvent(new OrderPreparingEvent(updatedOrder.getPublicOrderId()));
         return toResponseDto(updatedOrder);
     }
 
@@ -555,7 +568,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.READY_FOR_PICKUP);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderReady(updatedOrder.getPublicOrderId());
+        eventPublisher.publishEvent(new OrderReadyEvent(updatedOrder.getPublicOrderId()));
         return toResponseDto(updatedOrder);
     }
 
@@ -576,7 +589,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.OUT_FOR_DELIVERY);
         Order updatedOrder = orderRepository.save(order);
-        notificationService.notifyCustomerOrderOutForDelivery(updatedOrder.getPublicOrderId());
+        eventPublisher.publishEvent(new OrderOutForDeliveryEvent(updatedOrder.getPublicOrderId()));
         return toResponseDto(updatedOrder);
     }
 
@@ -611,7 +624,7 @@ public class OrderService {
         paymentService.captureStripePayment(updatedOrder, finalAmount);
         vendor.recordCompletedOrder(updatedOrder.getTotalAmount());
         vendorProfileRepository.save(vendor);
-        notificationService.notifyCustomerOrderDelivered(updatedOrder.getPublicOrderId());
+        eventPublisher.publishEvent(new OrderDeliveredEvent(updatedOrder.getPublicOrderId()));
         return toResponseDto(updatedOrder);
     }
 
