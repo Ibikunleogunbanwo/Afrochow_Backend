@@ -42,9 +42,10 @@ public class OutboxPoller {
     private static final int BATCH_SIZE  = 50;
     private static final int MAX_RETRIES = 3;
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private final OutboxEventRepository outboxEventRepository;
     private final NotificationService   notificationService;
-    private final ObjectMapper          objectMapper;
 
     @Scheduled(fixedDelay = 2000)   // poll every 2 s — tune to your traffic
     @Transactional
@@ -150,7 +151,7 @@ public class OutboxPoller {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Map<String, String> parse(String json) throws Exception {
-        return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
+        return MAPPER.readValue(json, new TypeReference<Map<String, String>>() {});
     }
 
     private static String truncate(String s, int max) {
