@@ -11,7 +11,7 @@ import com.afrochow.common.enums.ProvincialTax;
 import com.afrochow.common.enums.ScheduleType;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
-import com.afrochow.notification.service.NotificationService;
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.promotion.service.PromotionService;
 import com.afrochow.order.dto.OrderRequestDto;
 import com.afrochow.order.dto.OrderResponseDto;
@@ -36,16 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
-import com.afrochow.order.event.CustomerOrderReceivedEvent;
-import com.afrochow.order.event.OrderCancelledEvent;
-import com.afrochow.order.event.OrderConfirmedEvent;
-import com.afrochow.order.event.OrderDeliveredEvent;
-import com.afrochow.order.event.OrderOutForDeliveryEvent;
-import com.afrochow.order.event.OrderPlacedEvent;
-import com.afrochow.order.event.OrderPreparingEvent;
-import com.afrochow.order.event.OrderReadyEvent;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -69,10 +60,9 @@ public class OrderService {
     private final AddressRepository addressRepository;
     private final ProductRepository productRepository;
     private final PaymentRepository paymentRepository;
-    private final NotificationService notificationService;
     private final PaymentService paymentService;
     private final PromotionService promotionService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxEventService outboxEventService;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -82,10 +72,9 @@ public class OrderService {
             AddressRepository addressRepository,
             ProductRepository productRepository,
             PaymentRepository paymentRepository,
-            NotificationService notificationService,
             PaymentService paymentService,
             PromotionService promotionService,
-            ApplicationEventPublisher eventPublisher
+            OutboxEventService outboxEventService
     ) {
         this.orderRepository           = orderRepository;
         this.customerProfileRepository = customerProfileRepository;
@@ -93,11 +82,10 @@ public class OrderService {
         this.addressRepository         = addressRepository;
         this.productRepository         = productRepository;
         this.paymentRepository         = paymentRepository;
-        this.notificationService       = notificationService;
         this.userRepository            = userRepository;
         this.paymentService            = paymentService;
         this.promotionService          = promotionService;
-        this.eventPublisher            = eventPublisher;
+        this.outboxEventService        = outboxEventService;
     }
 
     // ========== HELPER METHODS ==========
@@ -306,8 +294,8 @@ public class OrderService {
             );
         }
 
-        eventPublisher.publishEvent(new OrderPlacedEvent(savedOrder.getPublicOrderId()));
-        eventPublisher.publishEvent(new CustomerOrderReceivedEvent(savedOrder.getPublicOrderId()));
+        outboxEventService.orderPlaced(savedOrder.getPublicOrderId());
+        outboxEventService.customerOrderReceived(savedOrder.getPublicOrderId());
 
         return toResponseDto(savedOrder);
     }
@@ -364,7 +352,7 @@ public class OrderService {
                 customerUserId,
                 previousStatus,
                 updatedOrder.getStatus());
-        eventPublisher.publishEvent(new OrderCancelledEvent(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus));
+        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus);
 
         return toResponseDto(updatedOrder);
     }
@@ -387,7 +375,7 @@ public class OrderService {
                 updatedOrder.getPublicOrderId(),
                 previousStatus,
                 updatedOrder.getStatus());
-        eventPublisher.publishEvent(new OrderCancelledEvent(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus));
+        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus);
 
         return toResponseDto(updatedOrder);
     }
@@ -462,7 +450,7 @@ public class OrderService {
         // If capture fails, @Transactional rolls back the status update — order stays PENDING.
         paymentService.captureStripePayment(updatedOrder, null);
 
-        eventPublisher.publishEvent(new OrderConfirmedEvent(updatedOrder.getPublicOrderId()));
+        outboxEventService.orderConfirmed(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -486,7 +474,7 @@ public class OrderService {
                 username,
                 previousStatus,
                 updatedOrder.getStatus());
-        eventPublisher.publishEvent(new OrderCancelledEvent(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus));
+        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus);
         return toResponseDto(updatedOrder);
     }
 
@@ -502,11 +490,11 @@ public class OrderService {
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
-        eventPublisher.publishEvent(new OrderCancelledEvent(
+        outboxEventService.orderCancelled(
                 order.getPublicOrderId(),
                 "Vendor did not respond in time — your order has been automatically cancelled and refunded.",
                 "PENDING"
-        ));
+        );
     }
 
     /**
@@ -525,7 +513,7 @@ public class OrderService {
         VendorProfile vendor = order.getVendor();
         vendor.recordCompletedOrder(order.getTotalAmount());
         vendorProfileRepository.save(vendor);
-        eventPublisher.publishEvent(new OrderDeliveredEvent(order.getPublicOrderId()));
+        outboxEventService.orderDelivered(order.getPublicOrderId());
     }
 
     /**
@@ -551,7 +539,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.PREPARING);
         Order updatedOrder = orderRepository.save(order);
-        eventPublisher.publishEvent(new OrderPreparingEvent(updatedOrder.getPublicOrderId()));
+        outboxEventService.orderPreparing(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -568,7 +556,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.READY_FOR_PICKUP);
         Order updatedOrder = orderRepository.save(order);
-        eventPublisher.publishEvent(new OrderReadyEvent(updatedOrder.getPublicOrderId()));
+        outboxEventService.orderReady(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -589,7 +577,7 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.OUT_FOR_DELIVERY);
         Order updatedOrder = orderRepository.save(order);
-        eventPublisher.publishEvent(new OrderOutForDeliveryEvent(updatedOrder.getPublicOrderId()));
+        outboxEventService.orderOutForDelivery(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -624,7 +612,7 @@ public class OrderService {
         paymentService.captureStripePayment(updatedOrder, finalAmount);
         vendor.recordCompletedOrder(updatedOrder.getTotalAmount());
         vendorProfileRepository.save(vendor);
-        eventPublisher.publishEvent(new OrderDeliveredEvent(updatedOrder.getPublicOrderId()));
+        outboxEventService.orderDelivered(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 

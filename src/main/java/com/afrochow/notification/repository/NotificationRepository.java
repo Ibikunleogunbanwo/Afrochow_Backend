@@ -36,10 +36,15 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     Long countByUserAndIsRead(User user, Boolean isRead);
 
-    // Fix 2: bulk delete read notifications — avoids loading into memory
+    // Bulk delete read notifications — avoids loading into memory
     @Modifying
     @Query("DELETE FROM Notification n WHERE n.user = :user AND n.isRead = true")
     void deleteAllReadByUser(@Param("user") User user);
+
+    // Bulk mark-all-read — single UPDATE instead of fetch-loop-saveAll
+    @Modifying
+    @Query("UPDATE Notification n SET n.isRead = true, n.readAt = :now WHERE n.user = :user AND n.isRead = false")
+    void markAllAsReadByUser(@Param("user") User user, @Param("now") LocalDateTime now);
 
     // Fix 4: single-statement broadcast — avoids loading every User into memory
     @Modifying

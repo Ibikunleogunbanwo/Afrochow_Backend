@@ -22,20 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionalEventListener;
-import org.springframework.transaction.event.TransactionPhase;
-import com.afrochow.favorite.event.VendorFavouritedEvent;
-import com.afrochow.order.event.CustomerOrderReceivedEvent;
-import com.afrochow.order.event.OrderCancelledEvent;
-import com.afrochow.order.event.OrderConfirmedEvent;
-import com.afrochow.order.event.OrderDeliveredEvent;
-import com.afrochow.order.event.OrderOutForDeliveryEvent;
-import com.afrochow.order.event.OrderPlacedEvent;
-import com.afrochow.order.event.OrderPreparingEvent;
-import com.afrochow.order.event.OrderReadyEvent;
-import com.afrochow.payment.event.PaymentCapturedEvent;
-import com.afrochow.payment.event.PaymentFailedEvent;
-import com.afrochow.review.event.VendorReviewedEvent;
+import com.afrochow.config.AsyncConfig;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -122,105 +109,16 @@ public class NotificationService {
                 NotificationType.SYSTEM_ALERT, null, null);
     }
 
-    // ========== ORDER LIFECYCLE NOTIFICATIONS (Fix 5: accept publicOrderId, load fresh) ==========
+    // ========== ORDER LIFECYCLE NOTIFICATIONS ==========
 
-    // ── Event-driven entry points ──────────────────────────────────────────────────────────────────
-    // These listeners fire AFTER the publishing transaction commits, guaranteeing the order/payment
-    // records are visible in the DB before the async notification thread tries to load them.
-    // @Async ensures they don't block the HTTP response; @Transactional opens a fresh read context.
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onOrderPlaced(OrderPlacedEvent event) {
-        notifyVendorNewOrder(event.publicOrderId());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onOrderConfirmed(OrderConfirmedEvent event) {
-        notifyCustomerOrderConfirmed(event.publicOrderId());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onPaymentCaptured(PaymentCapturedEvent event) {
-        notifyPaymentSuccess(event.userPublicId(), event.paymentId(),
-                event.publicOrderId(), event.amount());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onCustomerOrderReceived(CustomerOrderReceivedEvent event) {
-        notifyCustomerOrderReceived(event.publicOrderId());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onOrderCancelled(OrderCancelledEvent event) {
-        notifyCustomerOrderCancelled(event.publicOrderId(), event.reason(), event.previousStatus());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onOrderPreparing(OrderPreparingEvent event) {
-        notifyCustomerOrderPreparing(event.publicOrderId());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onOrderReady(OrderReadyEvent event) {
-        notifyCustomerOrderReady(event.publicOrderId());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onOrderOutForDelivery(OrderOutForDeliveryEvent event) {
-        notifyCustomerOrderOutForDelivery(event.publicOrderId());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onOrderDelivered(OrderDeliveredEvent event) {
-        notifyCustomerOrderDelivered(event.publicOrderId());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onPaymentFailed(PaymentFailedEvent event) {
-        notifyPaymentFailed(event.userPublicId(), event.publicOrderId(), event.reason());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onVendorReviewed(VendorReviewedEvent event) {
-        notifyVendorNewReview(event.vendorPublicId(), event.reviewerName(), event.rating(), event.reviewType());
-    }
-
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onVendorFavourited(VendorFavouritedEvent event) {
-        notifyVendorFavorited(event.vendorPublicId(), event.customerName());
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────────────────────────
+    // Entry points are now called directly by OutboxPoller after it reads
+    // the committed outbox row — no Spring events needed.
 
     /**
      * Notify customer when order is confirmed (after payment).
      * Channels: In-App + Email
      */
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderConfirmed(String publicOrderId) {
         try {
@@ -252,7 +150,7 @@ public class NotificationService {
      * Channels: In-App + Email
      * Fix 1: uses NEW_ORDER type instead of ORDER_UPDATE.
      */
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyVendorNewOrder(String publicOrderId) {
         try {
@@ -283,7 +181,7 @@ public class NotificationService {
      * Fires before the vendor has acted — reassures the customer the order was received.
      * Channels: In-App only (email confirmation comes later when vendor accepts)
      */
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderReceived(String publicOrderId) {
         try {
@@ -315,7 +213,7 @@ public class NotificationService {
      * Notify customer when order is being prepared.
      * Channels: In-App only
      */
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderPreparing(String publicOrderId) {
         try {
@@ -339,7 +237,7 @@ public class NotificationService {
      * Notify customer when order is ready for pickup / delivery.
      * Channels: In-App + Email
      */
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderReady(String publicOrderId) {
         try {
@@ -371,7 +269,7 @@ public class NotificationService {
      * Notify customer when order is out for delivery.
      * Channels: In-App only
      */
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderOutForDelivery(String publicOrderId) {
         try {
@@ -395,7 +293,7 @@ public class NotificationService {
      * Notify customer when order is delivered.
      * Channels: In-App + Email
      */
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderDelivered(String publicOrderId) {
         try {
@@ -428,7 +326,7 @@ public class NotificationService {
      * Notify customer when order is cancelled.
      * Channels: In-App + Email
      */
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderCancelled(String publicOrderId, String reason, String previousStatus) {
         try {
@@ -457,7 +355,7 @@ public class NotificationService {
 
     // ========== PAYMENT NOTIFICATIONS ==========
 
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyPaymentSuccess(String userPublicId, String paymentPublicId,
                                      String orderPublicId, BigDecimal amount) {
@@ -480,7 +378,7 @@ public class NotificationService {
         }
     }
 
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyPaymentFailed(String userPublicId, String orderPublicId, String reason) {
         try {
@@ -503,7 +401,7 @@ public class NotificationService {
 
     // ========== REVIEW & FAVORITE NOTIFICATIONS ==========
 
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyVendorNewReview(String vendorPublicId, String reviewerName,
                                       Integer rating, String reviewType) {
@@ -511,7 +409,7 @@ public class NotificationService {
             User vendor = resolveUser(vendorPublicId);
 
             String stars = "⭐".repeat(rating);
-            createInAppNotification(vendor, NotificationType.SYSTEM_ALERT,
+            createInAppNotification(vendor, NotificationType.NEW_REVIEW,
                     "New Review",
                     reviewerName + " left a " + rating + "-star review " + stars + " on your " + reviewType,
                     RelatedEntityType.REVIEW, null);
@@ -522,16 +420,16 @@ public class NotificationService {
         }
     }
 
-    @Async
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyVendorFavorited(String vendorPublicId, String customerName) {
         try {
             User vendor = resolveUser(vendorPublicId);
 
-            createInAppNotification(vendor, NotificationType.SYSTEM_ALERT,
+            createInAppNotification(vendor, NotificationType.NEW_FAVOURITE,
                     "New Favorite",
                     customerName + " added your restaurant to their favorites! ❤️",
-                    null, null);
+                    RelatedEntityType.USER, vendorPublicId);
 
             log.info("Vendor favorited notification sent to vendor: {}", vendorPublicId);
         } catch (Exception e) {
@@ -539,8 +437,13 @@ public class NotificationService {
         }
     }
 
-    // ========== BROADCAST (Fix 4: single SQL INSERT SELECT) ==========
+    // ========== BROADCAST ==========
 
+    /**
+     * Dispatched to the notification thread pool so large broadcasts don't
+     * block the HTTP request thread or hold a DB connection for the full duration.
+     */
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void broadcastNotification(com.afrochow.notification.dto.BroadcastNotificationRequestDto dto, String sentBy) {
         final int batchSize = 500;
@@ -664,10 +567,7 @@ public class NotificationService {
     @Transactional
     public void markAllAsRead(String userPublicId) {
         User user = resolveUser(userPublicId);
-        List<Notification> unread = notificationRepository
-                .findByUserAndIsReadOrderByCreatedAtDesc(user, false);
-        unread.forEach(Notification::markAsRead);
-        notificationRepository.saveAll(unread);
+        notificationRepository.markAllAsReadByUser(user, LocalDateTime.now());
     }
 
     // ========== DELETE ==========

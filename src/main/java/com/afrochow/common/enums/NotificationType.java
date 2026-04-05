@@ -6,5 +6,7 @@ public enum NotificationType {
     DELIVERY_UPDATE,
     PAYMENT_SUCCESS,
     PROMO,
-    SYSTEM_ALERT
+    SYSTEM_ALERT,
+    NEW_REVIEW,
+    NEW_FAVOURITE
 }
