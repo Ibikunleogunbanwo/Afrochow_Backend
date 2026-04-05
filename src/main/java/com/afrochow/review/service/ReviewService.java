@@ -3,7 +3,8 @@ package com.afrochow.review.service;
 import com.afrochow.review.dto.ReviewRequestDto;
 import com.afrochow.review.dto.ReviewResponseDto;
 import com.afrochow.common.enums.OrderStatus;
-import com.afrochow.notification.service.NotificationService;
+import com.afrochow.review.event.VendorReviewedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import com.afrochow.order.model.Order;
 import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.product.model.Product;
@@ -36,7 +37,7 @@ public class ReviewService {
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final CustomerProfileRepository customerProfileRepository;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ========== PUBLIC METHODS (No Authentication Required) ==========
 
@@ -173,12 +174,12 @@ public class ReviewService {
         // Notify vendor of new review (in-app notification only)
         String reviewerName = user.getFirstName() + " " + user.getLastName();
         String reviewType = savedReview.getProduct() != null ? "product" : "restaurant";
-        notificationService.notifyVendorNewReview(
-            vendor.getUser().getPublicUserId(),
-            reviewerName,
-            savedReview.getRating(),
-            reviewType
-        );
+        eventPublisher.publishEvent(new VendorReviewedEvent(
+                vendor.getUser().getPublicUserId(),
+                reviewerName,
+                savedReview.getRating(),
+                reviewType
+        ));
 
         return toResponseDto(savedReview);
     }

@@ -19,7 +19,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
+import com.afrochow.payment.event.PaymentCapturedEvent;
+import com.afrochow.payment.event.PaymentFailedEvent;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -39,6 +42,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${stripe.platform.fee-percent:10}")
     private int platformFeePercent;
@@ -49,11 +53,13 @@ public class PaymentService {
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderRepository orderRepository,
-            NotificationService notificationService
+            NotificationService notificationService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.paymentRepository   = paymentRepository;
         this.orderRepository     = orderRepository;
         this.notificationService = notificationService;
+        this.eventPublisher      = eventPublisher;
     }
 
     // ========== STRIPE METHODS ==========
@@ -198,11 +204,11 @@ public class PaymentService {
                     payment.getPaymentId(),
                     e.getMessage());
 
-            notificationService.notifyPaymentFailed(
+            eventPublisher.publishEvent(new PaymentFailedEvent(
                     order.getCustomer().getUser().getPublicUserId(),
                     order.getPublicOrderId(),
                     e.getMessage()
-            );
+            ));
 
             throw new RuntimeException("Payment failed: " + e.getMessage());
         }
@@ -262,12 +268,12 @@ public class PaymentService {
                         payment.getTransactionId(),
                         payment.getAmount());
 
-                notificationService.notifyPaymentSuccess(
+                eventPublisher.publishEvent(new PaymentCapturedEvent(
                         order.getCustomer().getUser().getPublicUserId(),
                         captured.getId(),
                         order.getPublicOrderId(),
                         order.getTotalAmount()
-                );
+                ));
             } else {
                 throw new RuntimeException(
                         "Stripe capture returned unexpected status: " + captured.getStatus());
@@ -407,12 +413,12 @@ public class PaymentService {
 
             Payment savedPayment = paymentRepository.save(payment);
 
-            notificationService.notifyPaymentSuccess(
+            eventPublisher.publishEvent(new PaymentCapturedEvent(
                     order.getCustomer().getUser().getPublicUserId(),
                     savedPayment.getTransactionId(),
                     order.getPublicOrderId(),
                     savedPayment.getAmount()
-            );
+            ));
 
             return toResponseDto(savedPayment);
 
@@ -420,11 +426,11 @@ public class PaymentService {
             payment.failPayment();
             paymentRepository.save(payment);
 
-            notificationService.notifyPaymentFailed(
+            eventPublisher.publishEvent(new PaymentFailedEvent(
                     order.getCustomer().getUser().getPublicUserId(),
                     order.getPublicOrderId(),
                     e.getMessage()
-            );
+            ));
 
             throw new RuntimeException("Payment processing failed: " + e.getMessage());
         }

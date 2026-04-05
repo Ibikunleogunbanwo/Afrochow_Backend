@@ -252,6 +252,50 @@ public class EmailService {
     }
 
     /**
+     * Send order received email to customer — fires immediately after order placement,
+     * before the vendor has confirmed. Reassures the customer their order is in the queue
+     * and payment is securely held.
+     */
+    public void sendOrderReceivedEmail(
+            String toEmail,
+            String customerName,
+            String orderPublicId,
+            String vendorName,
+            BigDecimal totalAmount,
+            LocalDateTime orderTime) {
+
+        if (!emailEnabled) {
+            logger.info("Email disabled. Would send order received email to: {} for order: {}",
+                    toEmail, orderPublicId);
+            return;
+        }
+
+        try {
+            validateEmail(toEmail);
+
+            Context context = new Context();
+            context.setVariable("customerName", customerName);
+            context.setVariable("orderPublicId", orderPublicId);
+            context.setVariable("vendorName", vendorName);
+            context.setVariable("totalAmount", String.format("$%.2f", totalAmount));
+            context.setVariable("orderTime", orderTime != null ? orderTime.format(DATE_FORMATTER) : LocalDateTime.now().format(DATE_FORMATTER));
+            context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
+            context.setVariable("orderTrackingUrl", String.format("%s/orders/%s", appUrl, orderPublicId));
+
+            String subject = String.format("We received your order #%s - %s", orderPublicId, appName);
+            String htmlContent = processTemplate("order-received", context);
+
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            logger.info("Order received email sent to: {} for order: {}", toEmail, orderPublicId);
+
+        } catch (Exception e) {
+            logger.error("Failed to send order received email to: {} for order: {}",
+                    toEmail, orderPublicId, e);
+        }
+    }
+
+    /**
      * Send order status update email
      */
     public void sendOrderStatusUpdateEmail(
