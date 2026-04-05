@@ -29,8 +29,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OutboxEventService {
 
+    /**
+     * ObjectMapper is thread-safe after construction and has no Spring-managed
+     * lifecycle, so we hold a private static instance rather than injecting it.
+     * This avoids any bean-resolution ordering issues during application startup.
+     */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private final OutboxEventRepository outboxEventRepository;
-    private final ObjectMapper          objectMapper;
 
     // ── Order lifecycle ──────────────────────────────────────────────────────
 
@@ -125,7 +131,7 @@ public class OutboxEventService {
 
     private void save(OutboxEventType type, Map<String, String> payload) {
         try {
-            String json = objectMapper.writeValueAsString(payload);
+            String json = MAPPER.writeValueAsString(payload);
             outboxEventRepository.save(OutboxEvent.builder()
                     .eventType(type)
                     .payload(json)
