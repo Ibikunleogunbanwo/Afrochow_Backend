@@ -230,7 +230,6 @@ public class Order {
         }
     }
 
-    @Transient
     /**
      * Returns true if the customer may still cancel this order.
      *
