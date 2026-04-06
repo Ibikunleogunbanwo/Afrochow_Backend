@@ -76,8 +76,8 @@ public class OrderSlaService {
                         order.getPublicOrderId(), order.getOrderTime());
             } catch (Exception ex) {
                 errors++;
-                log.error("SLA auto-cancel failed for order {} — will retry next cycle. Error: {}",
-                        order.getPublicOrderId(), ex.getMessage());
+                log.error("SLA auto-cancel failed for order {} — will retry next cycle.",
+                        order.getPublicOrderId(), ex);
             }
         }
 
