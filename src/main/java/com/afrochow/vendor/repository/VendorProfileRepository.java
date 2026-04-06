@@ -5,10 +5,13 @@ import com.afrochow.common.enums.Province;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -126,6 +129,29 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
             @Param("lng") double lng,
             @Param("radiusKm") double radiusKm
     );
+
+    // ========== ATOMIC STAT UPDATES ==========
+
+    /**
+     * Atomically increments totalOrdersCompleted by 1 and adds {@code amount} to
+     * totalRevenue — all in a single SQL UPDATE statement.
+     *
+     * This replaces the unsafe read-modify-write pattern:
+     *   vendor.recordCompletedOrder(amount);  // in-memory mutation
+     *   vendorProfileRepository.save(vendor); // full entity write
+     *
+     * The old pattern loses updates when two orders are delivered concurrently,
+     * because both threads read the same counter value before either saves.
+     * This atomic update lets the database do the arithmetic and is safe under
+     * any number of concurrent deliveries.
+     *
+     * Must be called inside a @Transactional method.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE VendorProfile v SET v.totalRevenue = v.totalRevenue + :amount, " +
+           "v.totalOrdersCompleted = v.totalOrdersCompleted + 1 WHERE v.id = :id")
+    void incrementCompletedOrderStats(@Param("id") Long id, @Param("amount") BigDecimal amount);
 
     // ========== COUNTS ==========
 

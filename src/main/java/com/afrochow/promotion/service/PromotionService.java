@@ -362,16 +362,23 @@ public class PromotionService {
      * Validate and calculate discount for a promo code applied to an order subtotal.
      * Call this before saving the order. Does NOT record usage.
      *
+     * <p>Uses a pessimistic write lock on the Promotion row so that the usage-count
+     * check and the subsequent {@link #recordUsage} INSERT are serialised.  Without
+     * the lock, two concurrent checkout requests for the same limited-use code can
+     * both pass the {@code totalUsed >= usageLimit} guard and both record a use,
+     * exceeding the intended limit.
+     *
      * @param code          promo code from the request
      * @param subtotal      order subtotal (before discount, delivery fee, tax)
      * @param userPublicId  authenticated customer's public user ID
      * @param vendorPublicId vendor the order is placed with
      * @return discount amount to subtract from the order total
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public BigDecimal calculateDiscount(String code, BigDecimal subtotal,
                                         String userPublicId, String vendorPublicId) {
-        Promotion promotion = promotionRepository.findByCode(code.toUpperCase().trim())
+        // Lock the promotion row so concurrent requests are serialised through here.
+        Promotion promotion = promotionRepository.findByCodeWithLock(code.toUpperCase().trim())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid promo code: " + code));
 
         if (!promotion.isCurrentlyActive()) {
@@ -416,10 +423,15 @@ public class PromotionService {
     /**
      * Record that a promo code was used for an order.
      * Call this after the order is saved and payment confirmed.
+     *
+     * <p>Re-acquires the pessimistic write lock on the Promotion row so that the
+     * final usage INSERT is also serialised — preventing a race between the last
+     * allowed use and a concurrent request that already passed the limit check in
+     * {@link #calculateDiscount}.
      */
     @Transactional
     public void recordUsage(String code, User user, Order order, BigDecimal discountApplied) {
-        Promotion promotion = promotionRepository.findByCode(code.toUpperCase().trim())
+        Promotion promotion = promotionRepository.findByCodeWithLock(code.toUpperCase().trim())
                 .orElseThrow(() -> new EntityNotFoundException("Promotion not found"));
 
         PromotionUsage usage = PromotionUsage.builder()

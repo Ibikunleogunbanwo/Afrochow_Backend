@@ -36,6 +36,10 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long productId;
 
+    /** Optimistic-locking version — prevents concurrent availability-toggle races. */
+    @Version
+    private Long version;
+
     @Column(unique = true, nullable = false)
     private String publicProductId;
 
