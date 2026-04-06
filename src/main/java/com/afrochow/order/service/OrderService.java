@@ -747,7 +747,7 @@ public class OrderService {
                 .estimatedDeliveryTime(order.getEstimatedDeliveryTime())
                 .updatedAt(order.getUpdatedAt())
                 // FIX 4: Delegate to Order.canBeCancelled() — single source of truth
-                .canBeCancelled(order.canBeCancelled())
+                .canBeCancelled(order.canBeCancelled(cancellationWindowHours))
                 .isCompleted(order.getStatus() != null
                         && order.getStatus() == OrderStatus.DELIVERED)
                 .isActive(order.getStatus() != null
@@ -795,7 +795,7 @@ public class OrderService {
                 .orderTime(order.getOrderTime())
                 .fulfillmentType(order.getFulfillmentType())
                 .requestedFulfillmentTime(order.getRequestedFulfillmentTime())
-                .canBeCancelled(order.canBeCancelled())
+                .canBeCancelled(order.canBeCancelled(cancellationWindowHours))
                 .itemCount(itemNames.size())
                 .itemNames(itemNames)
                 .build();
