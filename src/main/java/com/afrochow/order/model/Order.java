@@ -40,9 +40,12 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long orderId;
 
-    /** Optimistic-locking version — prevents lost-update race conditions on status changes. */
+    /** Optimistic-locking version — prevents lost-update race conditions on status changes.
+     *  Primitive long (not boxed Long) ensures Hibernate never sees a null version value;
+     *  a null DB column is read as 0 by JDBC instead of propagating null and causing
+     *  a NullPointerException during version-increment at flush time. */
     @Version
-    private Long version;
+    private long version;
 
     @Column(unique = true, nullable = false)
     private String publicOrderId;

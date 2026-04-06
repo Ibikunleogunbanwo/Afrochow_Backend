@@ -36,9 +36,10 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long productId;
 
-    /** Optimistic-locking version — prevents concurrent availability-toggle races. */
+    /** Optimistic-locking version — prevents concurrent availability-toggle races.
+     *  Primitive long: a null DB value is read as 0, never propagated as null. */
     @Version
-    private Long version;
+    private long version;
 
     @Column(unique = true, nullable = false)
     private String publicProductId;
