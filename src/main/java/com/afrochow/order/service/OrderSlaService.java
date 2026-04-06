@@ -3,6 +3,7 @@ package com.afrochow.order.service;
 import com.afrochow.order.model.Order;
 import com.afrochow.order.repository.OrderRepository;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -42,8 +43,18 @@ public class OrderSlaService {
      *
      * Finds all PENDING orders whose {@code orderTime} predates the SLA cutoff
      * and auto-cancels each one via {@link OrderService#autoExpireOrder}.
+     *
+     * ShedLock ensures only ONE instance acquires the lock per cycle — preventing
+     * duplicate Stripe cancel calls when multiple app instances are running.
+     * lockAtMostFor = 55 s (safety valve if instance crashes mid-sweep).
+     * lockAtLeastFor = 50 s (prevents rapid re-runs if the sweep finishes early).
      */
     @Scheduled(fixedDelayString = "${order.sla.check-interval-ms:60000}")
+    @SchedulerLock(
+            name          = "OrderSlaService_expireStaleOrders",
+            lockAtMostFor = "PT55S",
+            lockAtLeastFor= "PT50S"
+    )
     public void expireStaleOrders() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(acceptWindowMinutes);
 
