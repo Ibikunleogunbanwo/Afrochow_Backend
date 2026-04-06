@@ -666,7 +666,7 @@ public class AuthenticationService {
         );
         passwordResetTokenRepository.save(token);
 
-        String resetLink = frontendUrl + "/reset-password?token=" + token.getTransientRawToken();
+        String resetLink = frontendUrl + "/customer/confirm-token?token=" + token.getTransientRawToken();
         securityEventService.logPasswordResetRequest(user.getEmail(), httpRequest);
         outboxEventService.passwordResetRequested(
                 user.getPublicUserId(), user.getEmail(), user.getFirstName(), resetLink);
