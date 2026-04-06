@@ -56,6 +56,15 @@ public class Payment {
     @Column(length = 100)
     private String transactionId;
 
+    /**
+     * Stripe Transfer ID created when we pay out to the vendor at delivery.
+     * Null until {@link com.afrochow.payment.service.PaymentService#transferToVendor} runs.
+     * Presence of this field is the authoritative signal that a transfer exists and
+     * must be reversed if a post-delivery refund is ever issued.
+     */
+    @Column(name = "stripe_transfer_id", length = 100)
+    private String stripeTransferId;
+
     @Column(length = 4)
     private String cardLast4;
 

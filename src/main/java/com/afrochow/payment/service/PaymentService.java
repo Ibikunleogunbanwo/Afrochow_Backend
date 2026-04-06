@@ -12,9 +12,12 @@ import com.afrochow.payment.model.Payment;
 import com.afrochow.payment.repository.PaymentRepository;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
+import com.stripe.model.Transfer;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.PaymentIntentCaptureParams;
 import com.stripe.param.PaymentIntentCreateParams;
+import com.stripe.param.TransferCreateParams;
+import com.stripe.param.TransferReversalCollectionCreateParams;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -131,13 +134,14 @@ public class PaymentService {
                     .setReturnUrl("https://afrochow.ca/order-confirmation/" + order.getPublicOrderId());
 
             if (useConnect) {
-                paramsBuilder
-                        .setApplicationFeeAmount(feeInCents)
-                        .setTransferData(
-                                PaymentIntentCreateParams.TransferData.builder()
-                                        .setDestination(vendorStripeAccountId)
-                                        .build()
-                        );
+                // transfer_group links this PaymentIntent to the future Transfer we will
+                // create at delivery time.  We do NOT set transfer_data.destination here —
+                // that would move funds to the vendor immediately at capture, making
+                // reverseTransfer the only cancellation path (which fails when the vendor's
+                // Stripe balance is already paid out to their bank).
+                // Instead: capture goes to the platform account; transferToVendor() sends
+                // the vendor's share via a separate Transfer object at DELIVERED time.
+                paramsBuilder.setTransferGroup("ORDER_" + order.getPublicOrderId());
             }
 
             RequestOptions requestOptions = RequestOptions.builder()
@@ -288,6 +292,92 @@ public class PaymentService {
     }
 
     /**
+     * Pay out the vendor's share to their connected Stripe account after the order
+     * is marked DELIVERED.
+     *
+     * Under the transfer_group model the platform account holds all captured funds.
+     * This method creates a Stripe Transfer for (totalAmount − platformFee) linked
+     * to the original charge via source_transaction.  That linkage means the Transfer
+     * draws from the specific charge's funds rather than the platform account's
+     * general balance, which is both cleaner and better for reconciliation.
+     *
+     * Idempotent — if a transfer ID is already stored on the Payment record the
+     * method returns immediately (safe to retry from the safety-net scheduler).
+     *
+     * @param order the DELIVERED order whose vendor should be paid
+     */
+    @Transactional
+    public void transferToVendor(Order order) {
+        Payment payment = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment record not found for order: " + order.getPublicOrderId()));
+
+        if (payment.getStatus() != PaymentStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Cannot transfer — payment is not COMPLETED (current: " + payment.getStatus() + ")");
+        }
+
+        // Idempotency guard — transfer already created
+        if (payment.getStripeTransferId() != null && !payment.getStripeTransferId().isBlank()) {
+            log.warn("payment.transfer.already_done publicOrderId={} transferId={}",
+                    order.getPublicOrderId(), payment.getStripeTransferId());
+            return;
+        }
+
+        String vendorStripeAccountId = order.getVendor().getStripeAccountId();
+        if (vendorStripeAccountId == null || vendorStripeAccountId.isBlank()) {
+            throw new IllegalStateException(
+                    "Vendor does not have a Stripe account configured for payouts");
+        }
+
+        try {
+            // Retrieve the PaymentIntent to get the underlying Charge ID.
+            // source_transaction on a Transfer must be a Charge (ch_...) not a PaymentIntent (pi_...).
+            PaymentIntent intent = PaymentIntent.retrieve(payment.getTransactionId());
+            String chargeId = intent.getLatestCharge();
+            if (chargeId == null || chargeId.isBlank()) {
+                throw new IllegalStateException(
+                        "No charge found on PaymentIntent " + payment.getTransactionId());
+            }
+
+            // Vendor payout = total - platform fee, pre-calculated and stored at authorization time
+            long vendorPayoutCents = payment.getVendorPayout()
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .longValueExact();
+
+            TransferCreateParams transferParams = TransferCreateParams.builder()
+                    .setAmount(vendorPayoutCents)
+                    .setCurrency("cad")
+                    .setDestination(vendorStripeAccountId)
+                    // Links this Transfer to the charge — draws from those specific funds
+                    .setSourceTransaction(chargeId)
+                    // Same group as the PaymentIntent for unified Stripe reporting
+                    .setTransferGroup("ORDER_" + order.getPublicOrderId())
+                    .putMetadata("publicOrderId",  order.getPublicOrderId())
+                    .putMetadata("vendorPublicId", order.getVendor().getPublicVendorId())
+                    .build();
+
+            RequestOptions requestOptions = RequestOptions.builder()
+                    .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":transfer")
+                    .build();
+
+            Transfer transfer = Transfer.create(transferParams, requestOptions);
+
+            payment.setStripeTransferId(transfer.getId());
+            paymentRepository.save(payment);
+
+            log.info("payment.transfer.created publicOrderId={} transferId={} vendorPayout={}",
+                    order.getPublicOrderId(), transfer.getId(), payment.getVendorPayout());
+
+        } catch (StripeException e) {
+            log.error("payment.transfer.failed publicOrderId={} message={}",
+                    order.getPublicOrderId(), e.getMessage(), e);
+            throw new RuntimeException("Vendor transfer failed: " + e.getMessage());
+        }
+    }
+
+    /**
      * Refund a completed Stripe charge, or cancel the hold if the payment was
      * only authorised and not yet captured.
      * Called by OrderService.cancelCustomerOrder() / rejectOrder() / adminCancelOrder().
@@ -325,21 +415,42 @@ public class PaymentService {
 
             } else if (payment.getStatus() == PaymentStatus.COMPLETED) {
                 // ── Payment was captured — issue a real Stripe refund ──
-                boolean hasTransfer = order.getVendor().getStripeAccountId() != null
-                        && !order.getVendor().getStripeAccountId().isBlank();
-                com.stripe.param.RefundCreateParams.Builder refundBuilder =
-                        com.stripe.param.RefundCreateParams.builder()
-                                .setPaymentIntent(payment.getTransactionId());
-                if (hasTransfer) {
-                    // Connected account — reverse transfer and return platform fee
-                    refundBuilder
-                            .setRefundApplicationFee(true)
-                            .setReverseTransfer(true);
+                //
+                // Under the transfer_group model funds sit in the *platform* account
+                // until transferToVendor() runs at delivery.
+                //
+                // Case A — no transfer yet (order cancelled before delivery):
+                //   Refund straight from platform funds.  No reverseTransfer needed.
+                //
+                // Case B — transfer already done (post-delivery admin refund):
+                //   First reverse the vendor transfer so funds return to the platform,
+                //   then refund the customer from the platform.
+                boolean transferDone = payment.getStripeTransferId() != null
+                        && !payment.getStripeTransferId().isBlank();
+
+                if (transferDone) {
+                    // Reverse the vendor transfer — brings funds back to platform account
+                    Transfer transfer = Transfer.retrieve(payment.getStripeTransferId());
+                    RequestOptions reverseOptions = RequestOptions.builder()
+                            .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":transfer_reversal")
+                            .build();
+                    transfer.getReversals().create(
+                            TransferReversalCollectionCreateParams.builder().build(),
+                            reverseOptions);
+                    log.info("payment.transfer.reversed publicOrderId={} transferId={}",
+                            order.getPublicOrderId(), payment.getStripeTransferId());
                 }
-                RequestOptions requestOptions = RequestOptions.builder()
+
+                // Refund the customer — always from platform account (no reverseTransfer flag)
+                RequestOptions refundOptions = RequestOptions.builder()
                         .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":refund")
                         .build();
-                com.stripe.model.Refund.create(refundBuilder.build(), requestOptions);
+                com.stripe.model.Refund.create(
+                        com.stripe.param.RefundCreateParams.builder()
+                                .setPaymentIntent(payment.getTransactionId())
+                                .build(),
+                        refundOptions);
+
                 payment.refundPayment();
                 paymentRepository.save(payment);
                 log.info("payment.refunded publicOrderId={} paymentId={} transactionId={} amount={}",

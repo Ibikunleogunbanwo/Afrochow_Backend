@@ -328,7 +328,8 @@ public class NotificationService {
      */
     @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
-    public void notifyCustomerOrderCancelled(String publicOrderId, String reason, String previousStatus) {
+    public void notifyCustomerOrderCancelled(String publicOrderId, String reason,
+                                              String previousStatus, String cancelledBy) {
         try {
             Order order = loadOrder(publicOrderId);
             if (order == null) return;
@@ -337,17 +338,47 @@ public class NotificationService {
             if (!areNotificationsEnabled(customer)) return;
 
             String vendorName = order.getVendor().getRestaurantName();
-            String message = "Your order from " + vendorName + " has been cancelled.";
-            if (reason != null && !reason.isEmpty()) message += " Reason: " + reason;
+
+            // Title and message vary by who initiated the cancellation
+            String title;
+            String message;
+            switch (cancelledBy != null ? cancelledBy : "UNKNOWN") {
+                case "SYSTEM" -> {
+                    title   = "Order Automatically Cancelled";
+                    message = "Your order from " + vendorName + " was automatically cancelled because "
+                            + "the restaurant did not respond in time. You have not been charged — "
+                            + "any authorization hold on your card will be released within 5–7 business days.";
+                }
+                case "VENDOR" -> {
+                    title   = "Order Declined by Restaurant";
+                    message = "Unfortunately, " + vendorName + " has declined your order."
+                            + (reason != null && !reason.isEmpty() ? " Reason: " + reason : "")
+                            + " You have not been charged — any authorization hold on your card will be released within 5–7 business days.";
+                }
+                case "ADMIN" -> {
+                    title   = "Order Cancelled";
+                    message = "Your order from " + vendorName + " has been cancelled by Afrochow support."
+                            + (reason != null && !reason.isEmpty() ? " Reason: " + reason : "")
+                            + " You have not been charged — any authorization hold on your card will be released within 5–7 business days."
+                            + " If you have questions, please contact support.";
+                }
+                default -> {
+                    // CUSTOMER or legacy events without cancelledBy
+                    title   = "Order Cancelled";
+                    message = "Your order from " + vendorName + " has been cancelled."
+                            + (reason != null && !reason.isEmpty() ? " Reason: " + reason : "")
+                            + " You have not been charged — any authorization hold on your card will be released within 5–7 business days.";
+                }
+            }
 
             createInAppNotification(customer, NotificationType.ORDER_UPDATE,
-                    "Order Cancelled", message, RelatedEntityType.ORDER, publicOrderId);
+                    title, message, RelatedEntityType.ORDER, publicOrderId);
 
             emailService.sendOrderStatusUpdateEmail(
                     customer.getEmail(), customer.getFirstName(),
                     publicOrderId, previousStatus, "CANCELLED");
 
-            log.info("Order cancelled notifications sent for order: {}", publicOrderId);
+            log.info("Order cancelled notifications sent for order: {} cancelledBy={}", publicOrderId, cancelledBy);
         } catch (Exception e) {
             log.error("Failed to send order cancelled notifications for order: {}", publicOrderId, e);
         }
@@ -670,6 +701,133 @@ public class NotificationService {
                 .createdAt(n.getCreatedAt())
                 .readAt(n.getReadAt())
                 .build();
+    }
+
+    /**
+     * Notify the vendor that a customer cancelled an order the vendor had already accepted.
+     * Channels: In-App only (email not warranted for operational alerts like this).
+     */
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    @Transactional
+    public void notifyVendorCustomerCancelled(String publicOrderId) {
+        try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
+            User vendorUser = order.getVendor().getUser();
+            if (vendorUser == null || !areNotificationsEnabled(vendorUser)) return;
+
+            String customerName = order.getCustomer().getUser().getFirstName()
+                    + " " + order.getCustomer().getUser().getLastName();
+
+            createInAppNotification(vendorUser, NotificationType.ORDER_UPDATE,
+                    "Order Cancelled by Customer",
+                    "Customer " + customerName + " has cancelled order #" + publicOrderId
+                    + ". Any preparation already started should be stopped.",
+                    RelatedEntityType.ORDER, publicOrderId);
+
+            log.info("Vendor notified of customer cancellation for order: {}", publicOrderId);
+        } catch (Exception e) {
+            log.error("Failed to notify vendor of customer cancellation for order: {}", publicOrderId, e);
+        }
+    }
+
+    // ========== AUTH / ACCOUNT LIFECYCLE ==========
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    @Transactional
+    public void notifyUserRegistered(String publicUserId, String email,
+                                     String firstName, String role) {
+        try {
+            emailService.sendWelcomeEmail(email, firstName, role);
+        } catch (Exception e) {
+            log.error("notifyUserRegistered — welcome email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+        }
+        String message = switch (role) {
+            case "VENDOR" -> "Welcome to Afrochow! Your vendor account is now active. You can start adding your products and manage orders.";
+            case "ADMIN"  -> "Welcome to Afrochow Admin! Your admin account is now active.";
+            default       -> "Welcome to Afrochow! Your account is now verified. Explore our amazing African cuisine!";
+        };
+        createNotification(publicUserId, "Welcome to Afrochow!", message,
+                NotificationType.SYSTEM_ALERT, null, null);
+    }
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    @Transactional
+    public void notifyPasswordChanged(String publicUserId, String email, String firstName) {
+        try {
+            emailService.sendPasswordChangedEmail(email, firstName);
+        } catch (Exception e) {
+            log.error("notifyPasswordChanged — email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+        }
+        createNotification(publicUserId,
+                "Password Changed Successfully",
+                "Your password has been changed. If you did not make this change, contact support immediately.",
+                NotificationType.SYSTEM_ALERT, null, null);
+    }
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    @Transactional
+    public void notifyPasswordResetRequested(String publicUserId, String email,
+                                             String firstName, String resetLink) {
+        try {
+            emailService.sendPasswordResetEmail(email, firstName, resetLink);
+        } catch (Exception e) {
+            log.error("notifyPasswordResetRequested — email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+        }
+        createNotification(publicUserId,
+                "Password Reset Requested",
+                "A password reset was requested for your account. If you did not request this, please secure your account immediately.",
+                NotificationType.SYSTEM_ALERT, null, null);
+    }
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    public void notifyEmailVerificationSent(String publicUserId, String email,
+                                            String firstName, String verificationToken) {
+        try {
+            emailService.sendEmailVerificationEmail(email, verificationToken, firstName);
+        } catch (Exception e) {
+            log.error("notifyEmailVerificationSent — email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+        }
+    }
+
+    // ========== VENDOR ADMIN LIFECYCLE ==========
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    public void notifyVendorApproved(String email, String firstName, String restaurantName) {
+        try {
+            emailService.sendVendorApprovalEmail(email, firstName, restaurantName);
+        } catch (Exception e) {
+            log.error("notifyVendorApproved — email failed for {}: {}", email, e.getMessage());
+        }
+    }
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    public void notifyVendorRejected(String email, String firstName,
+                                     String restaurantName, String reason) {
+        try {
+            emailService.sendVendorRejectionEmail(email, firstName, restaurantName, reason);
+        } catch (Exception e) {
+            log.error("notifyVendorRejected — email failed for {}: {}", email, e.getMessage());
+        }
+    }
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    public void notifyVendorSuspended(String email, String firstName, String restaurantName) {
+        try {
+            emailService.sendVendorSuspensionEmail(email, firstName, restaurantName);
+        } catch (Exception e) {
+            log.error("notifyVendorSuspended — email failed for {}: {}", email, e.getMessage());
+        }
+    }
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    public void notifyVendorReinstated(String email, String firstName, String restaurantName) {
+        try {
+            emailService.sendVendorReinstatementEmail(email, firstName, restaurantName);
+        } catch (Exception e) {
+            log.error("notifyVendorReinstated — email failed for {}: {}", email, e.getMessage());
+        }
     }
 
     // ========== INNER CLASSES ==========

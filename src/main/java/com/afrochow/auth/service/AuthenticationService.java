@@ -13,14 +13,12 @@ import com.afrochow.auth.dto.LoginResponse;
 import com.afrochow.auth.dto.RegistrationResponse;
 import com.afrochow.auth.dto.ResetPasswordRequestDto;
 import com.afrochow.common.enums.AdminAccessLevel;
-import com.afrochow.common.enums.NotificationType;
 import com.afrochow.common.enums.Role;
 import com.afrochow.common.exceptions.*;
 import com.afrochow.customer.dto.CustomerProfileRequestDto;
 import com.afrochow.customer.model.CustomerProfile;
-import com.afrochow.email.EmailService;
 import com.afrochow.email.EmailVerificationTokenRepository;
-import com.afrochow.notification.service.NotificationService;
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.security.JwtTokenProvider;
 import com.afrochow.security.Services.*;
 import com.afrochow.security.Utils.CookieConstants;
@@ -71,8 +69,7 @@ public class AuthenticationService {
     private final LoginAttemptService           loginAttemptService;
     private final AuthenticationManager         authenticationManager;
     private final SecurityEventService          securityEventService;
-    private final EmailService                  emailService;
-    private final NotificationService           notificationService;
+    private final OutboxEventService            outboxEventService;
     private final RateLimitService              rateLimitService;
     private final PasswordPolicyService         passwordPolicyService;
     private final UserRepository                userRepository;
@@ -430,14 +427,7 @@ public class AuthenticationService {
         userRepository.save(user);
 
         securityEventService.logPasswordResetRequest(user.getEmail(), httpRequest);
-        emailService.sendPasswordChangedEmail(user.getEmail(), user.getFirstName());
-        notificationService.createNotification(
-                user.getPublicUserId(),
-                "Password Changed Successfully",
-                "Your password has been changed. If you did not make this change, contact support immediately.",
-                NotificationType.SYSTEM_ALERT,
-                null, null
-        );
+        outboxEventService.passwordChanged(user.getPublicUserId(), user.getEmail(), user.getFirstName());
     }
 
 
@@ -457,21 +447,9 @@ public class AuthenticationService {
         User user = verificationToken.getUser();
         user.setEmailVerified(true);
 
-        emailService.sendWelcomeEmail(user.getEmail(), user.getFirstName(), user.getRole().name());
-
-        String welcomeMessage = switch (user.getRole()) {
-            case VENDOR -> "Welcome to Afrochow! Your vendor account is now active. You can start adding your products and manage orders.";
-            case ADMIN  -> "Welcome to Afrochow Admin! Your admin account is now active.";
-            default     -> "Welcome to Afrochow! Your account is now verified. Explore our amazing African cuisine!";
-        };
-
-        notificationService.createNotification(
-                user.getPublicUserId(),
-                "Welcome to Afrochow!",
-                welcomeMessage,
-                NotificationType.SYSTEM_ALERT,
-                null, null
-        );
+        outboxEventService.userRegistered(
+                user.getPublicUserId(), user.getEmail(),
+                user.getFirstName(), user.getRole().name());
 
         verificationToken.markAsUsed();
         emailVerificationTokenRepository.save(verificationToken);
@@ -690,15 +668,8 @@ public class AuthenticationService {
 
         String resetLink = frontendUrl + "/reset-password?token=" + token.getTransientRawToken();
         securityEventService.logPasswordResetRequest(user.getEmail(), httpRequest);
-        emailService.sendPasswordResetEmail(user.getEmail(), user.getFirstName(), resetLink);
-
-        notificationService.createNotification(
-                user.getPublicUserId(),
-                "Password Reset Requested",
-                "A password reset was requested for your account. If you did not request this, please secure your account immediately.",
-                NotificationType.SYSTEM_ALERT,
-                null, null
-        );
+        outboxEventService.passwordResetRequested(
+                user.getPublicUserId(), user.getEmail(), user.getFirstName(), resetLink);
     }
 
     private void createAndSendEmailVerificationToken(User user) {
@@ -709,17 +680,14 @@ public class AuthenticationService {
         );
         emailVerificationTokenRepository.save(verificationToken);
 
-        try {
-            emailService.sendEmailVerificationEmail(
-                    user.getEmail(), verificationToken.getToken(), user.getFirstName()
-            );
-            log.info("Verification email sent for user: {}", user.getPublicUserId());
-        } catch (Exception e) {
-            // SMTP failure must not roll back registration — token is persisted,
-            // user can resend via POST /auth/resend-verification.
-            log.error("SMTP failure — verification email not delivered to {} (userId={}). Error: {}",
-                    user.getEmail(), user.getPublicUserId(), e.getMessage());
-        }
+        // Write to outbox — the poller delivers the email asynchronously, so an
+        // SMTP blip never rolls back registration. The token is already persisted;
+        // the user can also resend via POST /auth/resend-verification.
+        outboxEventService.emailVerificationSent(
+                user.getPublicUserId(), user.getEmail(),
+                user.getFirstName(), verificationToken.getToken());
+
+        log.info("Email verification outbox event queued for user: {}", user.getPublicUserId());
     }
 
     private void clearAuthCookies(HttpServletResponse httpResponse) {

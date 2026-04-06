@@ -1,7 +1,7 @@
 package com.afrochow.admin.controller;
 
 import com.afrochow.common.ApiResponse;
-import com.afrochow.email.EmailService;
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,7 +30,7 @@ import java.util.Map;
 public class AdminVendorManagementController {
 
     private final VendorProfileRepository vendorProfileRepository;
-    private final EmailService emailService;
+    private final OutboxEventService       outboxEventService;
 
     // ========== VIEW VENDORS ==========
 
@@ -89,9 +89,9 @@ public class AdminVendorManagementController {
         }
         vendorProfileRepository.save(vendor);
 
-        // Send approval email to vendor
         if (vendor.getUser() != null) {
-            emailService.sendVendorApprovalEmail(
+            outboxEventService.vendorApproved(
+                    vendor.getUser().getPublicUserId(),
                     vendor.getUser().getEmail(),
                     vendor.getUser().getFirstName(),
                     vendor.getRestaurantName());
@@ -131,9 +131,9 @@ public class AdminVendorManagementController {
         }
         vendorProfileRepository.save(vendor);
 
-        // Notify the vendor that their store access has been restored
         if (vendor.getUser() != null) {
-            emailService.sendVendorReinstatementEmail(
+            outboxEventService.vendorReinstated(
+                    vendor.getUser().getPublicUserId(),
                     vendor.getUser().getEmail(),
                     vendor.getUser().getFirstName(),
                     vendor.getRestaurantName());
@@ -157,10 +157,10 @@ public class AdminVendorManagementController {
         }
         vendorProfileRepository.save(vendor);
 
-        // Only send suspension email for verified vendors — rejected applicants
-        // go through the /reject endpoint which sends its own email.
+        // Only notify verified vendors — rejected applicants go through /reject.
         if (wasVerified && vendor.getUser() != null) {
-            emailService.sendVendorSuspensionEmail(
+            outboxEventService.vendorSuspended(
+                    vendor.getUser().getPublicUserId(),
                     vendor.getUser().getEmail(),
                     vendor.getUser().getFirstName(),
                     vendor.getRestaurantName());
@@ -193,10 +193,10 @@ public class AdminVendorManagementController {
         }
         vendorProfileRepository.save(vendor);
 
-        // Send rejection email with reason
         if (vendor.getUser() != null) {
             String reason = (body != null) ? body.getReason() : null;
-            emailService.sendVendorRejectionEmail(
+            outboxEventService.vendorRejected(
+                    vendor.getUser().getPublicUserId(),
                     vendor.getUser().getEmail(),
                     vendor.getUser().getFirstName(),
                     vendor.getRestaurantName(),

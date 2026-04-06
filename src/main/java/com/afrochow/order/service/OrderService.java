@@ -53,6 +53,9 @@ public class OrderService {
     @Value("${order.sla.accept-window-minutes:10}")
     private int slaAcceptWindowMinutes;
 
+    @Value("${order.cancellation.window-hours:6}")
+    private int cancellationWindowHours;
+
     private final OrderRepository orderRepository;
     private final CustomerProfileRepository customerProfileRepository;
     private final VendorProfileRepository vendorProfileRepository;
@@ -197,15 +200,24 @@ public class OrderService {
                             "'" + product.getName() + "' requires advance notice. " +
                             "Please provide a requestedFulfillmentTime.");
                 }
+                LocalDateTime now = LocalDateTime.now();
                 // Compare in MINUTES (not HOURS) to avoid ChronoUnit.HOURS truncation:
                 // e.g. 47h 59m would truncate to 47 hours and incorrectly fail a 48h requirement.
-                long minutesUntil = ChronoUnit.MINUTES.between(
-                        LocalDateTime.now(), request.getRequestedFulfillmentTime());
+                long minutesUntil = ChronoUnit.MINUTES.between(now, request.getRequestedFulfillmentTime());
                 int required = product.getAdvanceNoticeHours() != null ? product.getAdvanceNoticeHours() : 24;
                 if (minutesUntil < (long) required * 60) {
                     throw new IllegalArgumentException(
                             "'" + product.getName() + "' requires at least " + required +
                             " hours advance notice. Please choose a later fulfilment time.");
+                }
+                // ── Stripe 7-day authorization window ─────────────────────
+                // Stripe card authorizations expire after 7 days. We cap advance
+                // orders at 6 days so capture at acceptance always succeeds.
+                long daysUntil = ChronoUnit.DAYS.between(now, request.getRequestedFulfillmentTime());
+                if (daysUntil > 6) {
+                    throw new IllegalArgumentException(
+                            "Orders cannot be scheduled more than 6 days in advance. " +
+                            "Please choose a fulfilment time within the next 6 days.");
                 }
             }
 
@@ -339,10 +351,19 @@ public class OrderService {
             throw new IllegalStateException("You can only cancel your own orders");
         }
 
-        if (!order.canBeCancelled()) {
-            throw new IllegalStateException("Order cannot be cancelled at this stage");
+        if (!order.canBeCancelled(cancellationWindowHours)) {
+            boolean pastWindow = order.getOrderTime() != null &&
+                    !LocalDateTime.now().isBefore(order.getOrderTime().plusHours(cancellationWindowHours));
+            if (pastWindow) {
+                throw new IllegalStateException(
+                        "Orders can only be cancelled within " + cancellationWindowHours
+                        + " hours of placement. Please contact Afrochow support for assistance.");
+            }
+            throw new IllegalStateException(
+                    "This order can no longer be cancelled. Please contact Afrochow support.");
         }
 
+        boolean vendorAlreadyAccepted = order.getStatus() == OrderStatus.CONFIRMED;
         String previousStatus = order.getStatus().toString();
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
@@ -352,7 +373,12 @@ public class OrderService {
                 customerUserId,
                 previousStatus,
                 updatedOrder.getStatus());
-        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus);
+        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by customer", previousStatus, "CUSTOMER");
+
+        // If the vendor had already accepted, notify them to stop any prep work
+        if (vendorAlreadyAccepted) {
+            outboxEventService.vendorCustomerCancelled(updatedOrder.getPublicOrderId());
+        }
 
         return toResponseDto(updatedOrder);
     }
@@ -375,7 +401,7 @@ public class OrderService {
                 updatedOrder.getPublicOrderId(),
                 previousStatus,
                 updatedOrder.getStatus());
-        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus);
+        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Cancelled by admin", previousStatus, "ADMIN");
 
         return toResponseDto(updatedOrder);
     }
@@ -474,7 +500,7 @@ public class OrderService {
                 username,
                 previousStatus,
                 updatedOrder.getStatus());
-        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus);
+        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), "Rejected by vendor", previousStatus, "VENDOR");
         return toResponseDto(updatedOrder);
     }
 
@@ -493,7 +519,8 @@ public class OrderService {
         outboxEventService.orderCancelled(
                 order.getPublicOrderId(),
                 "Vendor did not respond in time — your order has been automatically cancelled and refunded.",
-                "PENDING"
+                "PENDING",
+                "SYSTEM"
         );
     }
 
@@ -509,7 +536,9 @@ public class OrderService {
             order.getStatus() != OrderStatus.READY_FOR_PICKUP) return; // guard: scheduler may race
         order.updateStatus(OrderStatus.DELIVERED);
         orderRepository.save(order);
-        paymentService.captureStripePayment(order, null);
+        // Payment was captured at acceptance (CONFIRMED).  Now that the order is
+        // delivered, pay out the vendor's share from the platform account.
+        paymentService.transferToVendor(order);
         VendorProfile vendor = order.getVendor();
         vendor.recordCompletedOrder(order.getTotalAmount());
         vendorProfileRepository.save(vendor);
@@ -518,12 +547,16 @@ public class OrderService {
 
     /**
      * Called by {@link com.afrochow.order.service.FulfillmentSafetyNetScheduler}
-     * to retry a Stripe capture for an order that was marked DELIVERED but whose
-     * payment was never captured — e.g. due to a transient network failure.
+     * to retry the vendor payout Transfer for an order that was marked DELIVERED
+     * but whose transfer failed due to a transient error.
+     *
+     * Under the transfer_group model capture happens at acceptance (CONFIRMED), not
+     * at delivery.  So the retry here is for the Transfer, not the capture.
+     * transferToVendor() is idempotent — it no-ops if the Transfer ID is already stored.
      */
     @Transactional
     public void retryCaptureForDeliveredOrder(Order order) {
-        paymentService.captureStripePayment(order, null);
+        paymentService.transferToVendor(order);
     }
 
     @Transactional
@@ -609,7 +642,10 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.DELIVERED);
         Order updatedOrder = orderRepository.save(order);
-        paymentService.captureStripePayment(updatedOrder, finalAmount);
+        // Payment was captured at acceptance (CONFIRMED).  Now that delivery is confirmed,
+        // move the vendor's share from the platform account to their Stripe connected account.
+        // Do NOT call captureStripePayment here — capture already happened at acceptance.
+        paymentService.transferToVendor(updatedOrder);
         vendor.recordCompletedOrder(updatedOrder.getTotalAmount());
         vendorProfileRepository.save(vendor);
         outboxEventService.orderDelivered(updatedOrder.getPublicOrderId());
