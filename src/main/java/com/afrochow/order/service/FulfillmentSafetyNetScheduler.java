@@ -95,8 +95,8 @@ public class FulfillmentSafetyNetScheduler {
                 );
             } catch (Exception ex) {
                 errors++;
-                log.error("SAFETY_NET_ERROR — auto-deliver failed for orderId={} error={}",
-                        order.getPublicOrderId(), ex.getMessage(), ex);
+                log.error("SAFETY_NET_ERROR — auto-deliver failed for orderId={}",
+                        order.getPublicOrderId(), ex);
             }
         }
 
@@ -112,8 +112,8 @@ public class FulfillmentSafetyNetScheduler {
                 auditLogger.logCaptureAttempt(order.getPublicOrderId(), "success", true, null);
             } catch (Exception ex) {
                 errors++;
-                log.error("SAFETY_NET_ERROR — capture retry failed for orderId={} error={}",
-                        order.getPublicOrderId(), ex.getMessage(), ex);
+                log.error("SAFETY_NET_ERROR — capture retry failed for orderId={}",
+                        order.getPublicOrderId(), ex);
                 auditLogger.logCaptureAttempt(order.getPublicOrderId(), "failure", true, ex.getMessage());
             }
         }

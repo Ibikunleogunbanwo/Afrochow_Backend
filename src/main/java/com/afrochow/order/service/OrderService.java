@@ -34,8 +34,11 @@ import com.afrochow.vendor.repository.VendorProfileRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -66,6 +69,15 @@ public class OrderService {
     private final PaymentService paymentService;
     private final PromotionService promotionService;
     private final OutboxEventService outboxEventService;
+
+    /**
+     * Self-reference via Spring proxy — allows calling @Transactional(REQUIRES_NEW)
+     * methods on this bean from within the same class. @Lazy prevents a circular
+     * dependency at construction time (Spring injects a CGLIB proxy on first use).
+     */
+    @Autowired
+    @Lazy
+    private OrderService self;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -511,18 +523,51 @@ public class OrderService {
 
     /**
      * Called by {@link com.afrochow.order.service.OrderSlaService} when a PENDING order
-     * exceeds the vendor acceptance window.  Uses the same refund + cancel path as
-     * {@link #rejectOrder} but does not require a vendor principal — the scheduler acts
-     * as the system actor.
+     * exceeds the vendor acceptance window.
+     *
+     * Two-phase approach to prevent Stripe/DB inconsistency:
+     *   Phase 1 — DB commit (via {@link #commitOrderExpiry}):  lock the order, verify it is
+     *             still PENDING, update Payment record and Order status to CANCELLED, write
+     *             the outbox event — all in a dedicated REQUIRES_NEW transaction that commits
+     *             before any external call.
+     *   Phase 2 — Stripe cancel (outside any transaction):  cancel the Stripe authorisation
+     *             after the DB is consistent. If Stripe fails, the DB is already clean and
+     *             the hold expires naturally after 7 days.
+     *
+     * This design means a DB failure (Phase 1) leaves Stripe untouched (no inconsistency),
+     * and a Stripe failure (Phase 2) leaves the DB in the correct CANCELLED state.
      */
-    @Transactional
     public void autoExpireOrder(Order order) {
-        // Re-fetch with a lock so the scheduler and a concurrent vendor-accept don't
-        // both see PENDING and both act on the same order.
+        // Phase 1: commit DB changes first, before touching Stripe.
+        boolean proceeded = self.commitOrderExpiry(order);
+        if (!proceeded) return; // vendor already accepted/rejected — nothing to do
+
+        // Phase 2: cancel the Stripe hold OUTSIDE any JPA transaction.
+        paymentService.cancelStripeAuthorization(order);
+    }
+
+    /**
+     * Locks the order row, validates it is still PENDING, marks the Payment record
+     * and the Order as CANCELLED, and writes an outbox event — all in a single
+     * REQUIRES_NEW transaction so the commit happens independently of the caller.
+     *
+     * Must be called via the Spring proxy (i.e. through {@code self}) so that
+     * {@code @Transactional(REQUIRES_NEW)} is honoured. Direct same-class calls
+     * bypass the proxy and would join (or start) the caller's transaction instead.
+     *
+     * @return {@code true} if the order was PENDING and has been cancelled;
+     *         {@code false} if another actor already handled it.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean commitOrderExpiry(Order order) {
         Order locked = orderRepository.findByOrderIdWithLock(order.getOrderId())
-                .orElseThrow(() -> new EntityNotFoundException("Order not found for auto-expiry: " + order.getPublicOrderId()));
-        if (locked.getStatus() != OrderStatus.PENDING) return; // already handled
-        paymentService.refundStripeCharge(locked);
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Order not found for auto-expiry: " + order.getPublicOrderId()));
+        if (locked.getStatus() != OrderStatus.PENDING) return false; // already handled
+
+        // Update the Payment DB record only (no Stripe call here)
+        paymentService.markPaymentCancelled(locked);
+
         locked.updateStatus(OrderStatus.CANCELLED);
         orderRepository.save(locked);
         outboxEventService.orderCancelled(
@@ -531,6 +576,7 @@ public class OrderService {
                 "PENDING",
                 "SYSTEM"
         );
+        return true;
     }
 
     /**

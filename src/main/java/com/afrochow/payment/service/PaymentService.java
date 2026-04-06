@@ -475,6 +475,58 @@ public class PaymentService {
         }
     }
 
+    /**
+     * Marks the Payment record as CANCELLED in the DB without calling Stripe.
+     * Joins the caller's transaction (REQUIRED propagation).
+     * Called from {@link com.afrochow.order.service.OrderService#commitOrderExpiry}
+     * during SLA auto-expiry, where the Stripe API call happens AFTER this DB commit.
+     */
+    @Transactional
+    public void markPaymentCancelled(Order order) {
+        Payment payment = paymentRepository.findByOrderWithLock(order)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment record not found for order: " + order.getPublicOrderId()));
+        if (payment.getStatus() != PaymentStatus.AUTHORIZED) {
+            // Already cancelled/refunded — nothing to do
+            return;
+        }
+        payment.cancelAuthorization();
+        paymentRepository.save(payment);
+        log.info("payment.record.marked_cancelled publicOrderId={} paymentId={}",
+                order.getPublicOrderId(), payment.getPaymentId());
+    }
+
+    /**
+     * Cancels the Stripe PaymentIntent authorization for an order.
+     * Intentionally NOT @Transactional — must be called OUTSIDE any active JPA transaction
+     * so that a Stripe failure cannot roll back already-committed DB state.
+     * Idempotent: uses a stable idempotency key so repeated calls are safe.
+     *
+     * If Stripe returns an error (e.g. the intent is already cancelled), logs a warning
+     * and swallows the exception — the authorization hold expires on its own after 7 days.
+     */
+    public void cancelStripeAuthorization(Order order) {
+        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+        if (payment == null || payment.getTransactionId() == null) return;
+
+        try {
+            PaymentIntent intent = PaymentIntent.retrieve(payment.getTransactionId());
+            RequestOptions requestOptions = RequestOptions.builder()
+                    .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":cancel_auth")
+                    .build();
+            intent.cancel(requestOptions);
+            log.info("payment.authorization.cancelled publicOrderId={} paymentId={} transactionId={}",
+                    order.getPublicOrderId(),
+                    payment.getPaymentId(),
+                    payment.getTransactionId());
+        } catch (StripeException e) {
+            log.error("payment.stripe_cancel.failed publicOrderId={} transactionId={} — " +
+                      "authorization will expire on Stripe after 7 days. Error: {}",
+                    order.getPublicOrderId(), payment.getTransactionId(), e.getMessage());
+            // Do NOT rethrow — order is already CANCELLED in DB; Stripe hold expires naturally.
+        }
+    }
+
     // ========== CUSTOMER METHODS ==========
 
     /**
