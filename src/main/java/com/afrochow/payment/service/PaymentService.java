@@ -387,7 +387,10 @@ public class PaymentService {
      */
     @Transactional
     public void refundStripeCharge(Order order) {
-        Payment payment = paymentRepository.findByOrder(order)
+        // Use a pessimistic write lock on the Payment row so two concurrent refund
+        // paths (e.g. SLA scheduler + customer cancel) cannot both reach Stripe
+        // with the same PaymentIntent and trigger a double-cancel / double-refund.
+        Payment payment = paymentRepository.findByOrderWithLock(order)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Payment record not found for order: " + order.getPublicOrderId()));
 
