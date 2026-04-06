@@ -29,9 +29,10 @@ public class Promotion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long promotionId;
 
-    /** Optimistic-locking version — prevents concurrent activate/deactivate races. */
+    /** Optimistic-locking version — prevents concurrent activate/deactivate races.
+     *  Primitive long: a null DB value is read as 0, never propagated as null. */
     @Version
-    private Long version;
+    private long version;
 
     @Column(unique = true, nullable = false)
     private String publicPromotionId;

@@ -29,9 +29,10 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long paymentId;
 
-    /** Optimistic-locking version — prevents double-capture / double-refund races. */
+    /** Optimistic-locking version — prevents double-capture / double-refund races.
+     *  Primitive long: a null DB value is read as 0, never propagated as null. */
     @Version
-    private Long version;
+    private long version;
 
     @Column(name = "public_payment_id", nullable = false, unique = true, length = 36)
     private String publicPaymentId;
