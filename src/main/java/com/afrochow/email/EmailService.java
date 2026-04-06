@@ -237,7 +237,7 @@ public class EmailService {
             context.setVariable("orderTime", orderTime != null ? orderTime.format(DATE_FORMATTER) : LocalDateTime.now().format(DATE_FORMATTER));
             context.setVariable("appName", appName);
             context.setVariable("appUrl", appUrl);
-            context.setVariable("orderTrackingUrl", String.format("%s/orders/%s", appUrl, orderPublicId));
+            context.setVariable("orderTrackingUrl", String.format("%s/profile/orders/%s", appUrl, orderPublicId));
 
             String subject = String.format("Order Confirmation #%s - %s", orderPublicId, appName);
             String htmlContent = processTemplate("order-confirmation", context);
@@ -281,7 +281,7 @@ public class EmailService {
             context.setVariable("orderTime", orderTime != null ? orderTime.format(DATE_FORMATTER) : LocalDateTime.now().format(DATE_FORMATTER));
             context.setVariable("appName", appName);
             context.setVariable("appUrl", appUrl);
-            context.setVariable("orderTrackingUrl", String.format("%s/orders/%s", appUrl, orderPublicId));
+            context.setVariable("orderTrackingUrl", String.format("%s/profile/orders/%s", appUrl, orderPublicId));
 
             String subject = String.format("We received your order #%s - %s", orderPublicId, appName);
             String htmlContent = processTemplate("order-received", context);
@@ -321,7 +321,7 @@ public class EmailService {
             context.setVariable("newStatus", newStatus);
             context.setVariable("appName", appName);
             context.setVariable("appUrl", appUrl);
-            context.setVariable("orderTrackingUrl", String.format("%s/orders/%s", appUrl, orderPublicId));
+            context.setVariable("orderTrackingUrl", String.format("%s/profile/orders/%s", appUrl, orderPublicId));
 
             String subject = String.format("Order Update: %s - %s", newStatus, appName);
             String htmlContent = processTemplate("order-status-update", context);
@@ -404,7 +404,7 @@ public class EmailService {
             context.setVariable("paymentTime", LocalDateTime.now().format(DATE_FORMATTER));
             context.setVariable("appName", appName);
             context.setVariable("appUrl", appUrl);
-            context.setVariable("orderViewUrl", String.format("%s/orders/%s", appUrl, orderPublicId));
+            context.setVariable("orderViewUrl", String.format("%s/profile/orders/%s", appUrl, orderPublicId));
 
             String subject = String.format("Payment Confirmation - %s", appName);
             String htmlContent = processTemplate("payment-confirmation", context);
