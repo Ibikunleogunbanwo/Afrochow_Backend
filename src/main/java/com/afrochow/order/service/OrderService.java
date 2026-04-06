@@ -344,7 +344,9 @@ public class OrderService {
 
     @Transactional
     public OrderResponseDto cancelCustomerOrder(Long customerUserId, String publicOrderId) {
-        Order order = orderRepository.findByPublicOrderId(publicOrderId)
+        // Pessimistic lock prevents a concurrent vendor acceptOrder from both seeing
+        // PENDING and both attempting to refund/capture the same Stripe authorization.
+        Order order = orderRepository.findByPublicOrderIdWithLock(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
         if (!order.getCustomer().getUser().getUserId().equals(customerUserId)) {
@@ -453,7 +455,9 @@ public class OrderService {
 
     @Transactional
     public OrderResponseDto acceptOrder(String username, String publicOrderId) {
-        Order order = orderRepository.findByPublicOrderId(publicOrderId)
+        // Pessimistic lock prevents two concurrent accept/reject calls from both
+        // seeing status=PENDING and both proceeding (double-charge, double-cancel, etc.).
+        Order order = orderRepository.findByPublicOrderIdWithLock(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
         VendorProfile vendor = getVendorByUsername(username);
         if (!order.getVendor().getId().equals(vendor.getId())) {
@@ -482,7 +486,8 @@ public class OrderService {
 
     @Transactional
     public OrderResponseDto rejectOrder(String username, String publicOrderId) {
-        Order order = orderRepository.findByPublicOrderId(publicOrderId)
+        // Pessimistic lock — same race as acceptOrder; lock prevents double-refund.
+        Order order = orderRepository.findByPublicOrderIdWithLock(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
         VendorProfile vendor = getVendorByUsername(username);
         if (!order.getVendor().getId().equals(vendor.getId())) {
@@ -512,12 +517,16 @@ public class OrderService {
      */
     @Transactional
     public void autoExpireOrder(Order order) {
-        if (order.getStatus() != OrderStatus.PENDING) return; // guard: job may race
-        paymentService.refundStripeCharge(order);
-        order.updateStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+        // Re-fetch with a lock so the scheduler and a concurrent vendor-accept don't
+        // both see PENDING and both act on the same order.
+        Order locked = orderRepository.findByOrderIdWithLock(order.getOrderId())
+                .orElseThrow(() -> new EntityNotFoundException("Order not found for auto-expiry: " + order.getPublicOrderId()));
+        if (locked.getStatus() != OrderStatus.PENDING) return; // already handled
+        paymentService.refundStripeCharge(locked);
+        locked.updateStatus(OrderStatus.CANCELLED);
+        orderRepository.save(locked);
         outboxEventService.orderCancelled(
-                order.getPublicOrderId(),
+                locked.getPublicOrderId(),
                 "Vendor did not respond in time — your order has been automatically cancelled and refunded.",
                 "PENDING",
                 "SYSTEM"
@@ -532,17 +541,22 @@ public class OrderService {
      */
     @Transactional
     public void autoDeliverOrder(Order order) {
-        if (order.getStatus() != OrderStatus.OUT_FOR_DELIVERY &&
-            order.getStatus() != OrderStatus.READY_FOR_PICKUP) return; // guard: scheduler may race
-        order.updateStatus(OrderStatus.DELIVERED);
-        orderRepository.save(order);
+        // Re-fetch with a lock so the scheduler and a concurrent vendor markDelivered
+        // call don't both see the same status and both trigger the transfer + stat update.
+        Order locked = orderRepository.findByOrderIdWithLock(order.getOrderId())
+                .orElseThrow(() -> new EntityNotFoundException("Order not found for auto-deliver: " + order.getPublicOrderId()));
+        if (locked.getStatus() != OrderStatus.OUT_FOR_DELIVERY &&
+            locked.getStatus() != OrderStatus.READY_FOR_PICKUP) return; // already handled
+        locked.updateStatus(OrderStatus.DELIVERED);
+        orderRepository.save(locked);
         // Payment was captured at acceptance (CONFIRMED).  Now that the order is
         // delivered, pay out the vendor's share from the platform account.
-        paymentService.transferToVendor(order);
-        VendorProfile vendor = order.getVendor();
-        vendor.recordCompletedOrder(order.getTotalAmount());
-        vendorProfileRepository.save(vendor);
-        outboxEventService.orderDelivered(order.getPublicOrderId());
+        paymentService.transferToVendor(locked);
+        // Atomic counter update — avoids lost-update when two orders for the same
+        // vendor are delivered concurrently (both would read the same stale counter).
+        vendorProfileRepository.incrementCompletedOrderStats(
+                locked.getVendor().getId(), locked.getTotalAmount());
+        outboxEventService.orderDelivered(locked.getPublicOrderId());
     }
 
     /**
@@ -626,7 +640,9 @@ public class OrderService {
      */
     @Transactional
     public OrderResponseDto markOrderDelivered(String username, String publicOrderId, java.math.BigDecimal finalAmount) {
-        Order order = orderRepository.findByPublicOrderId(publicOrderId)
+        // Pessimistic lock prevents a concurrent autoDeliverOrder (scheduler) from also
+        // marking this order delivered and triggering a duplicate transfer + stat update.
+        Order order = orderRepository.findByPublicOrderIdWithLock(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
         VendorProfile vendor = getVendorByUsername(username);
         if (!order.getVendor().getId().equals(vendor.getId())) {
@@ -646,8 +662,9 @@ public class OrderService {
         // move the vendor's share from the platform account to their Stripe connected account.
         // Do NOT call captureStripePayment here — capture already happened at acceptance.
         paymentService.transferToVendor(updatedOrder);
-        vendor.recordCompletedOrder(updatedOrder.getTotalAmount());
-        vendorProfileRepository.save(vendor);
+        // Atomic counter update — avoids lost-update when two orders for the same
+        // vendor are delivered concurrently (both would read the same stale counter).
+        vendorProfileRepository.incrementCompletedOrderStats(vendor.getId(), updatedOrder.getTotalAmount());
         outboxEventService.orderDelivered(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }

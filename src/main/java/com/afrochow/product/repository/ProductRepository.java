@@ -3,9 +3,11 @@ package com.afrochow.product.repository;
 import com.afrochow.product.model.Product;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.category.model.Category;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -22,6 +24,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     // ========== FIND BY ID ==========
 
     Optional<Product> findByPublicProductId(String publicProductId);
+
+    /**
+     * Fetch a product by its public ID with a database-level write lock.
+     * Use this in toggleProductAvailability() so that two concurrent toggle
+     * calls on the same product are serialised — preventing both from reading
+     * the same value and both flipping it the same direction.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Product p WHERE p.publicProductId = :publicProductId")
+    Optional<Product> findByPublicProductIdWithLock(@Param("publicProductId") String publicProductId);
 
     // ========== FIND BY VENDOR ==========
 

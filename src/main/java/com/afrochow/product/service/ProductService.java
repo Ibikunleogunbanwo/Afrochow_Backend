@@ -291,11 +291,21 @@ public class ProductService {
     }
 
     /**
-     * Toggle product availability (vendor only)
+     * Toggle product availability (vendor only).
+     *
+     * <p>Uses a pessimistic write lock on the product row so that two concurrent
+     * toggle requests are serialised at the database level.  Without the lock, both
+     * requests read {@code available = true}, both flip it to {@code false}, and the
+     * product ends up unavailable regardless of the intended toggle direction.
+     *
+     * <p>Note: was previously {@code @Transactional(readOnly = true)}, which silently
+     * discarded the {@code save()} call in some JPA providers — corrected to a full
+     * read-write transaction.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public ProductResponseDto toggleProductAvailability(Long vendorUserId, String publicProductId) {
-        Product product = productRepository.findByPublicProductId(publicProductId)
+        // Pessimistic lock — serialises concurrent toggles on the same product row.
+        Product product = productRepository.findByPublicProductIdWithLock(publicProductId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
 
         // Verify ownership
@@ -319,7 +329,7 @@ public class ProductService {
      * @return Updated product
      * @throws IOException if upload fails
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public ProductResponseDto uploadProductImage(Long vendorUserId, String publicProductId, MultipartFile file)
             throws IOException {
         Product product = productRepository.findByPublicProductId(publicProductId)

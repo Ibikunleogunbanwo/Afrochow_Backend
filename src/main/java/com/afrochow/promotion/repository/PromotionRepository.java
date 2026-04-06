@@ -2,7 +2,9 @@ package com.afrochow.promotion.repository;
 
 import com.afrochow.promotion.model.Promotion;
 import com.afrochow.vendor.model.VendorProfile;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +17,16 @@ import java.util.Optional;
 public interface PromotionRepository extends JpaRepository<Promotion, Long> {
 
     Optional<Promotion> findByCode(String code);
+
+    /**
+     * Fetch a promotion by its code with a database-level write lock.
+     * Use this in calculateDiscount() and recordUsage() so that the usage-count
+     * check and the subsequent PromotionUsage INSERT are serialised — preventing
+     * two concurrent requests from both passing the limit guard and both recording a use.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Promotion p WHERE p.code = :code")
+    Optional<Promotion> findByCodeWithLock(@Param("code") String code);
 
     Optional<Promotion> findByPublicPromotionId(String publicPromotionId);
 

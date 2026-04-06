@@ -29,6 +29,10 @@ public class Promotion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long promotionId;
 
+    /** Optimistic-locking version — prevents concurrent activate/deactivate races. */
+    @Version
+    private Long version;
+
     @Column(unique = true, nullable = false)
     private String publicPromotionId;
 

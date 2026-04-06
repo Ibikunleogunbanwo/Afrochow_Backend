@@ -40,6 +40,10 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long orderId;
 
+    /** Optimistic-locking version — prevents lost-update race conditions on status changes. */
+    @Version
+    private Long version;
+
     @Column(unique = true, nullable = false)
     private String publicOrderId;
 

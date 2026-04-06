@@ -4,7 +4,9 @@ import com.afrochow.order.model.Order;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.common.enums.OrderStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,6 +19,25 @@ import java.util.List;
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByPublicOrderId(String publicOrderId);
+
+    /**
+     * Fetch an order by its public ID with a database-level write lock.
+     * Use this in any service method that transitions order status to prevent
+     * two concurrent requests from both seeing the same "old" status and both
+     * proceeding past the guard check (e.g. double-accept, double-cancel).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.publicOrderId = :publicOrderId")
+    Optional<Order> findByPublicOrderIdWithLock(@Param("publicOrderId") String publicOrderId);
+
+    /**
+     * Fetch an order by its surrogate PK with a database-level write lock.
+     * Use this in scheduler-driven transitions (autoExpire, autoDeliver) where
+     * the caller already holds the Order object but needs to re-fetch with a lock.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.orderId = :id")
+    Optional<Order> findByOrderIdWithLock(@Param("id") Long id);
 
     // Customer queries
     List<Order> findByCustomer(CustomerProfile customer);
