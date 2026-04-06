@@ -1,277 +1,121 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<html xmlns:th="http://www.thymeleaf.org" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title th:text="|Your store has been suspended — ${appName}|">Your store has been suspended</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title th:text="|Store Suspended — ${appName}|">Store Suspended</title>
+    <!--[if mso]>
+    <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch><o:AllowPNG/></o:OfficeDocumentSettings></xml>
+    <![endif]-->
+    <!--[if !mso]><!-->
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet" type="text/css">
+    <!--<![endif]-->
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-            background-color: #FFF8F3;
-            padding: 32px 16px;
-            color: #1a1a1a;
-            line-height: 1.6;
-        }
-
-        .email-container {
-            max-width: 580px;
-            margin: 0 auto;
-            background: #ffffff;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 4px 24px rgba(255, 107, 53, 0.08), 0 1px 4px rgba(0,0,0,0.06);
-            border: 1px solid #FFE5D9;
-        }
-
-        .header {
-            background: #FF6B35;
-            padding: 48px 40px 40px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .header::before {
-            content: '';
-            position: absolute;
-            top: -60%;
-            right: -30%;
-            width: 280px;
-            height: 280px;
-            background: rgba(255,255,255,0.08);
-            border-radius: 50%;
-        }
-
-        .header::after {
-            content: '';
-            position: absolute;
-            bottom: -40%;
-            left: -20%;
-            width: 200px;
-            height: 200px;
-            background: rgba(255,255,255,0.06);
-            border-radius: 50%;
-        }
-
-        .header-logo {
-            font-size: 36px;
-            font-weight: 900;
-            color: #ffffff;
-            letter-spacing: -1px;
-            position: relative;
-            z-index: 1;
-            margin-bottom: 8px;
-        }
-
-        .header-tagline {
-            color: rgba(255,255,255,0.88);
-            font-size: 15px;
-            font-weight: 500;
-            position: relative;
-            z-index: 1;
-        }
-
-        .badge-wrap {
-            text-align: center;
-            margin-top: -18px;
-            margin-bottom: 8px;
-        }
-
-        .suspended-badge {
-            display: inline-block;
-            background: #ffffff;
-            color: #dc2626;
-            padding: 10px 26px;
-            border-radius: 50px;
-            font-size: 13px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.15);
-            position: relative;
-            z-index: 1;
-        }
-
-        .content {
-            padding: 44px 40px;
-        }
-
-        .greeting {
-            font-size: 28px;
-            font-weight: 800;
-            color: #1a1a1a;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-
-        .lead-text {
-            font-size: 16px;
-            color: #555;
-            line-height: 1.75;
-            text-align: center;
-            margin-bottom: 28px;
-        }
-
-        .store-callout {
-            background: #FFF4EE;
-            border: 1px solid #FFD5C2;
-            border-radius: 14px;
-            padding: 20px 24px;
-            text-align: center;
-            margin-bottom: 28px;
-        }
-
-        .store-label {
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #FF6B35;
-            margin-bottom: 6px;
-        }
-
-        .store-name {
-            font-size: 22px;
-            font-weight: 900;
-            color: #1a1a1a;
-        }
-
-        .alert-bar {
-            background: #FEF2F2;
-            border: 1px solid #FECACA;
-            border-left: 4px solid #dc2626;
-            border-radius: 12px;
-            padding: 16px 20px;
-            margin-bottom: 32px;
-            font-size: 14px;
-            font-weight: 600;
-            color: #7f1d1d;
-        }
-
-        .info-bar {
-            background: #FFF7ED;
-            border-left: 4px solid #f97316;
-            border-radius: 10px;
-            padding: 16px 20px;
-            margin-bottom: 32px;
-            font-size: 14px;
-            font-weight: 600;
-            color: #9a3412;
-        }
-
-        .support-box {
-            background: #F8F9FA;
-            border-radius: 12px;
-            padding: 22px;
-            text-align: center;
-            margin: 20px 0;
-            border: 1px solid #EFEFEF;
-        }
-
-        .support-title {
-            font-size: 15px;
-            font-weight: 700;
-            color: #1a1a1a;
-            margin-bottom: 6px;
-        }
-
-        .support-text {
-            font-size: 13px;
-            color: #777;
-            line-height: 1.6;
-        }
-
-        .footer {
-            background: #FAFAFA;
-            padding: 32px 40px;
-            text-align: center;
-            border-top: 1px solid #F0F0F0;
-        }
-
-        .footer-brand {
-            font-size: 18px;
-            font-weight: 800;
-            color: #FF6B35;
-            margin-bottom: 4px;
-        }
-
-        .footer-tagline {
-            font-size: 13px;
-            color: #aaa;
-            margin-bottom: 4px;
-        }
-
-        .footer-legal {
-            font-size: 12px;
-            color: #bbb;
-            line-height: 1.7;
-            margin-top: 16px;
-        }
-
-        @media only screen and (max-width: 600px) {
-            body { padding: 16px 10px; }
-            .header { padding: 40px 24px 36px; }
-            .header-logo { font-size: 30px; }
-            .content, .footer { padding-left: 24px; padding-right: 24px; }
-            .content { padding-top: 32px; padding-bottom: 32px; }
-            .greeting { font-size: 24px; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; background-color: #FBF4EF; font-family: 'Lato', Arial, sans-serif; }
+        a { color: #FF6B35; text-decoration: none; }
+        .email-wrapper { background-color: #FBF4EF; padding: 40px 16px; }
+        .logo-text { font-family: 'Playfair Display', Georgia, serif; font-size: 38px; font-weight: 800; color: #ffffff; letter-spacing: -1px; }
+        .heading { font-family: 'Playfair Display', Georgia, serif; font-size: 28px; font-weight: 700; color: #1C1109; margin: 0 0 16px; line-height: 1.25; }
+        .body-text { font-family: 'Lato', Arial, sans-serif; font-size: 16px; color: #5A4A3F; line-height: 1.7; margin: 0 0 24px; }
+        .btn-primary { display: inline-block; background-color: #FF6B35; color: #ffffff !important; font-family: 'Lato', Arial, sans-serif; font-size: 16px; font-weight: 700; padding: 16px 52px; border-radius: 100px; text-decoration: none; }
+        .btn-outline { display: inline-block; background-color: #ffffff; color: #FF6B35 !important; font-family: 'Lato', Arial, sans-serif; font-size: 15px; font-weight: 700; padding: 14px 40px; border-radius: 100px; text-decoration: none; border: 2px solid #FF6B35; }
+        .footer-logo { font-family: 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 700; color: #FF9B6A; }
+        @media only screen and (max-width: 620px) {
+            .email-wrapper { padding: 20px 10px !important; }
+            .header-inner { padding: 36px 28px 32px !important; }
+            .content-inner { padding: 32px 24px 28px !important; }
+            .footer-inner { padding: 28px 24px !important; }
+            .logo-text { font-size: 30px !important; }
+            .heading { font-size: 24px !important; }
+            .btn-primary, .btn-outline { padding: 14px 32px !important; font-size: 15px !important; display: block !important; text-align: center !important; margin: 8px 0 !important; }
         }
     </style>
 </head>
 <body>
-<div class="email-container">
+<div class="email-wrapper">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #F0E0D6;">
+    <tr>
+        <td>
 
-    <div class="header">
-        <div class="header-logo" th:text="${appName}">Afrochow</div>
-        <div class="header-tagline">Your African Marketplace, Delivered</div>
-    </div>
+            <!-- HEADER -->
+            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FF6B35;">
+                <tr>
+                    <td class="header-inner" style="padding:48px 48px 40px;text-align:center;">
+                        <div class="logo-text" th:text="${appName}">Afrochow</div>
+                        <div style="font-family:'Lato',Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.82);letter-spacing:2px;text-transform:uppercase;margin-top:10px;">Vendor Portal</div>
+                    </td>
+                </tr>
+            </table>
+            <!-- Badge -->
+            <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr><td style="background-color:#FEF2F2;padding:14px 24px;text-align:center;">
+                    <span style="font-family:'Lato',Arial,sans-serif;font-size:13px;font-weight:700;color:#991B1B;text-transform:uppercase;letter-spacing:1.5px;border:1.5px solid #FECACA;background-color:#FEE2E2;padding:6px 20px;border-radius:100px;">Store Suspended</span>
+                </td></tr>
+            </table>
 
-    <div class="badge-wrap">
-        <div class="suspended-badge">⚠️ Store Suspended</div>
-    </div>
+            <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr><td class="content-inner" style="padding:48px 48px 40px;">
+                    <h1 class="heading">Hi <span th:text="${firstName}">there</span>,</h1>
+                    <p class="body-text">We're writing to let you know that your store on <strong th:text="${appName}">Afrochow</strong> has been temporarily suspended by our admin team.</p>
 
-    <div class="content">
-        <h1 class="greeting">Hi <span th:text="${firstName}">there</span>,</h1>
+                                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FFF8F3;border:1.5px solid #FFD0B5;border-radius:12px;margin-bottom:24px;">
+                        <tr><td style="padding:12px 20px 6px;font-family:'Lato',Arial,sans-serif;font-size:12px;font-weight:700;color:#FF6B35;text-transform:uppercase;letter-spacing:1.5px;">Suspended Store</td></tr>
+                        <tr><td style="padding:4px 20px 18px;font-family:'Playfair Display',Georgia,serif;font-size:22px;font-weight:700;color:#1C1109;" th:text="${restaurantName}">Your Store</td></tr>
+                    </table>
 
-        <p class="lead-text">
-            We're writing to let you know that your store on
-            <strong th:text="${appName}">Afrochow</strong> has been temporarily suspended by our admin team.
-        </p>
+                    <!-- Alert -->
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FEF2F2;border-left:4px solid #DC2626;border-radius:0 10px 10px 0;margin-bottom:20px;">
+                        <tr><td style="padding:14px 20px;font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:600;color:#7F1D1D;line-height:1.6;">
+                            Your store is no longer visible to customers and cannot accept orders while suspended.
+                        </td></tr>
+                    </table>
 
-        <div class="store-callout">
-            <div class="store-label">Suspended Store</div>
-            <div class="store-name" th:text="${restaurantName}">Your Store</div>
-        </div>
+                    <!-- Info -->
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FFF7ED;border-left:4px solid #F97316;border-radius:0 10px 10px 0;margin-bottom:32px;">
+                        <tr><td style="padding:14px 20px;font-family:'Lato',Arial,sans-serif;font-size:14px;color:#9A3412;line-height:1.6;">
+                            Suspensions are temporary. Please contact our support team for details and to resolve any outstanding issues.
+                        </td></tr>
+                    </table>
 
-        <div class="alert-bar">
-            🚫 Your store is no longer visible to customers and cannot accept orders while suspended.
-        </div>
+                    <!-- Support -->
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F8F6F4;border:1px solid #EDE0D8;border-radius:10px;margin-bottom:28px;">
+                        <tr><td style="padding:20px 24px;text-align:center;">
+                            <p style="font-family:'Lato',Arial,sans-serif;font-size:15px;font-weight:700;color:#1C1109;margin:0 0 8px;">Need to resolve this?</p>
+                            <p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A6A60;margin:0;line-height:1.6;">If you believe this suspension was made in error, or you'd like to understand the reason and get your store reinstated, please reach out to our support team as soon as possible.</p>
+                        </td></tr>
+                    </table>
 
-        <div class="info-bar">
-            ℹ️ Suspensions are temporary. Please contact our support team for details and to resolve any outstanding issues.
-        </div>
+                    <!-- CTA -->
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 0;">
+                        <tr><td style="text-align:center;"><a th:href="|${appUrl}/contact|" class="btn-primary">Contact Support</a></td></tr>
+                    </table>
+                </td></tr>
+            </table>
+            <!-- FOOTER -->
+            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#2D1A0E;">
+                <tr>
+                    <td class="footer-inner" style="padding:36px 48px;text-align:center;">
+                        <div class="footer-logo" th:text="${appName}">Afrochow</div>
+                        <div style="font-family:'Lato',Arial,sans-serif;font-size:13px;color:#A08070;margin:6px 0 20px;">Your African Marketplace, Delivered</div>
+                        <div style="font-family:'Lato',Arial,sans-serif;font-size:12px;color:#6B5045;line-height:1.8;">
+                            <a th:href="${appUrl}" style="color:#A08070;text-decoration:none;">Website</a>
+                            &nbsp;&bull;&nbsp;
+                            <a th:href="|${appUrl}/help|" style="color:#A08070;text-decoration:none;">Help Centre</a>
+                            &nbsp;&bull;&nbsp;
+                            <a th:href="|${appUrl}/contact|" style="color:#A08070;text-decoration:none;">Contact Us</a>
+                        </div>
+                        <div style="font-family:'Lato',Arial,sans-serif;font-size:11px;color:#5A3A2A;margin-top:16px;">
+                            &copy; [[${currentYear}]] <span th:text="${appName}">Afrochow</span>. All rights reserved.
+                        </div>
+                    </td>
+                </tr>
+            </table>
 
-        <div class="support-box">
-            <div class="support-title">Need to Resolve This? Contact Support 🤝</div>
-            <div class="support-text">
-                If you believe this suspension was made in error, or you'd like to understand the reason
-                and get your store reinstated, please reach out to our support team as soon as possible.
-                We're here to help.
-            </div>
-        </div>
-    </div>
-
-    <div class="footer">
-        <div class="footer-brand" th:text="${appName}">Afrochow</div>
-        <div class="footer-tagline">Your African Marketplace, Delivered</div>
-        <div class="footer-legal">
-            You're receiving this because you have a vendor account at <span th:text="${appUrl}">afrochow.ca</span><br>
-            © [[${currentYear}]] <span th:text="${appName}">Afrochow</span>. All rights reserved.
-        </div>
-    </div>
-
+        </td>
+    </tr>
+</table>
 </div>
 </body>
 </html>
