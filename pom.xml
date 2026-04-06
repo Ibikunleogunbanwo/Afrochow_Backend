@@ -24,7 +24,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-		<lombok.version>1.18.42</lombok.version>
+		<lombok.version>1.18.44</lombok.version>
 
 		<!-- SpringDoc version supporting Spring Boot 4 -->
 		<springdoc.version>3.0.0</springdoc.version>
@@ -252,6 +252,12 @@
 					<profiles>
 						<profile>dev</profile>
 					</profiles>
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
 				</configuration>
 			</plugin>
 
