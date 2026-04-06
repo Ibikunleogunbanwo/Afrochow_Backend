@@ -107,7 +107,8 @@ public class OutboxPoller {
                     notificationService.notifyCustomerOrderCancelled(
                             p.get("publicOrderId"),
                             p.get("reason"),
-                            p.get("previousStatus"));
+                            p.get("previousStatus"),
+                            p.get("cancelledBy"));
 
             case ORDER_PREPARING ->
                     notificationService.notifyCustomerOrderPreparing(p.get("publicOrderId"));
@@ -145,6 +146,63 @@ public class OutboxPoller {
                     notificationService.notifyVendorFavorited(
                             p.get("vendorPublicId"),
                             p.get("customerName"));
+
+            case VENDOR_CUSTOMER_CANCELLED ->
+                    notificationService.notifyVendorCustomerCancelled(p.get("publicOrderId"));
+
+            // ── Auth / account lifecycle ──────────────────────────────────
+            case USER_REGISTERED ->
+                    notificationService.notifyUserRegistered(
+                            p.get("publicUserId"),
+                            p.get("email"),
+                            p.get("firstName"),
+                            p.get("role"));
+
+            case PASSWORD_CHANGED ->
+                    notificationService.notifyPasswordChanged(
+                            p.get("publicUserId"),
+                            p.get("email"),
+                            p.get("firstName"));
+
+            case PASSWORD_RESET_REQUESTED ->
+                    notificationService.notifyPasswordResetRequested(
+                            p.get("publicUserId"),
+                            p.get("email"),
+                            p.get("firstName"),
+                            p.get("resetLink"));
+
+            case EMAIL_VERIFICATION_SENT ->
+                    notificationService.notifyEmailVerificationSent(
+                            p.get("publicUserId"),
+                            p.get("email"),
+                            p.get("firstName"),
+                            p.get("verificationToken"));
+
+            // ── Vendor admin lifecycle ────────────────────────────────────
+            case VENDOR_APPROVED ->
+                    notificationService.notifyVendorApproved(
+                            p.get("email"),
+                            p.get("firstName"),
+                            p.get("restaurantName"));
+
+            case VENDOR_REJECTED ->
+                    notificationService.notifyVendorRejected(
+                            p.get("email"),
+                            p.get("firstName"),
+                            p.get("restaurantName"),
+                            p.get("reason"));
+
+            case VENDOR_SUSPENDED ->
+                    notificationService.notifyVendorSuspended(
+                            p.get("email"),
+                            p.get("firstName"),
+                            p.get("restaurantName"));
+
+            case VENDOR_REINSTATED ->
+                    notificationService.notifyVendorReinstated(
+                            p.get("email"),
+                            p.get("firstName"),
+                            p.get("restaurantName"));
         }
     }
 

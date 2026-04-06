@@ -22,5 +22,18 @@ public enum OutboxEventType {
 
     // ── Engagement ───────────────────────────────────────────────────────────
     VENDOR_REVIEWED,            // → notifyVendorNewReview
-    VENDOR_FAVOURITED           // → notifyVendorFavorited
+    VENDOR_FAVOURITED,          // → notifyVendorFavorited
+    VENDOR_CUSTOMER_CANCELLED,  // → notifyVendorCustomerCancelled (customer cancelled a CONFIRMED order)
+
+    // ── Auth / account lifecycle ─────────────────────────────────────────────
+    USER_REGISTERED,            // → notifyUserRegistered   (welcome email + in-app)
+    PASSWORD_CHANGED,           // → notifyPasswordChanged  (security alert email + in-app)
+    PASSWORD_RESET_REQUESTED,   // → notifyPasswordResetRequested (reset-link email + in-app)
+    EMAIL_VERIFICATION_SENT,    // → notifyEmailVerificationSent (verification email only)
+
+    // ── Vendor admin lifecycle ───────────────────────────────────────────────
+    VENDOR_APPROVED,            // → notifyVendorApproved
+    VENDOR_REJECTED,            // → notifyVendorRejected
+    VENDOR_SUSPENDED,           // → notifyVendorSuspended
+    VENDOR_REINSTATED           // → notifyVendorReinstated
 }

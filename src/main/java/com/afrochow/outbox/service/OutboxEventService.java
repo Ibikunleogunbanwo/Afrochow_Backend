@@ -55,12 +55,17 @@ public class OutboxEventService {
         save(OutboxEventType.ORDER_CONFIRMED, Map.of("publicOrderId", publicOrderId));
     }
 
+    /**
+     * @param cancelledBy  Who initiated the cancellation: CUSTOMER | VENDOR | ADMIN | SYSTEM
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void orderCancelled(String publicOrderId, String reason, String previousStatus) {
+    public void orderCancelled(String publicOrderId, String reason,
+                               String previousStatus, String cancelledBy) {
         save(OutboxEventType.ORDER_CANCELLED, Map.of(
                 "publicOrderId",  publicOrderId,
-                "reason",         reason,
-                "previousStatus", previousStatus
+                "reason",         reason != null ? reason : "",
+                "previousStatus", previousStatus,
+                "cancelledBy",    cancelledBy
         ));
     }
 
@@ -124,6 +129,105 @@ public class OutboxEventService {
         save(OutboxEventType.VENDOR_FAVOURITED, Map.of(
                 "vendorPublicId", vendorPublicId,
                 "customerName",   customerName
+        ));
+    }
+
+    /**
+     * Fired when a customer cancels an order that the vendor has already accepted (CONFIRMED).
+     * The vendor must be notified so they can stop any prep work in progress.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void vendorCustomerCancelled(String publicOrderId) {
+        save(OutboxEventType.VENDOR_CUSTOMER_CANCELLED, Map.of("publicOrderId", publicOrderId));
+    }
+
+    // ── Auth / account lifecycle ─────────────────────────────────────────────
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void userRegistered(String publicUserId, String email, String firstName, String role) {
+        save(OutboxEventType.USER_REGISTERED, Map.of(
+                "publicUserId", publicUserId,
+                "email",        email,
+                "firstName",    firstName,
+                "role",         role
+        ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void passwordChanged(String publicUserId, String email, String firstName) {
+        save(OutboxEventType.PASSWORD_CHANGED, Map.of(
+                "publicUserId", publicUserId,
+                "email",        email,
+                "firstName",    firstName
+        ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void passwordResetRequested(String publicUserId, String email,
+                                       String firstName, String resetLink) {
+        save(OutboxEventType.PASSWORD_RESET_REQUESTED, Map.of(
+                "publicUserId", publicUserId,
+                "email",        email,
+                "firstName",    firstName,
+                "resetLink",    resetLink
+        ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void emailVerificationSent(String publicUserId, String email,
+                                      String firstName, String verificationToken) {
+        save(OutboxEventType.EMAIL_VERIFICATION_SENT, Map.of(
+                "publicUserId",      publicUserId,
+                "email",             email,
+                "firstName",         firstName,
+                "verificationToken", verificationToken
+        ));
+    }
+
+    // ── Vendor admin lifecycle ────────────────────────────────────────────────
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void vendorApproved(String publicUserId, String email,
+                               String firstName, String restaurantName) {
+        save(OutboxEventType.VENDOR_APPROVED, Map.of(
+                "publicUserId",  publicUserId,
+                "email",         email,
+                "firstName",     firstName,
+                "restaurantName", restaurantName
+        ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void vendorRejected(String publicUserId, String email, String firstName,
+                               String restaurantName, String reason) {
+        save(OutboxEventType.VENDOR_REJECTED, Map.of(
+                "publicUserId",   publicUserId,
+                "email",          email,
+                "firstName",      firstName,
+                "restaurantName", restaurantName,
+                "reason",         reason != null ? reason : ""
+        ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void vendorSuspended(String publicUserId, String email,
+                                String firstName, String restaurantName) {
+        save(OutboxEventType.VENDOR_SUSPENDED, Map.of(
+                "publicUserId",   publicUserId,
+                "email",          email,
+                "firstName",      firstName,
+                "restaurantName", restaurantName
+        ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void vendorReinstated(String publicUserId, String email,
+                                 String firstName, String restaurantName) {
+        save(OutboxEventType.VENDOR_REINSTATED, Map.of(
+                "publicUserId",   publicUserId,
+                "email",          email,
+                "firstName",      firstName,
+                "restaurantName", restaurantName
         ));
     }
 

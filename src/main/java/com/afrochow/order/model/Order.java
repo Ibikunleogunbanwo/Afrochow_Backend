@@ -231,8 +231,23 @@ public class Order {
     }
 
     @Transient
-    public boolean canBeCancelled() {
-        return status == OrderStatus.PENDING || status == OrderStatus.CONFIRMED;
+    /**
+     * Returns true if the customer may still cancel this order.
+     *
+     * Rules:
+     *  1. Status must be PENDING or CONFIRMED — once the kitchen starts (PREPARING+)
+     *     cancellation is no longer possible regardless of timing.
+     *  2. The order must have been placed within {@code windowHours} hours ago.
+     *     This protects vendors on advance orders — a customer cannot cancel a
+     *     catering order the day before the event just because it is still CONFIRMED.
+     *
+     * @param windowHours  configured via order.cancellation.window-hours
+     */
+    @Transient
+    public boolean canBeCancelled(int windowHours) {
+        if (status != OrderStatus.PENDING && status != OrderStatus.CONFIRMED) return false;
+        if (orderTime == null) return true; // safety: no placement time recorded, allow
+        return LocalDateTime.now().isBefore(orderTime.plusHours(windowHours));
     }
 
     @Transient
