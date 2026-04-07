@@ -535,8 +535,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<Object>> handleIllegalState(
             IllegalStateException ex, WebRequest request) {
-        logger.warn("Illegal state: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        String message = ex.getMessage();
+        // Guard against framework/library exceptions leaking internal details.
+        // Business-logic exceptions thrown by our own services always have a
+        // non-null, user-safe message. Null or suspiciously long messages are
+        // signs of a framework-originated exception — return a generic response.
+        if (message == null || message.length() > 300) {
+            logger.error("Unexpected illegal state: {}", message, ex);
+            return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "An unexpected error occurred. Please try again.", request);
+        }
+        logger.warn("Illegal state: {}", message);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
     @ExceptionHandler(IOException.class)

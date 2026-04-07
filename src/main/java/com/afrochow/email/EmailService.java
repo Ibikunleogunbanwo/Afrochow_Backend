@@ -19,7 +19,7 @@ import java.util.List;
  * Service for sending email notifications via Resend HTTP API.
  *
  * SECURITY:
- * - Uses Resend HTTP API (HTTPS/443) — not SMTP — to work on Railway
+ * - Uses Resend HTTP API (HTTPS/443) — not SMTP
  * - Email addresses validated before sending
  * - API key stored in environment variables
  * - Rate limiting applied per endpoint
@@ -629,7 +629,7 @@ public class EmailService {
     }
 
     /**
-     * Send HTML email via Resend HTTP API (port 443 — works on Railway)
+     * Send HTML email via Resend HTTP API (port 443)
      */
     private void sendHtmlEmail(String to, String subject, String htmlContent) throws Exception {
         String fromField = String.format("%s <%s>", fromName, fromEmail);
