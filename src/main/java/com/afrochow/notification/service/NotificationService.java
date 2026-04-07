@@ -211,7 +211,7 @@ public class NotificationService {
 
     /**
      * Notify customer when order is being prepared.
-     * Channels: In-App only
+     * Channels: In-App + Email
      */
     @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
@@ -220,12 +220,17 @@ public class NotificationService {
             Order order = loadOrder(publicOrderId);
             if (order == null) return;
 
-            if (!areNotificationsEnabled(order.getCustomer().getUser())) return;
+            User customer = order.getCustomer().getUser();
+            if (!areNotificationsEnabled(customer)) return;
 
-            createInAppNotification(order.getCustomer().getUser(), NotificationType.ORDER_UPDATE,
+            createInAppNotification(customer, NotificationType.ORDER_UPDATE,
                     "Order Being Prepared",
                     order.getVendor().getRestaurantName() + " is preparing your order",
                     RelatedEntityType.ORDER, publicOrderId);
+
+            emailService.sendOrderStatusUpdateEmail(
+                    customer.getEmail(), customer.getFirstName(),
+                    publicOrderId, "CONFIRMED", "PREPARING");
 
             log.info("Order preparing notification sent for order: {}", publicOrderId);
         } catch (Exception e) {

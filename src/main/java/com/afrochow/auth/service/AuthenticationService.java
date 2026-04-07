@@ -141,8 +141,16 @@ public class AuthenticationService {
         String password   = loginRequest.getPassword().trim();
         String clientIp   = SecurityUtils.getClientIP(httpRequest);
 
+        // Resolve to canonical email so lockout counters are always keyed by
+        // email, regardless of whether the user typed their email or username.
+        // Falls back to the raw identifier for non-existent accounts so
+        // brute-force attempts against unknown identifiers are still tracked.
+        String canonicalEmail = findUserByIdentifier(identifier)
+                .map(User::getEmail)
+                .orElse(identifier);
+
         rateLimitService.verifyLoginLimit(clientIp + ":" + identifier);
-        validateAccountNotLocked(identifier, clientIp);
+        validateAccountNotLocked(canonicalEmail, clientIp);
 
         // Reactivate account if within the 30-day grace period
         reactivateIfEligible(identifier, password);
@@ -183,11 +191,11 @@ public class AuthenticationService {
         } catch (DisabledException e) {
             throw new DisabledAccountException("Please verify your e-mail.");
         } catch (LockedException e) {
-            long remainingSeconds = loginAttemptService.getRemainingLockoutSeconds(identifier);
+            long remainingSeconds = loginAttemptService.getRemainingLockoutSeconds(canonicalEmail);
             throw new AccountLockedException("Account locked due to too many failed attempts.", remainingSeconds);
         } catch (BadCredentialsException e) {
-            loginAttemptService.loginFailed(identifier, httpRequest);
-            int attemptCount = loginAttemptService.getAttemptCount(identifier);
+            loginAttemptService.loginFailed(canonicalEmail, httpRequest);
+            int attemptCount = loginAttemptService.getAttemptCount(canonicalEmail);
             securityEventService.logFailedLoginAttempt(identifier, clientIp, attemptCount, httpRequest);
             throw new BadCredentialsException("Invalid username/email or password");
         }

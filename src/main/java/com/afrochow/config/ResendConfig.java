@@ -9,8 +9,8 @@ import org.springframework.context.annotation.Configuration;
  * Configures the Resend HTTP API client for transactional email.
  *
  * Why HTTP instead of SMTP?
- * Railway (and many cloud platforms) block outbound SMTP ports (587/465).
- * Resend's HTTP API uses port 443 (HTTPS) which is always open.
+ * Resend's HTTP API uses port 443 (HTTPS) which is always open,
+ * making it more reliable than raw SMTP (ports 587/465).
  */
 @Configuration
 public class ResendConfig {

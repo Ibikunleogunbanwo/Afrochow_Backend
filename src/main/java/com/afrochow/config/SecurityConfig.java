@@ -110,10 +110,12 @@ public class SecurityConfig {
                                 "/images/upload/registration",
                                 "/images/vendor_image_registration"
                         ).permitAll()
+                        // DELETE requires authentication — only the owning user/vendor/admin
+                        // should be able to remove images. Access denied → falls through to anyRequest().authenticated()
                         .requestMatchers(HttpMethod.DELETE,
                                 "/api/images",
                                 "/images"
-                        ).permitAll()
+                        ).authenticated()
 
                         // ── API DOCS ──────────────────────────────────────
                         .requestMatchers(
@@ -249,9 +251,11 @@ public class SecurityConfig {
                 )
                 .contentSecurityPolicy(csp -> csp
                         .policyDirectives(
+                                // This is a REST API — no inline scripts or eval needed.
+                                // unsafe-inline and unsafe-eval are intentionally omitted.
                                 "default-src 'self'; " +
-                                        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-                                        "style-src 'self' 'unsafe-inline'; " +
+                                        "script-src 'self'; " +
+                                        "style-src 'self'; " +
                                         "img-src 'self' data: https:; " +
                                         "font-src 'self' data:; " +
                                         "connect-src 'self' https://api.afrochow.ca; " +

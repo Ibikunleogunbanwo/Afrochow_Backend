@@ -134,17 +134,14 @@ WHERE u.email = '<YOUR_ADMIN_EMAIL>'
 -- =====================================================
 -- HOW TO RUN
 -- =====================================================
--- Option 1: MySQL CLI
+-- Option 1: MySQL CLI (SSH into the DigitalOcean droplet)
 --   mysql -h <host> -P <port> -u <user> -p <database> < create_super_admin.sql
 --
--- Option 2: Railway MySQL plugin (via DB client)
---   Connect with the Railway connection string and paste this script.
---
--- Option 3: DBeaver / TablePlus / MySQL Workbench
+-- Option 2: DBeaver / TablePlus / MySQL Workbench
 --   Open a query window, paste, and execute.
 --
--- Option 4: Railway one-off command
---   Railway CLI → run a container with mysql client pointing at the DB.
+-- Option 3: SSH tunnel + DB client
+--   SSH into the droplet, then connect via localhost with your DB credentials.
 -- =====================================================
 
 -- =====================================================
