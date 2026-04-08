@@ -51,6 +51,13 @@ public class OrderResponseDto {
     private LocalDateTime outForDeliveryAt;
     private LocalDateTime deliveredAt;
     private LocalDateTime cancelledAt;
+    private LocalDateTime refundedAt;
+
+    /** Who triggered the cancellation: CUSTOMER, VENDOR, VENDOR_POST_ACCEPT, SYSTEM, ADMIN. Null for non-cancelled orders. */
+    private String cancelledBy;
+
+    /** Human-readable cancellation reason supplied at cancellation time. Null if not applicable. */
+    private String cancellationReason;
     private LocalDateTime estimatedDeliveryTime;
 
     private Boolean canBeCancelled;

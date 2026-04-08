@@ -150,6 +150,11 @@ public class OutboxPoller {
             case VENDOR_CUSTOMER_CANCELLED ->
                     notificationService.notifyVendorCustomerCancelled(p.get("publicOrderId"));
 
+            case VENDOR_UNABLE_TO_FULFIL ->
+                    notificationService.notifyCustomerVendorUnableToFulfil(
+                            p.get("publicOrderId"),
+                            p.get("reason"));
+
             // ── Auth / account lifecycle ──────────────────────────────────
             case USER_REGISTERED ->
                     notificationService.notifyUserRegistered(

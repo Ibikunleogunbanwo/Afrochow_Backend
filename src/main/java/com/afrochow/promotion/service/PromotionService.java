@@ -266,9 +266,15 @@ public class PromotionService {
 
     // ========== CUSTOMER METHODS ==========
 
+    /**
+     * Returns only global (non-vendor-specific) active promotions.
+     * Vendor-specific codes are intentionally excluded so a customer browsing
+     * Vendor B cannot discover and misapply a code that belongs to Vendor A.
+     * Customers see vendor-specific promos via {@link #getActivePromotionsForVendor}.
+     */
     @Transactional(readOnly = true)
     public List<PromotionResponseDto> getActivePromotions() {
-        return promotionRepository.findAllCurrentlyActive(LocalDateTime.now()).stream()
+        return promotionRepository.findGlobalCurrentlyActive(LocalDateTime.now()).stream()
                 .map(p -> toDto(p, null))
                 .collect(Collectors.toList());
     }
@@ -283,13 +289,23 @@ public class PromotionService {
     /**
      * Validate a promo code and return a preview of the discount that would apply.
      * Does NOT record usage.
+     *
+     * @param code           promo code to validate
+     * @param vendorPublicId optional — when provided, also verifies the code is valid
+     *                       for that vendor (user.publicUserId).  Pass null to skip
+     *                       the vendor check (e.g. admin tooling).
      */
     @Transactional(readOnly = true)
-    public PromotionResponseDto validateCode(String code) {
+    public PromotionResponseDto validateCode(String code, String vendorPublicId) {
         Promotion promotion = promotionRepository.findByCode(code.toUpperCase().trim())
                 .orElseThrow(() -> new EntityNotFoundException("Promo code not found"));
         if (!promotion.isCurrentlyActive()) {
             throw new IllegalStateException("Promo code is not currently active");
+        }
+        // Vendor restriction check — same logic as calculateDiscount and previewDiscount.
+        if (vendorPublicId != null && promotion.getVendor() != null &&
+                !promotion.getVendor().getUser().getPublicUserId().equals(vendorPublicId)) {
+            throw new IllegalStateException("Promo code is not valid for this vendor");
         }
         return toDto(promotion, null);
     }
@@ -368,15 +384,17 @@ public class PromotionService {
      * both pass the {@code totalUsed >= usageLimit} guard and both record a use,
      * exceeding the intended limit.
      *
-     * @param code          promo code from the request
-     * @param subtotal      order subtotal (before discount, delivery fee, tax)
-     * @param userPublicId  authenticated customer's public user ID
-     * @param vendorPublicId vendor the order is placed with
+     * @param code           promo code from the request
+     * @param subtotal       order subtotal (before discount, delivery fee, tax)
+     * @param userPublicId   authenticated customer's public user ID
+     * @param vendorPublicId vendor the order is placed with (user.publicUserId)
+     * @param deliveryFee    delivery fee for this order; pass BigDecimal.ZERO or null for pickup
      * @return discount amount to subtract from the order total
      */
     @Transactional
     public BigDecimal calculateDiscount(String code, BigDecimal subtotal,
-                                        String userPublicId, String vendorPublicId) {
+                                        String userPublicId, String vendorPublicId,
+                                        BigDecimal deliveryFee) {
         // Lock the promotion row so concurrent requests are serialised through here.
         Promotion promotion = promotionRepository.findByCodeWithLock(code.toUpperCase().trim())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid promo code: " + code));
@@ -385,10 +403,21 @@ public class PromotionService {
             throw new IllegalStateException("Promo code is expired or inactive");
         }
 
-        // Vendor restriction check
+        // Vendor restriction check.
+        // vendorPublicId is the vendor's user.publicUserId (the ID used throughout the
+        // order flow).  We compare against vendor.user.publicUserId — NOT publicVendorId —
+        // because the order request identifies vendors by their user public ID.
         if (promotion.getVendor() != null &&
-                !promotion.getVendor().getPublicVendorId().equals(vendorPublicId)) {
+                !promotion.getVendor().getUser().getPublicUserId().equals(vendorPublicId)) {
             throw new IllegalStateException("Promo code is not valid for this vendor");
+        }
+
+        // FREE_DELIVERY promos have no value on pickup orders — reject early with
+        // a clear message rather than silently applying a $0 discount.
+        if (promotion.getType() == com.afrochow.common.enums.PromotionType.FREE_DELIVERY
+                && (deliveryFee == null || deliveryFee.compareTo(BigDecimal.ZERO) == 0)) {
+            throw new IllegalStateException(
+                    "This promo code provides free delivery and cannot be applied to pickup orders");
         }
 
         // Minimum order amount check
@@ -417,7 +446,7 @@ public class PromotionService {
             }
         }
 
-        return computeDiscountAmount(promotion, subtotal);
+        return computeDiscountAmount(promotion, subtotal, deliveryFee);
     }
 
     /**

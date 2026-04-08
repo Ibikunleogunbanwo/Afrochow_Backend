@@ -264,7 +264,8 @@ public class OrderService {
                     request.getPromoCode(),
                     order.calculateSubtotal(),
                     customer.getUser().getPublicUserId(),
-                    request.getVendorPublicId()
+                    request.getVendorPublicId(),
+                    order.getDeliveryFee()   // BigDecimal.ZERO for pickup; used by FREE_DELIVERY check
             );
             order.setDiscount(promoDiscount);
             order.setAppliedPromoCode(request.getPromoCode().toUpperCase().trim());
@@ -381,6 +382,8 @@ public class OrderService {
         String previousStatus = order.getStatus().toString();
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
+        order.setCancelledBy("CUSTOMER");
+        order.setCancellationReason(null); // customer-initiated — no reason required
         Order updatedOrder = orderRepository.save(order);
         log.info("order.cancelled publicOrderId={} actor=customer customerUserId={} fromStatus={} toStatus={}",
                 updatedOrder.getPublicOrderId(),
@@ -410,6 +413,8 @@ public class OrderService {
         String previousStatus = status.toString();
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
+        order.setCancelledBy("ADMIN");
+        order.setCancellationReason("Cancelled by Afrochow support");
         Order updatedOrder = orderRepository.save(order);
         log.info("order.cancelled publicOrderId={} actor=admin fromStatus={} toStatus={}",
                 updatedOrder.getPublicOrderId(),
@@ -488,11 +493,18 @@ public class OrderService {
                 OrderStatus.PENDING,
                 updatedOrder.getStatus());
 
-        // Capture the previously-authorised payment now that the vendor has confirmed.
-        // If capture fails, @Transactional rolls back the status update — order stays PENDING.
+        // Write the outbox event BEFORE calling Stripe so that all DB work happens
+        // first. If the outbox insert fails the transaction rolls back (order stays
+        // PENDING) and Stripe is never called — no inconsistency.
+        // If Stripe then fails, @Transactional rolls back both the status update and
+        // the outbox insert — order correctly stays PENDING, no money moved.
+        outboxEventService.orderConfirmed(updatedOrder.getPublicOrderId());
+
+        // Capture the previously-authorised payment now that all DB state is staged.
+        // Stripe is called last: a failure here rolls back the full transaction so
+        // the order stays PENDING and no email/event fires — clean failure path.
         paymentService.captureStripePayment(updatedOrder, null);
 
-        outboxEventService.orderConfirmed(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }
 
@@ -511,6 +523,8 @@ public class OrderService {
         String previousStatus = order.getStatus().toString();
         paymentService.refundStripeCharge(order);
         order.updateStatus(OrderStatus.CANCELLED);
+        order.setCancelledBy("VENDOR");
+        order.setCancellationReason("Order declined by restaurant");
         Order updatedOrder = orderRepository.save(order);
         log.info("order.rejected publicOrderId={} actor=vendor username={} fromStatus={} toStatus={}",
                 updatedOrder.getPublicOrderId(),
@@ -569,6 +583,8 @@ public class OrderService {
         paymentService.markPaymentCancelled(locked);
 
         locked.updateStatus(OrderStatus.CANCELLED);
+        locked.setCancelledBy("SYSTEM");
+        locked.setCancellationReason("Vendor did not respond in time — your order has been automatically cancelled and refunded.");
         orderRepository.save(locked);
         outboxEventService.orderCancelled(
                 locked.getPublicOrderId(),
@@ -607,16 +623,96 @@ public class OrderService {
 
     /**
      * Called by {@link com.afrochow.order.service.FulfillmentSafetyNetScheduler}
-     * to retry the vendor payout Transfer for an order that was marked DELIVERED
-     * but whose transfer failed due to a transient error.
+     * to recover DELIVERED orders whose payment pipeline did not complete.
      *
-     * Under the transfer_group model capture happens at acceptance (CONFIRMED), not
-     * at delivery.  So the retry here is for the Transfer, not the capture.
-     * transferToVendor() is idempotent — it no-ops if the Transfer ID is already stored.
+     * Two sub-cases handled:
+     *
+     *   Case A — payment still AUTHORIZED (capture never ran or was rolled back):
+     *     This can happen if {@link #markOrderDelivered} or {@link #autoDeliverOrder}
+     *     threw after updating the Order status but before the Stripe capture committed.
+     *     We must first capture the Stripe authorization, then create the vendor Transfer.
+     *
+     *   Case B — payment COMPLETED but no Transfer ID (transfer failed after capture):
+     *     The capture already succeeded but the Stripe Transfer to the vendor failed
+     *     (e.g. transient network error).  We skip straight to transferToVendor().
+     *     transferToVendor() is idempotent — it no-ops if a Transfer ID is already stored.
      */
     @Transactional
     public void retryCaptureForDeliveredOrder(Order order) {
+        Payment payment = paymentService.getPaymentByOrder(order);
+
+        if (payment.getStatus() == PaymentStatus.AUTHORIZED) {
+            // Case A: capture was never completed — do it now, then transfer.
+            log.info("safety-net.retry_capture publicOrderId={} paymentStatus=AUTHORIZED — capturing first",
+                    order.getPublicOrderId());
+            paymentService.captureStripePayment(order, null);
+        }
+
+        // Case A falls through into Case B once captured; Case B enters here directly.
         paymentService.transferToVendor(order);
+    }
+
+    /**
+     * Allows a vendor to cancel an order they previously accepted, when they discover
+     * they cannot fulfil it (e.g. out of stock, kitchen breakdown, forced closure).
+     *
+     * <p><strong>Payment:</strong> unlike {@link #rejectOrder} (where the card was only
+     * authorised and the hold can simply be released), at this stage the payment is already
+     * CAPTURED.  A real Stripe refund is issued via {@link PaymentService#refundStripeCharge}.
+     *
+     * <p><strong>Allowed statuses:</strong> CONFIRMED or PREPARING only.
+     * Once the order is READY_FOR_PICKUP the food has been made; admin intervention is more
+     * appropriate at that point.
+     *
+     * <p><strong>Notifications:</strong> the customer receives both an in-app notification
+     * and an email confirming the cancellation and the refund, with the vendor's reason included.
+     *
+     * @param username      authenticated vendor's username
+     * @param publicOrderId order to cancel
+     * @param reason        mandatory vendor-provided explanation (shown to customer and admin)
+     */
+    @Transactional
+    public OrderResponseDto vendorUnableToFulfil(String username, String publicOrderId, String reason) {
+        // Pessimistic lock — prevents a concurrent markOrderReady / autoDeliver from both
+        // seeing the same status and causing a double-refund or missed refund.
+        Order order = orderRepository.findByPublicOrderIdWithLock(publicOrderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found"));
+
+        VendorProfile vendor = getVendorByUsername(username);
+        if (!order.getVendor().getId().equals(vendor.getId())) {
+            throw new IllegalStateException("You can only cancel orders for your restaurant");
+        }
+
+        OrderStatus currentStatus = order.getStatus();
+        if (currentStatus != OrderStatus.CONFIRMED && currentStatus != OrderStatus.PREPARING) {
+            throw new IllegalStateException(
+                    "You can only cancel an order that is CONFIRMED or PREPARING. " +
+                    "Once the order is ready, please contact Afrochow support.");
+        }
+
+        String previousStatus = currentStatus.toString();
+
+        // Issue a full refund — payment was already captured so this is a real Stripe refund,
+        // not just a hold cancellation.  Do this before updating status so that if Stripe fails
+        // the transaction rolls back and the order stays in its current (non-cancelled) state.
+        paymentService.refundStripeCharge(order);
+
+        order.updateStatus(OrderStatus.CANCELLED);
+        order.setCancelledBy("VENDOR_POST_ACCEPT");
+        order.setCancellationReason(reason);
+        Order updatedOrder = orderRepository.save(order);
+
+        log.info("order.vendor_unable_to_fulfil publicOrderId={} vendor={} fromStatus={} reason={}",
+                updatedOrder.getPublicOrderId(), username, previousStatus, reason);
+
+        // Fire the dedicated event — the notification carries the correct "refund issued"
+        // messaging (distinct from a pre-capture rejection which says "hold released").
+        outboxEventService.vendorUnableToFulfil(updatedOrder.getPublicOrderId(), reason);
+
+        // Also record a generic cancellation event for admin reporting / audit trail
+        outboxEventService.orderCancelled(updatedOrder.getPublicOrderId(), reason, previousStatus, "VENDOR_POST_ACCEPT");
+
+        return toResponseDto(updatedOrder);
     }
 
     @Transactional
@@ -807,14 +903,17 @@ public class OrderService {
                 .outForDeliveryAt(order.getOutForDeliveryAt())
                 .deliveredAt(order.getDeliveredAt())
                 .cancelledAt(order.getCancelledAt())
+                .refundedAt(order.getRefundedAt())
+                .cancelledBy(order.getCancelledBy())
+                .cancellationReason(order.getCancellationReason())
                 .estimatedDeliveryTime(order.getEstimatedDeliveryTime())
                 .updatedAt(order.getUpdatedAt())
                 // FIX 4: Delegate to Order.canBeCancelled() — single source of truth
                 .canBeCancelled(order.canBeCancelled(cancellationWindowHours))
-                .isCompleted(order.getStatus() != null
-                        && order.getStatus() == OrderStatus.DELIVERED)
-                .isActive(order.getStatus() != null
-                        && order.getStatus() != OrderStatus.CANCELLED)
+                .isCompleted(order.isCompleted())
+                // Delegates to Order.isActive() — single source of truth.
+                // Active = not DELIVERED, not CANCELLED, not REFUNDED.
+                .isActive(order.isActive())
                 .slaExpiresAt(order.getStatus() == OrderStatus.PENDING && order.getOrderTime() != null
                         ? order.getOrderTime().plusMinutes(slaAcceptWindowMinutes) : null)
                 .slaRemainingSeconds(order.getStatus() == OrderStatus.PENDING && order.getOrderTime() != null

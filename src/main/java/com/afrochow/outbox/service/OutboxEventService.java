@@ -141,6 +141,22 @@ public class OutboxEventService {
         save(OutboxEventType.VENDOR_CUSTOMER_CANCELLED, Map.of("publicOrderId", publicOrderId));
     }
 
+    /**
+     * Fired when a vendor cancels an order they had already accepted (CONFIRMED or PREPARING).
+     * Unlike a rejection (PENDING → CANCELLED), the payment was already captured at this point,
+     * so a real Stripe refund is issued and the notification messaging must reflect that.
+     *
+     * @param publicOrderId  the affected order
+     * @param reason         vendor-provided explanation shown to the customer
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void vendorUnableToFulfil(String publicOrderId, String reason) {
+        save(OutboxEventType.VENDOR_UNABLE_TO_FULFIL, Map.of(
+                "publicOrderId", publicOrderId,
+                "reason",        reason != null ? reason : ""
+        ));
+    }
+
     // ── Auth / account lifecycle ─────────────────────────────────────────────
 
     @Transactional(propagation = Propagation.MANDATORY)

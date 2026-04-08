@@ -59,9 +59,13 @@ public class PromotionController {
 
     @GetMapping("/validate/{code}")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Validate promo code", description = "Check if a promo code is valid and preview the discount")
-    public ResponseEntity<ApiResponse<PromotionResponseDto>> validateCode(@PathVariable String code) {
-        return ResponseEntity.ok(ApiResponse.success(promotionService.validateCode(code)));
+    @Operation(
+            summary = "Validate promo code",
+            description = "Check if a promo code is valid. Pass vendorPublicId to also verify the code is applicable to that vendor.")
+    public ResponseEntity<ApiResponse<PromotionResponseDto>> validateCode(
+            @PathVariable String code,
+            @RequestParam(required = false) String vendorPublicId) {
+        return ResponseEntity.ok(ApiResponse.success(promotionService.validateCode(code, vendorPublicId)));
     }
 
     @PostMapping("/preview")

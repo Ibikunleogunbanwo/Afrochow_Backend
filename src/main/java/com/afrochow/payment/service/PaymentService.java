@@ -262,19 +262,47 @@ public class PaymentService {
             PaymentIntent captured = intent.capture(captureParamsBuilder.build(), requestOptions);
 
             if ("succeeded".equals(captured.getStatus())) {
+                // If a partial capture was requested, update the payment record to reflect
+                // the actual amount charged rather than the original authorization amount.
+                // Also recalculate the platform fee and vendor payout proportionally so
+                // reconciliation reports stay accurate.
+                if (finalAmount != null) {
+                    BigDecimal capturedAmount = finalAmount.setScale(2, RoundingMode.HALF_UP);
+                    long capturedCents = capturedAmount
+                            .multiply(BigDecimal.valueOf(100))
+                            .setScale(0, RoundingMode.HALF_UP)
+                            .longValue();
+                    long feeCents = BigDecimal.valueOf(capturedCents)
+                            .multiply(BigDecimal.valueOf(platformFeePercent))
+                            .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
+                            .longValue();
+                    payment.setAmount(capturedAmount);
+                    payment.setPlatformFeeAmount(
+                            BigDecimal.valueOf(feeCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+                    payment.setVendorPayout(
+                            BigDecimal.valueOf(capturedCents - feeCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+                    log.info("payment.partial_capture publicOrderId={} originalAmount={} capturedAmount={} fee={} vendorPayout={}",
+                            order.getPublicOrderId(),
+                            order.getTotalAmount(),
+                            capturedAmount,
+                            payment.getPlatformFeeAmount(),
+                            payment.getVendorPayout());
+                }
+
+                BigDecimal actualCapturedAmount = payment.getAmount();
                 payment.completePayment(payment.getCardLast4(), payment.getCardBrand());
                 paymentRepository.save(payment);
                 log.info("payment.captured publicOrderId={} paymentId={} transactionId={} amount={}",
                         order.getPublicOrderId(),
                         payment.getPaymentId(),
                         payment.getTransactionId(),
-                        payment.getAmount());
+                        actualCapturedAmount);
 
                 outboxEventService.paymentCaptured(
                         order.getCustomer().getUser().getPublicUserId(),
                         captured.getId(),
                         order.getPublicOrderId(),
-                        order.getTotalAmount()
+                        actualCapturedAmount
                 );
             } else {
                 throw new RuntimeException(
@@ -525,6 +553,20 @@ public class PaymentService {
                     order.getPublicOrderId(), payment.getTransactionId(), e.getMessage());
             // Do NOT rethrow — order is already CANCELLED in DB; Stripe hold expires naturally.
         }
+    }
+
+    // ========== INTERNAL HELPERS ==========
+
+    /**
+     * Returns the raw Payment entity for a given Order.
+     * Intended for internal service-to-service use (e.g. OrderService checking
+     * payment status before deciding whether to capture or transfer).
+     * Does not perform any authorisation check.
+     */
+    public Payment getPaymentByOrder(Order order) {
+        return paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment record not found for order: " + order.getPublicOrderId()));
     }
 
     // ========== CUSTOMER METHODS ==========

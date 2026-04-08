@@ -21,7 +21,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import java.security.SecureRandom;
 
 @Entity
 @Table(name = "users", indexes = {
@@ -126,12 +126,30 @@ public class User {
     @Builder.Default
     private List<PromotionUsage> promotionUsages = new ArrayList<>();
 
+    // ===== ID GENERATION =====
+
+    /**
+     * Safe alphabet for generated IDs — excludes visually ambiguous characters (0, O, I, 1).
+     * 32 characters → 32^8 ≈ 1 trillion unique combinations per role prefix.
+     */
+    private static final String ID_ALPHABET  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int    ID_LENGTH    = 8;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private static String generateShortId() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < ID_LENGTH; i++) {
+            sb.append(ID_ALPHABET.charAt(SECURE_RANDOM.nextInt(ID_ALPHABET.length())));
+        }
+        return sb.toString();
+    }
+
     // ===== AUTO-GENERATE PUBLIC ID & USERNAME =====
     @PrePersist
     public void onPrePersist() {
         if (publicUserId == null) {
-            publicUserId = role.getPrefix() + "-" +
-                    UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+            // e.g. CUS-X7MK2P4N, VEN-X7MK2P4N
+            publicUserId = role.getPrefix() + "-" + generateShortId();
         }
 
         if (username == null || username.isBlank()) {
@@ -148,10 +166,11 @@ public class User {
             base = base + "user";
         }
 
-        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 6);
-        String combined = base + suffix;
-
-        return combined.substring(0, Math.min(combined.length(), 50));
+        // Truncate base to 16 chars, then append 4 random digits (1000–9999).
+        // Total max length = 20 chars. Always exactly 4 digit suffix for readability.
+        String truncatedBase = base.substring(0, Math.min(base.length(), 16));
+        int suffix = SECURE_RANDOM.nextInt(9000) + 1000;
+        return truncatedBase + suffix;
     }
 
     // ===== PHONE NORMALIZATION =====

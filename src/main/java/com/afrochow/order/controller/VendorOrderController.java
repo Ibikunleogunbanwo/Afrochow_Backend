@@ -4,6 +4,7 @@ import com.afrochow.common.ApiResponse;
 import com.afrochow.order.dto.MarkDeliveredRequestDto;
 import com.afrochow.order.dto.OrderResponseDto;
 import com.afrochow.order.dto.OrderSummaryResponseDto;
+import com.afrochow.order.dto.VendorCancelFulfillmentRequestDto;
 import com.afrochow.common.enums.OrderStatus;
 import com.afrochow.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,7 +30,8 @@ import java.util.List;
  * - GET /vendor/orders/status/{status} - Get orders by status
  * - GET /vendor/orders/{publicOrderId} - Get order details
  * - PUT /vendor/orders/{publicOrderId}/accept - Accept order
- * - PUT /vendor/orders/{publicOrderId}/reject - Reject order
+ * - PUT /vendor/orders/{publicOrderId}/reject - Reject order (PENDING only — no capture yet)
+ * - PUT /vendor/orders/{publicOrderId}/unable-to-fulfil - Cancel after accepting (refund issued)
  * - PUT /vendor/orders/{publicOrderId}/preparing - Start preparing
  * - PUT /vendor/orders/{publicOrderId}/ready - Mark as ready
  * - PUT /vendor/orders/{publicOrderId}/out-for-delivery - Mark out for delivery
@@ -171,6 +173,29 @@ public class VendorOrderController {
         String username = getUsername(userDetails);
         OrderResponseDto order = orderService.rejectOrder(username, publicOrderId);
         return ResponseEntity.ok(ApiResponse.success("Order rejected", order));
+    }
+
+    @PutMapping("/{publicOrderId}/unable-to-fulfil")
+    @Operation(
+            summary = "Unable to fulfil",
+            description = "Cancel an order the vendor has already accepted (CONFIRMED or PREPARING). " +
+                          "A mandatory reason must be provided. Because the payment was captured at acceptance, " +
+                          "a full Stripe refund is issued automatically and the customer is notified by email and in-app.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Order cancelled and refund issued"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid order ID, missing reason, or order is past the PREPARING stage"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — order does not belong to this vendor"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Order not found")
+    })
+    public ResponseEntity<ApiResponse<OrderResponseDto>> unableToFulfil(
+            @PathVariable @NotBlank(message = "Order ID cannot be blank") String publicOrderId,
+            @jakarta.validation.Valid @RequestBody VendorCancelFulfillmentRequestDto request,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        String username = getUsername(userDetails);
+        OrderResponseDto order = orderService.vendorUnableToFulfil(username, publicOrderId, request.getReason());
+        return ResponseEntity.ok(ApiResponse.success("Order cancelled and refund issued to customer", order));
     }
 
     @PutMapping("/{publicOrderId}/preparing")
