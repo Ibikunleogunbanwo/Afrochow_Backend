@@ -737,6 +737,57 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Notify the customer that the vendor cancelled an order they had already accepted.
+     *
+     * This is distinct from a plain ORDER_CANCELLED notification because:
+     *  - The payment was already CAPTURED (not just authorised), so the customer's card
+     *    was actually charged. The message must say "refund" not "hold release".
+     *  - The vendor's reason is shown to help the customer understand what happened.
+     *
+     * Channels: In-App + Email (because real money was taken and is being returned).
+     */
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    @Transactional
+    public void notifyCustomerVendorUnableToFulfil(String publicOrderId, String reason) {
+        try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
+            User customer = order.getCustomer().getUser();
+            if (!areNotificationsEnabled(customer)) return;
+
+            String vendorName = order.getVendor().getRestaurantName();
+            String reasonSuffix = (reason != null && !reason.isBlank())
+                    ? " Reason: " + reason
+                    : "";
+
+            String title   = "Order Cancelled by Restaurant";
+            String message = "We're sorry — " + vendorName + " is unable to fulfil your order." + reasonSuffix
+                    + " A full refund has been issued and should appear on your statement within 5–10 business days."
+                    + " We apologise for the inconvenience.";
+
+            createInAppNotification(customer, NotificationType.ORDER_UPDATE,
+                    title, message, RelatedEntityType.ORDER, publicOrderId);
+
+            // Email: customer paid real money so a confirmation of the refund is warranted
+            try {
+                emailService.sendNotificationEmail(
+                        customer.getEmail(),
+                        customer.getFirstName(),
+                        title,
+                        message);
+            } catch (Exception emailEx) {
+                log.warn("notifyCustomerVendorUnableToFulfil — email failed for order {} ({}): {}",
+                        publicOrderId, customer.getEmail(), emailEx.getMessage());
+            }
+
+            log.info("Customer notified of vendor unable-to-fulfil for order: {}", publicOrderId);
+        } catch (Exception e) {
+            log.error("Failed to notify customer of vendor unable-to-fulfil for order: {}", publicOrderId, e);
+        }
+    }
+
     // ========== AUTH / ACCOUNT LIFECYCLE ==========
 
     @Async(AsyncConfig.NOTIFICATION_EXECUTOR)

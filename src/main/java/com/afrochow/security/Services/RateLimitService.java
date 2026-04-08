@@ -10,26 +10,11 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Prevents abuse by limiting how many times an action can be performed
- * within a sliding time window.
- *
- * Limits are configurable per environment via application properties:
- *
- *   application-dev.properties:
- *     rate-limit.registration.max=50
- *     rate-limit.registration.window-seconds=60
- *
- *   application-prod.properties:
- *     rate-limit.registration.max=5
- *     rate-limit.registration.window-seconds=3600
- */
 @Slf4j
 @Service
 public class RateLimitService {
 
     // ─── Config ───────────────────────────────────────────────────────────────
-    // Values fall back to sensible prod defaults if not set in properties.
 
     @Value("${rate-limit.registration.max:5}")
     private int registrationMax;
@@ -50,8 +35,6 @@ public class RateLimitService {
     private int passwordResetWindow;
 
     // ─── Storage ──────────────────────────────────────────────────────────────
-    // Key format: "action:identifier" e.g. "register:192.168.1.1"
-    // Using ConcurrentHashMap so multiple threads can read/write safely.
 
     private final Map<String, AttemptTracker> attempts = new ConcurrentHashMap<>();
 

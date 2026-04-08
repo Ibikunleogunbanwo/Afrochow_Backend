@@ -32,6 +32,10 @@ public interface PromotionRepository extends JpaRepository<Promotion, Long> {
 
     List<Promotion> findByIsActiveTrue();
 
+    /**
+     * All currently active promotions (including vendor-specific ones).
+     * Use for admin visibility only — not for the public customer-facing endpoint.
+     */
     @Query("""
             SELECT p FROM Promotion p
             WHERE p.isActive = true
@@ -39,6 +43,19 @@ public interface PromotionRepository extends JpaRepository<Promotion, Long> {
               AND p.endDate   >= :now
             """)
     List<Promotion> findAllCurrentlyActive(@Param("now") LocalDateTime now);
+
+    /**
+     * Global promotions only (vendor IS NULL) — used by the public customer endpoint
+     * so vendor-specific codes are never leaked to customers browsing other vendors.
+     */
+    @Query("""
+            SELECT p FROM Promotion p
+            WHERE p.isActive = true
+              AND p.startDate <= :now
+              AND p.endDate   >= :now
+              AND p.vendor IS NULL
+            """)
+    List<Promotion> findGlobalCurrentlyActive(@Param("now") LocalDateTime now);
 
     @Query("""
             SELECT p FROM Promotion p

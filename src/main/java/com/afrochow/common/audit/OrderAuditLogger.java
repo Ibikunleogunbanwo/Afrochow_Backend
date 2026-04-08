@@ -38,7 +38,7 @@ public class OrderAuditLogger {
     /**
      * Log and count every order status transition.
      *
-     * @param publicOrderId   public-facing order reference (e.g. ORD-abc123)
+     * @param publicOrderId   public-facing order reference (e.g. AFC-X7MK2P4N)
      * @param fromStatus      previous status
      * @param toStatus        new status
      * @param actor           who triggered the change (username, "customer", "admin", "system:safety-net")

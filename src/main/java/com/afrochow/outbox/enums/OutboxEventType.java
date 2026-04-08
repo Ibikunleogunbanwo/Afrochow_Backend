@@ -24,6 +24,7 @@ public enum OutboxEventType {
     VENDOR_REVIEWED,            // → notifyVendorNewReview
     VENDOR_FAVOURITED,          // → notifyVendorFavorited
     VENDOR_CUSTOMER_CANCELLED,  // → notifyVendorCustomerCancelled (customer cancelled a CONFIRMED order)
+    VENDOR_UNABLE_TO_FULFIL,    // → notifyCustomerVendorUnableToFulfil (vendor cancelled after accepting — payment already captured, refund issued)
 
     // ── Auth / account lifecycle ─────────────────────────────────────────────
     USER_REGISTERED,            // → notifyUserRegistered   (welcome email + in-app)

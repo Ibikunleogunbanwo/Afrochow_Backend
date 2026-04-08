@@ -20,7 +20,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+import java.security.SecureRandom;
 
 @Entity
 @Table(name = "orders", indexes = {
@@ -131,6 +131,25 @@ public class Order {
     private LocalDateTime outForDeliveryAt;
     private LocalDateTime deliveredAt;
     private LocalDateTime cancelledAt;
+
+    /**
+     * Who triggered the cancellation.
+     * Values: "CUSTOMER", "VENDOR", "VENDOR_POST_ACCEPT", "SYSTEM", "ADMIN".
+     * Null for non-cancelled orders.
+     */
+    @Column(length = 20)
+    private String cancelledBy;
+
+    /**
+     * Human-readable explanation stored at cancellation time.
+     * For VENDOR / VENDOR_POST_ACCEPT cancellations this is the vendor-supplied reason.
+     * For SYSTEM cancellations it is the SLA expiry message.
+     * Null for non-cancelled orders or when no reason was provided.
+     */
+    @Column(length = 500)
+    private String cancellationReason;
+
+    private LocalDateTime refundedAt;
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
@@ -164,12 +183,31 @@ public class Order {
     @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private PromotionUsage promotionUsage;
 
+    // ========== ORDER ID GENERATION ==========
+
+    /**
+     * Alphanumeric alphabet used for public order IDs.
+     * Excludes visually ambiguous characters: 0, O, I, 1.
+     * 32 characters → 32^8 ≈ 1 trillion unique combinations.
+     */
+    private static final String ORDER_ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int    ORDER_ID_LENGTH    = 8;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private static String generatePublicOrderId() {
+        StringBuilder sb = new StringBuilder("AFC-");
+        for (int i = 0; i < ORDER_ID_LENGTH; i++) {
+            sb.append(ORDER_ID_ALPHABET.charAt(SECURE_RANDOM.nextInt(ORDER_ID_ALPHABET.length())));
+        }
+        return sb.toString();
+    }
+
     // ========== LIFECYCLE HOOKS ==========
 
     @PrePersist
     public void onPrePersist() {
         if (this.publicOrderId == null) {
-            this.publicOrderId = "ORD-" + UUID.randomUUID().toString();
+            this.publicOrderId = generatePublicOrderId();
         }
         if (this.status == null) {
             this.status = OrderStatus.PENDING;
@@ -234,6 +272,8 @@ public class Order {
             case OUT_FOR_DELIVERY-> this.outForDeliveryAt  = now;
             case DELIVERED       -> this.deliveredAt       = now;
             case CANCELLED       -> this.cancelledAt       = now;
+            case REFUNDED        -> this.refundedAt        = now;
+            default              -> { /* PENDING — no timestamp */ }
         }
     }
 
