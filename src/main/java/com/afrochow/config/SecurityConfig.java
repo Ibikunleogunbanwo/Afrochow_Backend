@@ -143,6 +143,7 @@ public class SecurityConfig {
                                 "/auth/register/customer",
                                 "/auth/register/vendor",
                                 "/auth/login",
+                                "/auth/google",
                                 "/auth/refresh",
                                 "/auth/logout",
                                 "/auth/logout-all/**",

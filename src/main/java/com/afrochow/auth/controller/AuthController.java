@@ -51,6 +51,23 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthenticationService authenticationService;
+    private final com.afrochow.auth.service.GoogleAuthService googleAuthService;
+
+    /* ==========================================================
+       GOOGLE LOGIN
+       ========================================================== */
+
+    @PostMapping("/google")
+    @Operation(summary = "Google Login", description = "Authenticate with a Google ID token. Creates a customer account on first login.")
+    public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(
+            @Valid @RequestBody com.afrochow.auth.dto.GoogleAuthRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        LoginResponse response = googleAuthService.authenticateWithGoogle(
+                request.getCredential(), httpRequest, httpResponse);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 
     /* ==========================================================
        REGISTRATION ENDPOINTS
