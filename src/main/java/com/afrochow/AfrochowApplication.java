@@ -1,6 +1,5 @@
 package com.afrochow;
 
-import com.afrochow.config.DotenvConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
@@ -22,8 +21,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class AfrochowApplication {
 
 	public static void main(String[] args) {
-		SpringApplication app = new SpringApplication(AfrochowApplication.class);
-		app.addInitializers(new DotenvConfig());
-		app.run(args);
+		SpringApplication.run(AfrochowApplication.class, args);
 	}
 }
