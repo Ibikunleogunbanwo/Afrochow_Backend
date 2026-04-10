@@ -155,6 +155,14 @@ public class AuthenticationService {
         // Reactivate account if within the 30-day grace period
         reactivateIfEligible(identifier, password);
 
+        // Block password login for Google-only accounts
+        findUserByIdentifier(identifier).ifPresent(user -> {
+            if (user.getGoogleId() != null && user.getPassword() == null) {
+                throw new GoogleOnlyAccountException(
+                        "This account was created with Google. Please sign in with Google.");
+            }
+        });
+
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(identifier, password)
@@ -371,7 +379,13 @@ public class AuthenticationService {
     public String forgotPassword(ForgotPasswordRequestDto request, HttpServletRequest httpRequest) {
         String identifier = request.getIdentifier().trim();
         rateLimitService.verifyPasswordResetLimit(getCanonicalIdentifier(identifier));
-        findUserByIdentifier(identifier).ifPresent(user -> processPasswordResetRequest(user, httpRequest));
+        findUserByIdentifier(identifier).ifPresent(user -> {
+            if (user.getGoogleId() != null && user.getPassword() == null) {
+                throw new GoogleOnlyAccountException(
+                        "This account uses Google login. Password reset is not available. Please sign in with Google.");
+            }
+            processPasswordResetRequest(user, httpRequest);
+        });
         return "If the username or email exists in our system, you will receive reset instructions.";
     }
 

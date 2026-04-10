@@ -54,8 +54,11 @@ public class User {
 
     private String profileImageUrl;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String password;
+
+    @Column(unique = true, nullable = true)
+    private String googleId;
 
     @Column(nullable = false)
     private String firstName;

@@ -114,8 +114,12 @@ public class PaymentService {
                     .setScale(0, RoundingMode.HALF_UP)
                     .longValueExact();
 
-            // Platform fee: e.g. 10% of total → kept by Afrochow; remainder goes to vendor
-            long feeInCents = BigDecimal.valueOf(amountInCents)
+            // Platform fee: e.g. 10% of subtotal (excluding tax) → kept by Afrochow; remainder goes to vendor
+            long subtotalInCents = order.getSubtotal()
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .longValueExact();
+            long feeInCents = BigDecimal.valueOf(subtotalInCents)
                     .multiply(BigDecimal.valueOf(platformFeePercent))
                     .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
                     .longValueExact();
@@ -170,7 +174,7 @@ public class PaymentService {
                 payment.setPlatformFeeAmount(
                         BigDecimal.valueOf(feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                 payment.setVendorPayout(
-                        BigDecimal.valueOf(amountInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+                        BigDecimal.valueOf(subtotalInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                 paymentRepository.save(payment);
                 log.info("payment.authorized publicOrderId={} paymentId={} transactionId={} amount={} fee={} vendorPayout={}",
                         order.getPublicOrderId(),
@@ -272,7 +276,15 @@ public class PaymentService {
                             .multiply(BigDecimal.valueOf(100))
                             .setScale(0, RoundingMode.HALF_UP)
                             .longValue();
-                    long feeCents = BigDecimal.valueOf(capturedCents)
+                    // Fee is on subtotal only — back out tax proportionally from captured amount
+                    BigDecimal taxRate = order.getTaxRate() != null ? order.getTaxRate() : BigDecimal.ZERO;
+                    BigDecimal capturedSubtotal = capturedAmount
+                            .divide(BigDecimal.ONE.add(taxRate), 10, RoundingMode.HALF_UP);
+                    long capturedSubtotalCents = capturedSubtotal
+                            .multiply(BigDecimal.valueOf(100))
+                            .setScale(0, RoundingMode.HALF_UP)
+                            .longValue();
+                    long feeCents = BigDecimal.valueOf(capturedSubtotalCents)
                             .multiply(BigDecimal.valueOf(platformFeePercent))
                             .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
                             .longValue();
@@ -280,7 +292,7 @@ public class PaymentService {
                     payment.setPlatformFeeAmount(
                             BigDecimal.valueOf(feeCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                     payment.setVendorPayout(
-                            BigDecimal.valueOf(capturedCents - feeCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+                            BigDecimal.valueOf(capturedSubtotalCents - feeCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                     log.info("payment.partial_capture publicOrderId={} originalAmount={} capturedAmount={} fee={} vendorPayout={}",
                             order.getPublicOrderId(),
                             order.getTotalAmount(),

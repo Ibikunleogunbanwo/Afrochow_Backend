@@ -255,6 +255,13 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage(), request);
     }
 
+    @ExceptionHandler(GoogleOnlyAccountException.class)
+    public ResponseEntity<ApiResponse<Object>> handleGoogleOnlyAccount(
+            GoogleOnlyAccountException ex, WebRequest request) {
+        logger.warn("Password action attempted on Google-only account");
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
+    }
+
     // ═════════════════════════════════════════════════════════════
     //  RATE LIMITING & SECURITY EXCEPTIONS
     // ═════════════════════════════════════════════════════════════
