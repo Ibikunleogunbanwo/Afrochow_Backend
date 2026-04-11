@@ -8,6 +8,6 @@ import lombok.Setter;
 @Setter
 public class GoogleAuthRequest {
 
-    @NotBlank(message = "Google credential token is required")
-    private String credential;
+    @NotBlank(message = "Google authorization code is required")
+    private String code;
 }
