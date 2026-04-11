@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -568,6 +569,17 @@ public class GlobalExceptionHandler {
     // ═════════════════════════════════════════════════════════════
     //  CATCH-ALL
     // ═════════════════════════════════════════════════════════════
+
+    /**
+     * Handle requests to routes that don't exist.
+     * Without this, Spring falls through to the catch-all and returns 500.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleNoResourceFound(
+            NoResourceFoundException ex, WebRequest request) {
+        logger.warn("Route not found: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.NOT_FOUND, "The requested endpoint does not exist", request);
+    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGeneralException(
