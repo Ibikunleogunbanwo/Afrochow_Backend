@@ -11,6 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,6 +28,37 @@ import java.util.Map;
 public class AdminProductController {
 
     private final ProductRepository productRepository;
+
+    // ========== ALL PRODUCTS LIST ==========
+
+    /**
+     * Paginated list of ALL products for the admin product management page.
+     * Featured products appear first, then newest. Includes unavailable products.
+     * Each product includes isFeatured so the frontend toggle knows its current state.
+     */
+    @GetMapping
+    @Operation(summary = "List all products", description = "Paginated list of all products for admin management. Featured products appear first.")
+    public ResponseEntity<ApiResponse<Page<AdminProductSummary>>> getAllProducts(
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<AdminProductSummary> result = productRepository.findAllForAdmin(pageable)
+                .map(p -> new AdminProductSummary(
+                        p.getPublicProductId(),
+                        p.getName(),
+                        p.getPrice(),
+                        p.getImageUrl(),
+                        p.getAvailable(),
+                        p.getVendor() != null ? p.getVendor().getRestaurantName() : null,
+                        p.getVendor() != null ? p.getVendor().getPublicVendorId() : null,
+                        p.getCategory() != null ? p.getCategory().getName() : null,
+                        p.getIsFeatured(),
+                        p.getFeaturedAt()
+                ));
+
+        return ResponseEntity.ok(ApiResponse.success("Products retrieved", result));
+    }
 
     // ========== FEATURED MANAGEMENT ==========
 
@@ -81,7 +116,20 @@ public class AdminProductController {
                 "Admin featured products retrieved", featured));
     }
 
-    // ========== DTO ==========
+    // ========== DTOs ==========
+
+    public record AdminProductSummary(
+            String publicProductId,
+            String name,
+            java.math.BigDecimal price,
+            String imageUrl,
+            Boolean available,
+            String vendorName,
+            String publicVendorId,
+            String categoryName,
+            Boolean isFeatured,
+            LocalDateTime featuredAt
+    ) {}
 
     public record FeaturedProductSummary(
             String publicProductId,

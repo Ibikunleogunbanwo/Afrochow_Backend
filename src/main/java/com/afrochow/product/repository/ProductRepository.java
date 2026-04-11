@@ -284,6 +284,23 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("radiusKm") double radiusKm
     );
 
+    // ========== ADMIN ALL PRODUCTS ==========
+
+    /**
+     * All products for the admin product management page.
+     * Includes unavailable products and unverified vendors so admins can see everything.
+     * Ordered: featured first (featuredAt DESC), then newest.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN FETCH p.vendor v
+        LEFT JOIN FETCH p.category c
+        ORDER BY p.isFeatured DESC,
+                 p.featuredAt DESC NULLS LAST,
+                 p.createdAt  DESC
+        """)
+    Page<Product> findAllForAdmin(Pageable pageable);
+
     // ========== COUNTS ==========
 
     Long countByVendor(VendorProfile vendor);
