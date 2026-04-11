@@ -1,5 +1,6 @@
 package com.afrochow.customer.controller;
 import com.afrochow.common.ApiResponse;
+import com.afrochow.customer.dto.CompleteProfileRequestDto;
 import com.afrochow.customer.dto.CustomerPasswordUpdate;
 import com.afrochow.customer.dto.CustomerUpdateRequestDto;
 import com.afrochow.customer.dto.CustomerProfileResponseDto;
@@ -36,6 +37,26 @@ public class CustomerProfileController {
 
     public CustomerProfileController(CustomerProfileService customerProfileService) {
         this.customerProfileService = customerProfileService;
+    }
+
+    /**
+     * Complete profile after Google OAuth sign-in.
+     * Called once on first login when isProfileComplete = false.
+     */
+    @PostMapping("/complete")
+    @Operation(
+            summary = "Complete Google profile",
+            description = "One-time endpoint for Google sign-in users to add phone, address, and username after auto-creation"
+    )
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<CustomerProfileResponseDto>> completeProfile(
+            @Valid @RequestBody CompleteProfileRequestDto request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        CustomerProfileResponseDto profile =
+                customerProfileService.completeProfile(userDetails.getPublicUserId(), request);
+
+        return ResponseEntity.ok(ApiResponse.success("Profile completed successfully", profile));
     }
 
     /**

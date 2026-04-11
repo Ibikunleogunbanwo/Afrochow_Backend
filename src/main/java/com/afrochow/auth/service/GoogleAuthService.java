@@ -125,11 +125,13 @@ public class GoogleAuthService {
     }
 
     private LoginResponse buildLoginResponse(User user) {
+        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         return LoginResponse.builder()
                 .publicUserId(user.getPublicUserId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole().name())
+                .isProfileComplete(profileComplete)
                 .build();
     }
 }

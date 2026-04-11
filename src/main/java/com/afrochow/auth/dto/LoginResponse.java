@@ -20,5 +20,8 @@ public class LoginResponse {
     // Vendor-only status fields (null for non-vendor users)
     private Boolean vendorIsActive;
     private Boolean vendorIsVerified;
+
+    // Profile completeness — false for new Google sign-in users missing phone/address
+    private Boolean isProfileComplete;
 }
 

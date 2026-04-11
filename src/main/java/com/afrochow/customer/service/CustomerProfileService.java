@@ -2,6 +2,8 @@ package com.afrochow.customer.service;
 
 import com.afrochow.address.dto.AddressResponseDto;
 import com.afrochow.address.model.Address;
+import com.afrochow.address.dto.AddressRequestDto;
+import com.afrochow.customer.dto.CompleteProfileRequestDto;
 import com.afrochow.customer.dto.CustomerPasswordUpdate;
 import com.afrochow.customer.dto.CustomerUpdateRequestDto;
 import com.afrochow.customer.dto.CustomerProfileResponseDto;
@@ -222,6 +224,69 @@ public class CustomerProfileService {
             target.setPaymentMethod(src.getPaymentMethod());
         }
         /* add more if needed … */
+    }
+
+    /* ---------------------------------------------------------- */
+    /*  COMPLETE GOOGLE PROFILE (onboarding)                     */
+    /* ---------------------------------------------------------- */
+
+    /**
+     * Called once after Google OAuth auto-creation to fill in the missing
+     * required fields (phone, and optionally address + username).
+     * Idempotent — safe to call again if the user refreshes mid-onboarding.
+     */
+    @Transactional
+    public CustomerProfileResponseDto completeProfile(String publicUserId, CompleteProfileRequestDto dto) {
+        User user = userRepository.findByPublicUserId(publicUserId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        if (!user.isCustomer()) {
+            throw new IllegalStateException("Only customer accounts can complete a profile here");
+        }
+
+        CustomerProfile profile = Optional.ofNullable(user.getCustomerProfile())
+                .orElseThrow(() -> new EntityNotFoundException("Customer profile not found"));
+
+        // Phone — always required
+        String normalizedPhone = PhoneUtils.normalize(dto.getPhone());
+        if (userRepository.existsByPhone(normalizedPhone) &&
+                !normalizedPhone.equals(user.getPhone())) {
+            throw new IllegalArgumentException("Phone number is already registered to another account");
+        }
+        user.setPhone(normalizedPhone);
+
+        // Username — optional, set only if provided and not already taken
+        if (dto.getUsername() != null && !dto.getUsername().isBlank()) {
+            String username = dto.getUsername().trim();
+            if (userRepository.existsByUsername(username) &&
+                    !username.equals(user.getUsername())) {
+                throw new IllegalArgumentException("Username is already taken");
+            }
+            user.setUsername(username);
+        }
+
+        // Delivery instructions — optional
+        if (dto.getDefaultDeliveryInstructions() != null) {
+            profile.setDefaultDeliveryInstructions(dto.getDefaultDeliveryInstructions());
+        }
+
+        // Address — optional at this stage (can be added at checkout)
+        if (dto.getAddress() != null) {
+            AddressRequestDto a = dto.getAddress();
+            Address address = Address.builder()
+                    .addressLine(a.getAddressLine())
+                    .city(a.getCity())
+                    .province(a.getProvince())
+                    .postalCode(a.getPostalCode())
+                    .country(a.getCountry() != null ? a.getCountry() : "Canada")
+                    .defaultAddress(Boolean.TRUE)
+                    .build();
+            profile.addAddress(address);
+        }
+
+        userRepository.save(user);
+        log.info("google.profile.complete publicUserId={}", publicUserId);
+        return toResponseDto(profile);
     }
 
     private CustomerProfileResponseDto toResponseDto(CustomerProfile profile) {
