@@ -284,6 +284,15 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("radiusKm") double radiusKm
     );
 
+    // ========== ADMIN FEATURED FILTER ==========
+
+    /**
+     * Used by the admin "Featured" / "Not Featured" tab filter.
+     * Returns a page of products matching the given isFeatured value,
+     * ordered by featuredAt DESC (pinned most recently first).
+     */
+    Page<Product> findByIsFeaturedOrderByFeaturedAtDesc(Boolean isFeatured, Pageable pageable);
+
     // ========== ADMIN ALL PRODUCTS ==========
 
     /**

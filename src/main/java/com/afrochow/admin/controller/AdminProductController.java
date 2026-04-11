@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -44,14 +45,20 @@ public class AdminProductController {
     )
     public ResponseEntity<ApiResponse<Page<AdminProductSummary>>> getAllProducts(
             @RequestParam(required = false)    String search,
+            @RequestParam(required = false)    Boolean featured,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
 
-        Page<AdminProductSummary> result = (search != null && !search.isBlank())
-                ? productRepository.searchForAdmin(search.trim(), pageable).map(this::toAdminSummary)
-                : productRepository.findAllForAdmin(pageable).map(this::toAdminSummary);
+        Page<AdminProductSummary> result;
+        if (search != null && !search.isBlank()) {
+            result = productRepository.searchForAdmin(search.trim(), pageable).map(this::toAdminSummary);
+        } else if (featured != null) {
+            result = productRepository.findByIsFeaturedOrderByFeaturedAtDesc(featured, pageable).map(this::toAdminSummary);
+        } else {
+            result = productRepository.findAllForAdmin(pageable).map(this::toAdminSummary);
+        }
 
         return ResponseEntity.ok(ApiResponse.success("Products retrieved", result));
     }
@@ -125,6 +132,28 @@ public class AdminProductController {
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Admin featured products retrieved", featured));
+    }
+
+    /**
+     * Unpin all currently featured products in one operation.
+     * Used by the "Clear All Featured" button in the admin dashboard.
+     */
+    @DeleteMapping("/featured/clear")
+    @Transactional
+    @Operation(summary = "Clear all featured products", description = "Unpin every product from the featured section")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> clearAllFeatured() {
+        List<Product> pinned = productRepository.findAdminFeaturedProducts();
+        pinned.forEach(p -> {
+            p.setIsFeatured(false);
+            p.setFeaturedAt(null);
+        });
+        productRepository.saveAll(pinned);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("cleared", pinned.size());
+
+        return ResponseEntity.ok(ApiResponse.success(
+                pinned.size() + " product(s) removed from featured section", data));
     }
 
     // ========== DTOs ==========
