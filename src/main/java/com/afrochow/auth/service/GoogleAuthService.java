@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.Optional;
 
@@ -30,6 +31,8 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class GoogleAuthService {
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
     private final JwtTokenProvider jwtTokenProvider;
@@ -104,8 +107,17 @@ public class GoogleAuthService {
             return user;
         }
 
+        // Generate username upfront — JwtTokenProvider.validateUser() requires a
+        // non-null username before createToken() is called, which happens before
+        // the DB flush that would trigger @PrePersist auto-generation.
+        String base = (firstName + lastName).toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (base.length() < 3) base = base + "user";
+        String username = base.substring(0, Math.min(base.length(), 16))
+                + (SECURE_RANDOM.nextInt(9000) + 1000);
+
         User user = User.builder()
                 .email(email)
+                .username(username)
                 .googleId(googleId)
                 .firstName(firstName)
                 .lastName(lastName)
