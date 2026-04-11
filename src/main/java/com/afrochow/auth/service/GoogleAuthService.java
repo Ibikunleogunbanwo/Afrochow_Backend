@@ -13,15 +13,23 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Collections;
@@ -29,28 +37,61 @@ import java.util.Optional;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class GoogleAuthService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
     private final UserRepository userRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
+    private final String googleClientId;
+    private final String googleClientSecret;
+    private final String googleRedirectUri;
+    private final String cookieDomain;
 
-    @Value("${google.client-id}")
-    private String googleClientId;
+    private final HttpClient httpClient;
+    private GoogleIdTokenVerifier verifier;
 
-    @Value("${app.cookie.domain:}")
-    private String cookieDomain;
+    public GoogleAuthService(
+            UserRepository userRepository,
+            JwtTokenProvider jwtTokenProvider,
+            RefreshTokenService refreshTokenService,
+            @Value("${google.client-id}")      String googleClientId,
+            @Value("${google.client-secret}")  String googleClientSecret,
+            @Value("${google.redirect-uri}")   String googleRedirectUri,
+            @Value("${app.cookie.domain:}")    String cookieDomain
+    ) {
+        this.userRepository      = userRepository;
+        this.jwtTokenProvider    = jwtTokenProvider;
+        this.refreshTokenService = refreshTokenService;
+        this.googleClientId      = googleClientId;
+        this.googleClientSecret  = googleClientSecret;
+        this.googleRedirectUri   = googleRedirectUri;
+        this.cookieDomain        = cookieDomain;
+        this.httpClient          = HttpClient.newHttpClient();
+    }
+
+    @PostConstruct
+    void initVerifier() {
+        this.verifier = new GoogleIdTokenVerifier.Builder(
+                new NetHttpTransport(), GsonFactory.getDefaultInstance())
+                .setAudience(Collections.singletonList(googleClientId))
+                .build();
+    }
+
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
 
     @Transactional
     public LoginResponse authenticateWithGoogle(
-            String credential,
+            String code,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        GoogleIdToken.Payload payload = verifyToken(credential);
+        String idToken = exchangeCodeForIdToken(code);
+        GoogleIdToken.Payload payload = verifyToken(idToken);
 
         String email      = payload.getEmail();
         String googleId   = payload.getSubject();
@@ -67,26 +108,64 @@ public class GoogleAuthService {
         String refreshToken = refreshTokenService.createRefreshTokenForUser(user, httpRequest);
 
         CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.ACCESS_TOKEN_COOKIE,
-                accessToken, jwtTokenProvider.getAccessTokenExpirationSeconds(), true, "None", cookieDomain);
+                accessToken, jwtTokenProvider.getAccessTokenExpirationSeconds(),
+                true, "None", cookieDomain);
         CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE,
-                refreshToken, refreshTokenService.getRefreshTokenExpirationSeconds(), true, "None", cookieDomain);
+                refreshToken, refreshTokenService.getRefreshTokenExpirationSeconds(),
+                true, "None", cookieDomain);
 
         log.info("google.login.success email={} publicUserId={}", email, user.getPublicUserId());
         return buildLoginResponse(user);
     }
 
-    private GoogleIdToken.Payload verifyToken(String credential) {
-        try {
-            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
-                    new NetHttpTransport(), GsonFactory.getDefaultInstance())
-                    .setAudience(Collections.singletonList(googleClientId))
-                    .build();
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
 
-            GoogleIdToken idToken = verifier.verify(credential);
-            if (idToken == null) {
+    private String exchangeCodeForIdToken(String code) {
+        String body = "code="           + encode(code)
+                + "&client_id="     + encode(googleClientId)
+                + "&client_secret=" + encode(googleClientSecret)
+                + "&redirect_uri="  + encode(googleRedirectUri)
+                + "&grant_type=authorization_code";
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(GOOGLE_TOKEN_URL))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) {
+                log.error("google.token.exchange.failed status={} body={}", response.statusCode(), response.body());
+                throw new IllegalArgumentException("Failed to exchange authorization code");
+            }
+
+            JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
+
+            if (!json.has("id_token")) {
+                log.error("google.token.exchange.missing_id_token body={}", response.body());
+                throw new IllegalArgumentException("No id_token in Google token response");
+            }
+
+            return json.get("id_token").getAsString();
+
+        } catch (IOException | InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("google.token.exchange.error: {}", e.getMessage());
+            throw new IllegalArgumentException("Google token exchange failed");
+        }
+    }
+
+    private GoogleIdToken.Payload verifyToken(String idToken) {
+        try {
+            GoogleIdToken token = verifier.verify(idToken);
+            if (token == null) {
                 throw new IllegalArgumentException("Invalid Google token");
             }
-            return idToken.getPayload();
+            return token.getPayload();
         } catch (GeneralSecurityException | IOException | IllegalArgumentException e) {
             log.error("google.token.verification.failed: {}", e.getMessage());
             throw new IllegalArgumentException("Google token verification failed");
@@ -107,9 +186,6 @@ public class GoogleAuthService {
             return user;
         }
 
-        // Generate username upfront — JwtTokenProvider.validateUser() requires a
-        // non-null username before createToken() is called, which happens before
-        // the DB flush that would trigger @PrePersist auto-generation.
         String base = (firstName + lastName).toLowerCase().replaceAll("[^a-z0-9]", "");
         if (base.length() < 3) base = base + "user";
         String username = base.substring(0, Math.min(base.length(), 16))
@@ -133,9 +209,6 @@ public class GoogleAuthService {
         customerProfile.setUser(user);
         user.setCustomerProfile(customerProfile);
 
-        // saveAndFlush() forces an immediate DB flush which triggers @PrePersist,
-        // ensuring publicUserId and username are both populated on the returned
-        // entity before createToken() is called in the caller.
         return userRepository.saveAndFlush(user);
     }
 
@@ -148,5 +221,9 @@ public class GoogleAuthService {
                 .role(user.getRole().name())
                 .isProfileComplete(profileComplete)
                 .build();
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }
