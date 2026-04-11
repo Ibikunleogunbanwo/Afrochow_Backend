@@ -87,7 +87,7 @@ public class GoogleAuthService {
                 throw new IllegalArgumentException("Invalid Google token");
             }
             return idToken.getPayload();
-        } catch (GeneralSecurityException | IOException e) {
+        } catch (GeneralSecurityException | IOException | IllegalArgumentException e) {
             log.error("google.token.verification.failed: {}", e.getMessage());
             throw new IllegalArgumentException("Google token verification failed");
         }
