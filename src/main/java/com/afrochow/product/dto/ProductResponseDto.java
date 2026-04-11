@@ -43,6 +43,10 @@ public class ProductResponseDto {
     private String vendorCountry;
     private String vendorFormattedAddress;
 
+    // Featured
+    private Boolean isFeatured;
+    private LocalDateTime featuredAt;
+
     private Double averageRating;
     private Integer reviewCount;
     private Integer totalOrders;

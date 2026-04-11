@@ -25,8 +25,10 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -366,57 +368,104 @@ public class SearchService {
         }
 
         /**
-         * Get Featured Products — trending in the last 90 days, spread across vendors.
+         * Get Featured Products — admin-pinned first, then trending, spread across vendors.
          *
          * Strategy:
-         * 1. Fetch up to POOL_SIZE products with at least one order in the last 90
-         * days.
-         * 2. Fall back to all-time order ranking if fewer than MIN_RECENCY_THRESHOLD
-         * results.
-         * 3. Fall back further to newest available products if the platform has no
-         * orders yet.
-         * 4. Apply vendor diversity: at most MAX_PER_VENDOR products per vendor, up to
-         * MAX_TOTAL.
+         * 1. Always include admin-pinned products (isFeatured = true) up to MAX_TOTAL.
+         * 2. Fill remaining slots with algorithmically ranked products:
+         *    Tier 1 — orders in last 90 days (recency trending)
+         *    Tier 2 — all-time order ranking (broader history)
+         *    Tier 3 — best rated then newest (zero-order fallback for new platforms)
+         * 3. Tier 3 applies category diversity (max 2 per category) and sorts by
+         *    average rating DESC so quality products surface over pure recency.
+         * 4. Apply vendor diversity: at most MAX_PER_VENDOR per vendor across all slots.
          */
         @Transactional(readOnly = true)
         public List<ProductResponseDto> getFeaturedProducts() {
-                final int POOL_SIZE = 50;
-                final int MAX_TOTAL = 16;
-                final int MAX_PER_VENDOR = 2;
+                final int POOL_SIZE           = 50;
+                final int MAX_TOTAL           = 16;
+                final int MAX_PER_VENDOR      = 2;
+                final int MAX_PER_CATEGORY    = 2;
                 final int MIN_RECENCY_THRESHOLD = 4;
 
-                LocalDateTime cutoff = LocalDateTime.now().minusDays(90);
-                Pageable pool = PageRequest.of(0, POOL_SIZE);
+                // ── Step 1: Admin-pinned products always shown first ──────────────
+                List<Product> pinned = productRepository.findAdminFeaturedProducts();
+                Set<Long> pinnedIds  = pinned.stream()
+                        .map(Product::getProductId)
+                        .collect(java.util.stream.Collectors.toSet());
 
-                List<Product> candidates = productRepository.findFeaturedProducts(pool, cutoff).getContent();
+                Map<String, Integer> vendorCount    = new HashMap<>();
+                Map<Long,   Integer> categoryCount  = new HashMap<>();
+                List<Product>        result          = new ArrayList<>();
 
-                if (candidates.size() < MIN_RECENCY_THRESHOLD) {
-                        candidates = productRepository.findFeaturedProductsBroad(pool).getContent();
+                for (Product p : pinned) {
+                        if (p.getVendor() == null) continue;
+                        applyDiversity(p, result, vendorCount, categoryCount, MAX_PER_VENDOR, MAX_PER_CATEGORY, MAX_TOTAL);
+                        if (result.size() >= MAX_TOTAL) break;
                 }
 
-                if (candidates.size() < MIN_RECENCY_THRESHOLD) {
-                        candidates = productRepository.findAnyFeaturedProducts(pool).getContent();
-                }
+                // ── Step 2: Fill remaining slots algorithmically ──────────────────
+                if (result.size() < MAX_TOTAL) {
+                        LocalDateTime cutoff = LocalDateTime.now().minusDays(90);
+                        Pageable pool = PageRequest.of(0, POOL_SIZE);
 
-                Map<String, Integer> vendorCount = new HashMap<>();
-                List<Product> diverse = new ArrayList<>();
+                        List<Product> candidates = productRepository
+                                .findFeaturedProducts(pool, cutoff).getContent();
 
-                for (Product p : candidates) {
-                        if (p.getVendor() == null)
-                                continue;
-                        String vid = p.getVendor().getPublicVendorId();
-                        int count = vendorCount.getOrDefault(vid, 0);
-                        if (count < MAX_PER_VENDOR) {
-                                diverse.add(p);
-                                vendorCount.put(vid, count + 1);
+                        if (candidates.size() < MIN_RECENCY_THRESHOLD) {
+                                candidates = productRepository.findFeaturedProductsBroad(pool).getContent();
                         }
-                        if (diverse.size() >= MAX_TOTAL)
-                                break;
+
+                        if (candidates.size() < MIN_RECENCY_THRESHOLD) {
+                                // Tier 3: sort by rating DESC then newest — better than pure date order
+                                candidates = productRepository.findAnyFeaturedProducts(pool).getContent()
+                                        .stream()
+                                        .sorted(Comparator
+                                                .comparingDouble(Product::getAverageRating).reversed()
+                                                .thenComparing(Product::getReviewCount,   Comparator.reverseOrder())
+                                                .thenComparing(Product::getCreatedAt,     Comparator.reverseOrder()))
+                                        .toList();
+                        }
+
+                        for (Product p : candidates) {
+                                if (p.getVendor() == null) continue;
+                                if (pinnedIds.contains(p.getProductId())) continue; // already in result
+                                applyDiversity(p, result, vendorCount, categoryCount, MAX_PER_VENDOR, MAX_PER_CATEGORY, MAX_TOTAL);
+                                if (result.size() >= MAX_TOTAL) break;
+                        }
                 }
 
-                return diverse.stream()
-                                .map(this::toProductResponseDto)
-                                .toList();
+                return result.stream()
+                        .map(this::toProductResponseDto)
+                        .toList();
+        }
+
+        /** Adds a product to the result list if vendor + category diversity caps allow it. */
+        private void applyDiversity(
+                Product p,
+                List<Product> result,
+                Map<String, Integer> vendorCount,
+                Map<Long,   Integer> categoryCount,
+                int maxPerVendor,
+                int maxPerCategory,
+                int maxTotal
+        ) {
+                if (result.size() >= maxTotal) return;
+
+                String vendorId   = p.getVendor().getPublicVendorId();
+                Long   categoryId = p.getCategory() != null ? p.getCategory().getCategoryId() : null;
+
+                int vc = vendorCount.getOrDefault(vendorId, 0);
+                if (vc >= maxPerVendor) return;
+
+                if (categoryId != null) {
+                        int cc = categoryCount.getOrDefault(categoryId, 0);
+                        if (cc >= maxPerCategory) return;
+                        categoryCount.put(categoryId, cc + 1);
+                }
+
+                vendorCount.put(vendorId, vc + 1);
+                result.add(p);
         }
 
         /**
@@ -669,6 +718,8 @@ public class SearchService {
                                 .isVegan(product.getIsVegan())
                                 .isGlutenFree(product.getIsGlutenFree())
                                 .isSpicy(product.getIsSpicy())
+                                .isFeatured(product.getIsFeatured())
+                                .featuredAt(product.getFeaturedAt())
                                 .vendorPublicId(vendor != null ? vendor.getPublicVendorId() : null)
                                 .restaurantName(vendor != null ? vendor.getRestaurantName() : null)
                                 .categoryId(category != null ? category.getCategoryId() : null)
