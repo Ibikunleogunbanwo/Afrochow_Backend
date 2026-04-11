@@ -55,10 +55,9 @@ public class CustomUserDetailsService implements UserDetailsService {
                     ));
         } else {
             return userRepository.findByUsername(identifier)
-                    .orElseGet(() -> userRepository.findByUsername(identifier)
-                            .orElseThrow(() -> new UsernameNotFoundException(
-                                    "User not found with identifier: " + identifier
-                            )));
+                    .orElseThrow(() -> new UsernameNotFoundException(
+                            "User not found with identifier: " + identifier
+                    ));
         }
     }
 

@@ -718,11 +718,14 @@ public class AuthenticationService {
     }
 
     private LoginResponse buildLoginResponse(User user) {
+        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+
         LoginResponse.LoginResponseBuilder builder = LoginResponse.builder()
                 .publicUserId(user.getPublicUserId())
                 .username(user.getUsername())
                 .email(user.getEmail())
-                .role(user.getRole().name());
+                .role(user.getRole().name())
+                .isProfileComplete(profileComplete);
 
         // Attach vendor-specific status so the frontend can show appropriate
         // banners for pending-approval or deactivated vendor accounts.
