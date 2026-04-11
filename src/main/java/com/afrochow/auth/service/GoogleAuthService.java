@@ -133,7 +133,10 @@ public class GoogleAuthService {
         customerProfile.setUser(user);
         user.setCustomerProfile(customerProfile);
 
-        return userRepository.save(user);
+        // saveAndFlush() forces an immediate DB flush which triggers @PrePersist,
+        // ensuring publicUserId and username are both populated on the returned
+        // entity before createToken() is called in the caller.
+        return userRepository.saveAndFlush(user);
     }
 
     private LoginResponse buildLoginResponse(User user) {
