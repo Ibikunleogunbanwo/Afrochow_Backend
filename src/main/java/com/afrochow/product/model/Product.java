@@ -88,6 +88,15 @@ public class Product {
     private Boolean isGlutenFree;
     private Boolean isSpicy;
 
+    // ========== FEATURED ==========
+    /** Admin-pinned: always surfaces in the featured section regardless of order history. */
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isFeatured = false;
+
+    /** When an admin last pinned this product as featured. */
+    private LocalDateTime featuredAt;
+
     // ========== TIMESTAMPS ==========
     @CreationTimestamp
     @Column(updatable = false)

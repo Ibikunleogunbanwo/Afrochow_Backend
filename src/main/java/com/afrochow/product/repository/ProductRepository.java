@@ -136,17 +136,33 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Page<Product> findFeaturedProductsBroad(Pageable pageable);
 
     /**
-     * Zero-order fallback: returns any available products from verified vendors,
-     * sorted by newest first. Used when the platform has no orders at all yet.
+     * Zero-order fallback: returns available products from verified vendors
+     * ranked by review count then newest — better than pure newest-first for
+     * platforms that have reviews but no orders yet.
      */
     @Query("""
             SELECT p FROM Product p
             WHERE p.available         = true
               AND p.vendor.isVerified = true
               AND p.vendor.isActive   = true
-            ORDER BY p.createdAt DESC
+            ORDER BY SIZE(p.reviews) DESC,
+                     p.createdAt     DESC
             """)
     Page<Product> findAnyFeaturedProducts(Pageable pageable);
+
+    /**
+     * Admin-pinned featured products — always surfaced first regardless of order history.
+     * Ordered by most recently featured so freshly-pinned items appear at the top.
+     */
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.available         = true
+              AND p.vendor.isVerified = true
+              AND p.vendor.isActive   = true
+              AND p.isFeatured        = true
+            ORDER BY p.featuredAt DESC
+            """)
+    List<Product> findAdminFeaturedProducts();
 
     // ========== PRODUCTS BY BEST RESTAURANTS NEAR ME ==========
 
