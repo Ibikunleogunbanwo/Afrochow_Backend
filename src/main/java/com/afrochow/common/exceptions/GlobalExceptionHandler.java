@@ -536,8 +536,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Object>> handleIllegalArgument(
             IllegalArgumentException ex, WebRequest request) {
-        logger.warn("Illegal argument: {}", ex.getMessage());
         String message = ex.getMessage() != null ? ex.getMessage() : "Invalid request parameters";
+        logger.warn("Illegal argument: {}", message, ex);
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
