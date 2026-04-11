@@ -301,6 +301,27 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         """)
     Page<Product> findAllForAdmin(Pageable pageable);
 
+    /**
+     * Admin product search — case-insensitive partial match across product name,
+     * vendor name, and category name. Includes all products regardless of
+     * availability or verification status.
+     * Ordered: featured first, then by how early in the name the match appears
+     * (LOCATE gives position of match — lower = closer to start = more relevant),
+     * then alphabetically.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN p.vendor v
+        LEFT JOIN p.category c
+        WHERE LOWER(p.name)        LIKE LOWER(CONCAT('%', :query, '%'))
+           OR LOWER(v.restaurantName) LIKE LOWER(CONCAT('%', :query, '%'))
+           OR LOWER(c.name)        LIKE LOWER(CONCAT('%', :query, '%'))
+        ORDER BY p.isFeatured DESC,
+                 LOCATE(LOWER(:query), LOWER(p.name)) ASC,
+                 p.name ASC
+        """)
+    Page<Product> searchForAdmin(@Param("query") String query, Pageable pageable);
+
     // ========== COUNTS ==========
 
     Long countByVendor(VendorProfile vendor);

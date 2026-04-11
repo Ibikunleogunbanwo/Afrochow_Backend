@@ -33,31 +33,42 @@ public class AdminProductController {
 
     /**
      * Paginated list of ALL products for the admin product management page.
-     * Featured products appear first, then newest. Includes unavailable products.
-     * Each product includes isFeatured so the frontend toggle knows its current state.
+     * Optionally filter by search query (case-insensitive, matches product name,
+     * vendor name, or category name — returns closest match first).
+     * Featured products always appear first within results.
      */
     @GetMapping
-    @Operation(summary = "List all products", description = "Paginated list of all products for admin management. Featured products appear first.")
+    @Operation(
+            summary = "List / search all products",
+            description = "Paginated list of all products for admin management. Pass `search` to filter by name, vendor, or category."
+    )
     public ResponseEntity<ApiResponse<Page<AdminProductSummary>>> getAllProducts(
+            @RequestParam(required = false)    String search,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
-        Page<AdminProductSummary> result = productRepository.findAllForAdmin(pageable)
-                .map(p -> new AdminProductSummary(
-                        p.getPublicProductId(),
-                        p.getName(),
-                        p.getPrice(),
-                        p.getImageUrl(),
-                        p.getAvailable(),
-                        p.getVendor() != null ? p.getVendor().getRestaurantName() : null,
-                        p.getVendor() != null ? p.getVendor().getPublicVendorId() : null,
-                        p.getCategory() != null ? p.getCategory().getName() : null,
-                        p.getIsFeatured(),
-                        p.getFeaturedAt()
-                ));
+
+        Page<AdminProductSummary> result = (search != null && !search.isBlank())
+                ? productRepository.searchForAdmin(search.trim(), pageable).map(this::toAdminSummary)
+                : productRepository.findAllForAdmin(pageable).map(this::toAdminSummary);
 
         return ResponseEntity.ok(ApiResponse.success("Products retrieved", result));
+    }
+
+    private AdminProductSummary toAdminSummary(com.afrochow.product.model.Product p) {
+        return new AdminProductSummary(
+                p.getPublicProductId(),
+                p.getName(),
+                p.getPrice(),
+                p.getImageUrl(),
+                p.getAvailable(),
+                p.getVendor() != null ? p.getVendor().getRestaurantName() : null,
+                p.getVendor() != null ? p.getVendor().getPublicVendorId() : null,
+                p.getCategory() != null ? p.getCategory().getName() : null,
+                p.getIsFeatured(),
+                p.getFeaturedAt()
+        );
     }
 
     // ========== FEATURED MANAGEMENT ==========

@@ -382,14 +382,19 @@ public class SearchService {
          */
         @Transactional(readOnly = true)
         public List<ProductResponseDto> getFeaturedProducts() {
-                final int POOL_SIZE           = 50;
-                final int MAX_TOTAL           = 16;
-                final int MAX_PER_VENDOR      = 2;
-                final int MAX_PER_CATEGORY    = 2;
+                final int POOL_SIZE             = 50;
+                final int MAX_PER_VENDOR        = 2;
+                final int MAX_PER_CATEGORY      = 2;
                 final int MIN_RECENCY_THRESHOLD = 4;
 
-                // ── Step 1: Admin-pinned products always shown first ──────────────
+                // ── Step 1: Admin-pinned products — added as-is, no diversity cap ──
+                // Admin explicitly chose these products; diversity caps must not override that.
+                // We still track their vendor/category counts so the algorithmic fill (Step 2)
+                // diversifies around them.
                 List<Product> pinned = productRepository.findAdminFeaturedProducts();
+
+                // All pinned products always show + up to 8 algorithmic fill slots
+                final int MAX_TOTAL = Math.max(24, pinned.size() + 8);
                 Set<Long> pinnedIds  = pinned.stream()
                         .map(Product::getProductId)
                         .collect(java.util.stream.Collectors.toSet());
@@ -400,8 +405,12 @@ public class SearchService {
 
                 for (Product p : pinned) {
                         if (p.getVendor() == null) continue;
-                        applyDiversity(p, result, vendorCount, categoryCount, MAX_PER_VENDOR, MAX_PER_CATEGORY, MAX_TOTAL);
-                        if (result.size() >= MAX_TOTAL) break;
+                        result.add(p);
+                        // Track counts for Step 2 diversity only
+                        String vendorId   = p.getVendor().getPublicVendorId();
+                        Long   categoryId = p.getCategory() != null ? p.getCategory().getCategoryId() : null;
+                        vendorCount.merge(vendorId, 1, Integer::sum);
+                        if (categoryId != null) categoryCount.merge(categoryId, 1, Integer::sum);
                 }
 
                 // ── Step 2: Fill remaining slots algorithmically ──────────────────
