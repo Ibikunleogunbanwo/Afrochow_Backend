@@ -381,11 +381,13 @@ public class SearchService {
          * 4. Apply vendor diversity: at most MAX_PER_VENDOR per vendor across all slots.
          */
         @Transactional(readOnly = true)
-        public List<ProductResponseDto> getFeaturedProducts() {
+        public List<ProductResponseDto> getFeaturedProducts(String city) {
                 final int POOL_SIZE             = 50;
                 final int MAX_PER_VENDOR        = 2;
                 final int MAX_PER_CATEGORY      = 2;
                 final int MIN_RECENCY_THRESHOLD = 4;
+
+                final String cityFilter = (city != null && !city.isBlank()) ? city.trim() : null;
 
                 // ── Step 1: Admin-pinned products — added as-is, no diversity cap ──
                 // Admin explicitly chose these products; diversity caps must not override that.
@@ -439,6 +441,12 @@ public class SearchService {
                         for (Product p : candidates) {
                                 if (p.getVendor() == null) continue;
                                 if (pinnedIds.contains(p.getProductId())) continue; // already in result
+                                // City filter — skip algorithmic candidates not in the requested city
+                                if (cityFilter != null) {
+                                        String vendorCity = p.getVendor().getAddress() != null
+                                                ? p.getVendor().getAddress().getCity() : null;
+                                        if (vendorCity == null || !vendorCity.equalsIgnoreCase(cityFilter)) continue;
+                                }
                                 applyDiversity(p, result, vendorCount, categoryCount, MAX_PER_VENDOR, MAX_PER_CATEGORY, MAX_TOTAL);
                                 if (result.size() >= MAX_TOTAL) break;
                         }

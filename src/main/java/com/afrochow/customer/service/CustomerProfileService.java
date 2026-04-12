@@ -247,6 +247,14 @@ public class CustomerProfileService {
         CustomerProfile profile = Optional.ofNullable(user.getCustomerProfile())
                 .orElseThrow(() -> new EntityNotFoundException("Customer profile not found"));
 
+        // Name — optional, overrides the Google-provided name if the user prefers different values
+        if (dto.getFirstName() != null && !dto.getFirstName().isBlank()) {
+            user.setFirstName(dto.getFirstName().trim());
+        }
+        if (dto.getLastName() != null && !dto.getLastName().isBlank()) {
+            user.setLastName(dto.getLastName().trim());
+        }
+
         // Phone — always required
         String normalizedPhone = PhoneUtils.normalize(dto.getPhone());
         if (userRepository.existsByPhone(normalizedPhone) &&

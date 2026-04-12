@@ -331,6 +331,26 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         """)
     Page<Product> searchForAdmin(@Param("query") String query, Pageable pageable);
 
+    /**
+     * Admin search filtered by featured status — combines search and tab filter.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN p.vendor v
+        LEFT JOIN p.category c
+        WHERE p.isFeatured = :featured
+          AND (LOWER(p.name)           LIKE LOWER(CONCAT('%', :query, '%'))
+           OR  LOWER(v.restaurantName) LIKE LOWER(CONCAT('%', :query, '%'))
+           OR  LOWER(c.name)           LIKE LOWER(CONCAT('%', :query, '%')))
+        ORDER BY p.isFeatured DESC,
+                 LOCATE(LOWER(:query), LOWER(p.name)) ASC,
+                 p.name ASC
+        """)
+    Page<Product> searchForAdminWithFeatured(
+            @Param("query")    String query,
+            @Param("featured") Boolean featured,
+            Pageable pageable);
+
     // ========== COUNTS ==========
 
     Long countByVendor(VendorProfile vendor);

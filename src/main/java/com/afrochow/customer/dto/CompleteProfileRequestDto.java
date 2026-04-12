@@ -20,6 +20,13 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CompleteProfileRequestDto {
 
+    // Optional — update Google-provided name if user prefers a different one
+    @Size(max = 50, message = "First name must be at most 50 characters")
+    private String firstName;
+
+    @Size(max = 50, message = "Last name must be at most 50 characters")
+    private String lastName;
+
     @NotBlank(message = "Phone number is required")
     @Pattern(regexp = "^[+]?[0-9\\s\\-().]{7,20}$", message = "Invalid phone number format")
     private String phone;
