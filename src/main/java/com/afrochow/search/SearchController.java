@@ -190,9 +190,10 @@ public class SearchController {
 
     @GetMapping("/products/featured")
     @Operation(summary = "Get featured products",
-               description = "Get up to 16 featured products from verified vendors, trending in the last 90 days, max 2 per vendor, sorted by order count and reviews")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getFeaturedProducts() {
-        List<ProductResponseDto> products = searchService.getFeaturedProducts();
+               description = "Admin-pinned products always included. Pass ?city= to filter algorithmic fill by vendor city.")
+    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getFeaturedProducts(
+            @RequestParam(required = false) String city) {
+        List<ProductResponseDto> products = searchService.getFeaturedProducts(city);
         return ResponseEntity.ok(ApiResponse.success("Featured products retrieved successfully", products));
     }
 

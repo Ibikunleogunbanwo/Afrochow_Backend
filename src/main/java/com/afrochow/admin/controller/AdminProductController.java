@@ -50,11 +50,15 @@ public class AdminProductController {
             @RequestParam(defaultValue = "20") int size) {
 
         Pageable pageable = PageRequest.of(page, size);
+        boolean hasSearch   = search != null && !search.isBlank();
+        boolean hasFeatured = featured != null;
 
         Page<AdminProductSummary> result;
-        if (search != null && !search.isBlank()) {
+        if (hasSearch && hasFeatured) {
+            result = productRepository.searchForAdminWithFeatured(search.trim(), featured, pageable).map(this::toAdminSummary);
+        } else if (hasSearch) {
             result = productRepository.searchForAdmin(search.trim(), pageable).map(this::toAdminSummary);
-        } else if (featured != null) {
+        } else if (hasFeatured) {
             result = productRepository.findByIsFeaturedOrderByFeaturedAtDesc(featured, pageable).map(this::toAdminSummary);
         } else {
             result = productRepository.findAllForAdmin(pageable).map(this::toAdminSummary);
