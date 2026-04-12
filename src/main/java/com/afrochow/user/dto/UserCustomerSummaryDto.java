@@ -16,4 +16,6 @@ public class UserCustomerSummaryDto {
     private String phone;
     private String role;
     private Boolean isActive;
+    private Boolean isProfileComplete;
+    private String profileImageUrl;
 }

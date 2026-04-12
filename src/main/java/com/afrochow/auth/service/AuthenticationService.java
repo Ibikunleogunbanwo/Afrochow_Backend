@@ -105,6 +105,8 @@ public class AuthenticationService {
         User user = principal.getUser();
         if (user == null) return null;
 
+        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+
         return UserCustomerSummaryDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .firstName(user.getFirstName())
@@ -114,6 +116,8 @@ public class AuthenticationService {
                 .username(user.getUsername())
                 .role(user.getRole().name())
                 .isActive(user.getIsActive())
+                .isProfileComplete(profileComplete)
+                .profileImageUrl(user.getProfileImageUrl())
                 .build();
     }
 
