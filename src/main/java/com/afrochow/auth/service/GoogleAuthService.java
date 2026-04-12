@@ -49,18 +49,18 @@ public class GoogleAuthService {
     private final String googleClientSecret;
     private final String googleRedirectUri;
     private final String cookieDomain;
-
     private final HttpClient httpClient;
+
     private GoogleIdTokenVerifier verifier;
 
     public GoogleAuthService(
             UserRepository userRepository,
             JwtTokenProvider jwtTokenProvider,
             RefreshTokenService refreshTokenService,
-            @Value("${google.client-id}")      String googleClientId,
-            @Value("${google.client-secret}")  String googleClientSecret,
-            @Value("${google.redirect-uri}")   String googleRedirectUri,
-            @Value("${app.cookie.domain:}")    String cookieDomain
+            @Value("${google.client-id}")     String googleClientId,
+            @Value("${google.client-secret}") String googleClientSecret,
+            @Value("${google.redirect-uri}")  String googleRedirectUri,
+            @Value("${app.cookie.domain:}")   String cookieDomain
     ) {
         this.userRepository      = userRepository;
         this.jwtTokenProvider    = jwtTokenProvider;
@@ -186,6 +186,9 @@ public class GoogleAuthService {
             return user;
         }
 
+        // Generate username upfront — publicUserId and username are both generated
+        // in @PrePersist which fires at flush time. saveAndFlush() below ensures they
+        // are populated on the returned entity before createToken() is called.
         String base = (firstName + lastName).toLowerCase().replaceAll("[^a-z0-9]", "");
         if (base.length() < 3) base = base + "user";
         String username = base.substring(0, Math.min(base.length(), 16))
@@ -209,6 +212,8 @@ public class GoogleAuthService {
         customerProfile.setUser(user);
         user.setCustomerProfile(customerProfile);
 
+        // saveAndFlush forces immediate DB flush → @PrePersist fires →
+        // publicUserId is set on the entity before createToken() is called.
         return userRepository.saveAndFlush(user);
     }
 
