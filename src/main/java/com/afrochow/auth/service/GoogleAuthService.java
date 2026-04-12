@@ -3,6 +3,7 @@ package com.afrochow.auth.service;
 import com.afrochow.auth.dto.LoginResponse;
 import com.afrochow.common.enums.Role;
 import com.afrochow.customer.model.CustomerProfile;
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.security.JwtTokenProvider;
 import com.afrochow.security.Services.RefreshTokenService;
 import com.afrochow.security.Utils.CookieConstants;
@@ -45,6 +46,7 @@ public class GoogleAuthService {
     private final UserRepository userRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
+    private final OutboxEventService outboxEventService;
     private final String googleClientId;
     private final String googleClientSecret;
     private final String googleRedirectUri;
@@ -57,6 +59,7 @@ public class GoogleAuthService {
             UserRepository userRepository,
             JwtTokenProvider jwtTokenProvider,
             RefreshTokenService refreshTokenService,
+            OutboxEventService outboxEventService,
             @Value("${google.client-id}")     String googleClientId,
             @Value("${google.client-secret}") String googleClientSecret,
             @Value("${google.redirect-uri}")  String googleRedirectUri,
@@ -65,6 +68,7 @@ public class GoogleAuthService {
         this.userRepository      = userRepository;
         this.jwtTokenProvider    = jwtTokenProvider;
         this.refreshTokenService = refreshTokenService;
+        this.outboxEventService  = outboxEventService;
         this.googleClientId      = googleClientId;
         this.googleClientSecret  = googleClientSecret;
         this.googleRedirectUri   = googleRedirectUri;
@@ -183,7 +187,7 @@ public class GoogleAuthService {
                 user.setGoogleId(googleId);
                 userRepository.save(user);
             }
-            return user;
+            return user;  // returning user — no welcome email, already sent at registration
         }
 
         // Generate username upfront — publicUserId and username are both generated
@@ -214,7 +218,19 @@ public class GoogleAuthService {
 
         // saveAndFlush forces immediate DB flush → @PrePersist fires →
         // publicUserId is set on the entity before createToken() is called.
-        return userRepository.saveAndFlush(user);
+        User savedUser = userRepository.saveAndFlush(user);
+
+        // Fire the same welcome email + in-app notification that regular
+        // registration triggers after email verification. Google users have
+        // their email pre-verified so we fire it immediately on first sign-in.
+        outboxEventService.userRegistered(
+                savedUser.getPublicUserId(),
+                savedUser.getEmail(),
+                savedUser.getFirstName(),
+                savedUser.getRole().name()
+        );
+
+        return savedUser;
     }
 
     private LoginResponse buildLoginResponse(User user) {
