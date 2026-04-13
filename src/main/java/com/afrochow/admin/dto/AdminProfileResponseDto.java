@@ -27,4 +27,5 @@ public class AdminProfileResponseDto {
     private String phone;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isProfileComplete;
 }

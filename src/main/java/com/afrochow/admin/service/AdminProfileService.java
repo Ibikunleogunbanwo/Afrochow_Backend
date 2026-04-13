@@ -101,19 +101,22 @@ public class AdminProfileService {
     // ========== MAPPING METHODS ==========
 
     private AdminProfileResponseDto toResponseDto(AdminProfile adminProfile) {
+        User user = adminProfile.getUser();
+        boolean profileComplete = user != null && user.getPhone() != null && !user.getPhone().isBlank();
         return AdminProfileResponseDto.builder()
-                .publicUserId(adminProfile.getUser() != null ? adminProfile.getUser().getPublicUserId() : null)
+                .publicUserId(user != null ? user.getPublicUserId() : null)
                 .department(adminProfile.getDepartment() != null ? adminProfile.getDepartment(): null)
                 .accessLevel(adminProfile.getAccessLevel())
                 .isSuperAdmin(adminProfile.isSuperAdmin())
-                .email(adminProfile.getUser().getEmail())
-                .username(adminProfile.getUser().getUsername())
-                .firstName(adminProfile.getUser().getFirstName())
-                .lastName(adminProfile.getUser().getLastName())
-                .phone(adminProfile.getUser().getPhone())
-                .profileImageUrl(adminProfile.getUser().getProfileImageUrl())
+                .email(user != null ? user.getEmail() : null)
+                .username(user != null ? user.getUsername() : null)
+                .firstName(user != null ? user.getFirstName() : null)
+                .lastName(user != null ? user.getLastName() : null)
+                .phone(user != null ? user.getPhone() : null)
+                .profileImageUrl(user != null ? user.getProfileImageUrl() : null)
                 .employeeId(adminProfile.getEmployeeId() != null ? adminProfile.getEmployeeId() : null)
                 .hasFullAccess(adminProfile.hasFullAccess())
+                .isProfileComplete(profileComplete)
                 .createdAt(adminProfile.getCreatedAt())
                 .updatedAt(adminProfile.getUpdatedAt())
                 .build();

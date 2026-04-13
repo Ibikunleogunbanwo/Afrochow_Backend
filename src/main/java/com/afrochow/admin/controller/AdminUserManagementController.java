@@ -222,6 +222,7 @@ public class AdminUserManagementController {
 
     private UserSummaryDto toUserSummary(User user) {
         Long totalOrders = countOrders(user);
+        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         return UserSummaryDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
@@ -232,11 +233,13 @@ public class AdminUserManagementController {
                 .profileImageUrl(user.getProfileImageUrl())
                 .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
+                .isProfileComplete(profileComplete)
                 .build();
     }
 
     private UserDetailDto toUserDetail(User user) {
         Long totalOrders = countOrders(user);
+        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         return UserDetailDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
@@ -249,6 +252,7 @@ public class AdminUserManagementController {
                 .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .isProfileComplete(profileComplete)
                 .build();
     }
 
@@ -273,6 +277,7 @@ public class AdminUserManagementController {
         private String profileImageUrl;
         private Long totalOrders;
         private java.time.LocalDateTime createdAt;
+        private Boolean isProfileComplete;
     }
 
     @lombok.Data
@@ -289,6 +294,7 @@ public class AdminUserManagementController {
         private Long totalOrders;
         private java.time.LocalDateTime createdAt;
         private java.time.LocalDateTime updatedAt;
+        private Boolean isProfileComplete;
     }
 
     @lombok.Data

@@ -744,6 +744,7 @@ public class AuthenticationService {
 
     private AdminProfileResponseDto adminProfileResponseDto(User user) {
         AdminProfile profile = user.getAdminProfile();
+        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         return AdminProfileResponseDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .department(profile.getDepartment())
@@ -752,6 +753,12 @@ public class AuthenticationService {
                 .employeeId(profile.getEmployeeId())
                 .isSuperAdmin(profile.getAccessLevel() == AdminAccessLevel.SUPER_ADMIN)
                 .hasFullAccess(profile.getAccessLevel() == AdminAccessLevel.SUPER_ADMIN)
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .profileImageUrl(user.getProfileImageUrl())
+                .isProfileComplete(profileComplete)
                 .createdAt(profile.getCreatedAt())
                 .updatedAt(profile.getUpdatedAt())
                 .build();
