@@ -28,4 +28,5 @@ public class AdminProfileResponseDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Boolean isProfileComplete;
+    private String authProvider;
 }

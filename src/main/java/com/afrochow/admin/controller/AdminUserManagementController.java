@@ -223,6 +223,7 @@ public class AdminUserManagementController {
     private UserSummaryDto toUserSummary(User user) {
         Long totalOrders = countOrders(user);
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
         return UserSummaryDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
@@ -234,12 +235,14 @@ public class AdminUserManagementController {
                 .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
                 .isProfileComplete(profileComplete)
+                .authProvider(authProvider)
                 .build();
     }
 
     private UserDetailDto toUserDetail(User user) {
         Long totalOrders = countOrders(user);
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
         return UserDetailDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
@@ -253,6 +256,7 @@ public class AdminUserManagementController {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .isProfileComplete(profileComplete)
+                .authProvider(authProvider)
                 .build();
     }
 
@@ -278,6 +282,7 @@ public class AdminUserManagementController {
         private Long totalOrders;
         private java.time.LocalDateTime createdAt;
         private Boolean isProfileComplete;
+        private String authProvider;
     }
 
     @lombok.Data
@@ -295,6 +300,7 @@ public class AdminUserManagementController {
         private java.time.LocalDateTime createdAt;
         private java.time.LocalDateTime updatedAt;
         private Boolean isProfileComplete;
+        private String authProvider;
     }
 
     @lombok.Data

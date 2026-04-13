@@ -103,6 +103,7 @@ public class AdminProfileService {
     private AdminProfileResponseDto toResponseDto(AdminProfile adminProfile) {
         User user = adminProfile.getUser();
         boolean profileComplete = user != null && user.getPhone() != null && !user.getPhone().isBlank();
+        String authProvider = user != null && user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
         return AdminProfileResponseDto.builder()
                 .publicUserId(user != null ? user.getPublicUserId() : null)
                 .department(adminProfile.getDepartment() != null ? adminProfile.getDepartment(): null)
@@ -117,6 +118,7 @@ public class AdminProfileService {
                 .employeeId(adminProfile.getEmployeeId() != null ? adminProfile.getEmployeeId() : null)
                 .hasFullAccess(adminProfile.hasFullAccess())
                 .isProfileComplete(profileComplete)
+                .authProvider(authProvider)
                 .createdAt(adminProfile.getCreatedAt())
                 .updatedAt(adminProfile.getUpdatedAt())
                 .build();

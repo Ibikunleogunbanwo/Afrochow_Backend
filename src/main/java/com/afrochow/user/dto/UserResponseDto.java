@@ -23,4 +23,5 @@ public class UserResponseDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Boolean isProfileComplete;
+    private String authProvider;
 }

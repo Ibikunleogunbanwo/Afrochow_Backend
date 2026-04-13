@@ -9,6 +9,7 @@ import com.afrochow.security.model.EmailVerificationToken;
 import com.afrochow.security.model.PasswordResetToken;
 import com.afrochow.security.model.RefreshToken;
 import com.afrochow.vendor.model.VendorProfile;
+import com.afrochow.common.enums.AuthProvider;
 import com.afrochow.common.enums.Role;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
@@ -72,6 +73,11 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Role role;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private AuthProvider authProvider = AuthProvider.EMAIL;
 
     @Builder.Default
     private Boolean isActive = true;
