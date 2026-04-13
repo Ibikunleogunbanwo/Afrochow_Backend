@@ -255,6 +255,7 @@ public class AdminUserManagementController {
                 .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .lastLoginAt(user.getLastLoginAt())
                 .isProfileComplete(profileComplete)
                 .authProvider(authProvider)
                 .build();
@@ -299,6 +300,7 @@ public class AdminUserManagementController {
         private Long totalOrders;
         private java.time.LocalDateTime createdAt;
         private java.time.LocalDateTime updatedAt;
+        private java.time.LocalDateTime lastLoginAt;
         private Boolean isProfileComplete;
         private String authProvider;
     }

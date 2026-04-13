@@ -201,6 +201,10 @@ public class AuthenticationService {
 
             loginAttemptService.loginSucceeded(user.getEmail(), httpRequest);
 
+            // Stamp last login time
+            user.setLastLoginAt(LocalDateTime.now());
+            userRepository.save(user);
+
             return buildLoginResponse(user);
 
         } catch (DisabledException e) {
