@@ -26,4 +26,5 @@ public class CustomerProfileResponseDto {
     private Boolean notificationsEnabled;
     private LocalDateTime createdAt;
     private Boolean isProfileComplete;
+    private String authProvider;
 }

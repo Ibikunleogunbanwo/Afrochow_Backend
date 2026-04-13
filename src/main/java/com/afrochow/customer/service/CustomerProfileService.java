@@ -310,6 +310,7 @@ public class CustomerProfileService {
                 .toList();
 
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
 
         return CustomerProfileResponseDto.builder()
                 .publicUserId(user.getPublicUserId())
@@ -325,6 +326,7 @@ public class CustomerProfileService {
                 .notificationsEnabled(profile.getNotificationsEnabled())
                 .createdAt(profile.getCreatedAt())
                 .isProfileComplete(profileComplete)
+                .authProvider(authProvider)
                 .build();
     }
 

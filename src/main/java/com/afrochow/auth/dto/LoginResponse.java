@@ -23,5 +23,8 @@ public class LoginResponse {
 
     // Profile completeness — false for new Google sign-in users missing phone/address
     private Boolean isProfileComplete;
+
+    // Registration method — EMAIL or GOOGLE
+    private String authProvider;
 }
 

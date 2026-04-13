@@ -18,4 +18,5 @@ public class UserCustomerSummaryDto {
     private Boolean isActive;
     private Boolean isProfileComplete;
     private String profileImageUrl;
+    private String authProvider;
 }

@@ -1,6 +1,7 @@
 package com.afrochow.auth.service;
 
 import com.afrochow.auth.dto.LoginResponse;
+import com.afrochow.common.enums.AuthProvider;
 import com.afrochow.common.enums.Role;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.outbox.service.OutboxEventService;
@@ -206,6 +207,7 @@ public class GoogleAuthService {
                 .lastName(lastName)
                 .password(null)
                 .role(Role.CUSTOMER)
+                .authProvider(AuthProvider.GOOGLE)
                 .emailVerified(true)
                 .acceptTerms(true)
                 .isActive(true)
@@ -235,12 +237,14 @@ public class GoogleAuthService {
 
     private LoginResponse buildLoginResponse(User user) {
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "GOOGLE";
         return LoginResponse.builder()
                 .publicUserId(user.getPublicUserId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .isProfileComplete(profileComplete)
+                .authProvider(authProvider)
                 .build();
     }
 

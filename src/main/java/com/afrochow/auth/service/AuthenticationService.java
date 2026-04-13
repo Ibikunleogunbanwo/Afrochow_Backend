@@ -13,6 +13,7 @@ import com.afrochow.auth.dto.LoginResponse;
 import com.afrochow.auth.dto.RegistrationResponse;
 import com.afrochow.auth.dto.ResetPasswordRequestDto;
 import com.afrochow.common.enums.AdminAccessLevel;
+import com.afrochow.common.enums.AuthProvider;
 import com.afrochow.common.enums.Role;
 import com.afrochow.common.exceptions.*;
 import com.afrochow.customer.dto.CustomerProfileRequestDto;
@@ -106,6 +107,7 @@ public class AuthenticationService {
         if (user == null) return null;
 
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : AuthProvider.EMAIL.name();
 
         return UserCustomerSummaryDto.builder()
                 .publicUserId(user.getPublicUserId())
@@ -118,6 +120,7 @@ public class AuthenticationService {
                 .isActive(user.getIsActive())
                 .isProfileComplete(profileComplete)
                 .profileImageUrl(user.getProfileImageUrl())
+                .authProvider(authProvider)
                 .build();
     }
 
@@ -559,6 +562,7 @@ public class AuthenticationService {
                 .lastName(request.getLastName())
                 .phone(request.getPhone())
                 .role(role)
+                .authProvider(AuthProvider.EMAIL)
                 .profileImageUrl(request.getProfileImageUrl())
                 .isActive(true)
                 .acceptTerms(request.getAcceptTerms())
@@ -723,13 +727,15 @@ public class AuthenticationService {
 
     private LoginResponse buildLoginResponse(User user) {
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : AuthProvider.EMAIL.name();
 
         LoginResponse.LoginResponseBuilder builder = LoginResponse.builder()
                 .publicUserId(user.getPublicUserId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole().name())
-                .isProfileComplete(profileComplete);
+                .isProfileComplete(profileComplete)
+                .authProvider(authProvider);
 
         // Attach vendor-specific status so the frontend can show appropriate
         // banners for pending-approval or deactivated vendor accounts.
@@ -745,6 +751,7 @@ public class AuthenticationService {
     private AdminProfileResponseDto adminProfileResponseDto(User user) {
         AdminProfile profile = user.getAdminProfile();
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : AuthProvider.EMAIL.name();
         return AdminProfileResponseDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .department(profile.getDepartment())
@@ -759,6 +766,7 @@ public class AuthenticationService {
                 .phone(user.getPhone())
                 .profileImageUrl(user.getProfileImageUrl())
                 .isProfileComplete(profileComplete)
+                .authProvider(authProvider)
                 .createdAt(profile.getCreatedAt())
                 .updatedAt(profile.getUpdatedAt())
                 .build();
