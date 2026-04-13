@@ -309,6 +309,8 @@ public class CustomerProfileService {
                 .map(this::toAddressResponseDto)
                 .toList();
 
+        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
+
         return CustomerProfileResponseDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .firstName(user.getFirstName())
@@ -322,6 +324,7 @@ public class CustomerProfileService {
                 .addresses(addresses)
                 .notificationsEnabled(profile.getNotificationsEnabled())
                 .createdAt(profile.getCreatedAt())
+                .isProfileComplete(profileComplete)
                 .build();
     }
 

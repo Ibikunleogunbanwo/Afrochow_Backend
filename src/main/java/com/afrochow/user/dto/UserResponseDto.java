@@ -22,4 +22,5 @@ public class UserResponseDto {
     private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isProfileComplete;
 }

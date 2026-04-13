@@ -112,6 +112,7 @@ public class UserController {
     }
 
     private UserResponseDto toDto(User user) {
+        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         return UserResponseDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
@@ -122,6 +123,7 @@ public class UserController {
                 .isActive(user.getIsActive())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .isProfileComplete(profileComplete)
                 .build();
     }
 }

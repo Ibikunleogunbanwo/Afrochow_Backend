@@ -25,4 +25,5 @@ public class CustomerProfileResponseDto {
     private List<AddressResponseDto> addresses;
     private Boolean notificationsEnabled;
     private LocalDateTime createdAt;
+    private Boolean isProfileComplete;
 }
