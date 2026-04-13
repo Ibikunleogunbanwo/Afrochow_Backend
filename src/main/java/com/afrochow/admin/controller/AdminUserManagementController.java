@@ -1,6 +1,8 @@
 package com.afrochow.admin.controller;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.customer.model.CustomerProfile;
+import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.Role;
 import com.afrochow.security.Services.LoginAttemptService;
@@ -23,8 +25,9 @@ import java.util.List;
 @Tag(name = "Admin User Management", description = "Admin APIs for managing all users")
 public class AdminUserManagementController {
 
-    private final UserRepository       userRepository;
-    private final LoginAttemptService  loginAttemptService;
+    private final UserRepository      userRepository;
+    private final LoginAttemptService loginAttemptService;
+    private final OrderRepository     orderRepository;
 
     // ========== VIEW USERS ==========
 
@@ -218,6 +221,7 @@ public class AdminUserManagementController {
     // ========== HELPER METHODS ==========
 
     private UserSummaryDto toUserSummary(User user) {
+        Long totalOrders = countOrders(user);
         return UserSummaryDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
@@ -225,22 +229,34 @@ public class AdminUserManagementController {
                 .role(user.getRole())
                 .isActive(user.getIsActive())
                 .isLocked(loginAttemptService.isAccountLocked(user.getEmail()))
+                .profileImageUrl(user.getProfileImageUrl())
+                .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
                 .build();
     }
 
     private UserDetailDto toUserDetail(User user) {
+        Long totalOrders = countOrders(user);
         return UserDetailDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .phone(user.getPhone())
+                .profileImageUrl(user.getProfileImageUrl())
                 .role(user.getRole())
                 .isActive(user.getIsActive())
+                .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
+    }
+
+    /** Returns order count for customers; 0 for vendors/admins who don't place orders. */
+    private Long countOrders(User user) {
+        CustomerProfile profile = user.getCustomerProfile();
+        if (profile == null) return 0L;
+        return orderRepository.countByCustomer(profile);
     }
 
     // ========== INNER CLASSES ==========
@@ -254,6 +270,8 @@ public class AdminUserManagementController {
         private Role role;
         private Boolean isActive;
         private boolean isLocked;
+        private String profileImageUrl;
+        private Long totalOrders;
         private java.time.LocalDateTime createdAt;
     }
 
@@ -265,8 +283,10 @@ public class AdminUserManagementController {
         private String firstName;
         private String lastName;
         private String phone;
+        private String profileImageUrl;
         private Role role;
         private Boolean isActive;
+        private Long totalOrders;
         private java.time.LocalDateTime createdAt;
         private java.time.LocalDateTime updatedAt;
     }
