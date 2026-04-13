@@ -119,6 +119,10 @@ public class GoogleAuthService {
                 refreshToken, refreshTokenService.getRefreshTokenExpirationSeconds(),
                 true, "None", cookieDomain);
 
+        // Stamp last login time
+        user.setLastLoginAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
+
         log.info("google.login.success email={} publicUserId={}", email, user.getPublicUserId());
         return buildLoginResponse(user);
     }

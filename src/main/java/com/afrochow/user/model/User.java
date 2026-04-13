@@ -101,6 +101,8 @@ public class User {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
+    private LocalDateTime lastLoginAt;
+
     // ===== PROFILE RELATIONSHIPS =====
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private CustomerProfile customerProfile;
