@@ -1,6 +1,7 @@
 package com.afrochow.vendor;
 import com.afrochow.address.dto.AddressResponseDto;
 import com.afrochow.address.model.Address;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import com.afrochow.vendor.dto.VendorProfileUpdateRequestDto;
 import com.afrochow.vendor.model.VendorProfile;
@@ -35,9 +36,23 @@ public class VendorMapper {
                 .bannerUrl(profile.getBannerUrl())
                 .stripeAccountId(profile.getStripeAccountId())
                 .stripeOnboardingComplete(profile.getStripeOnboardingComplete())
+                // Status (new state machine)
+                .vendorStatus(profile.getVendorStatus())
+                .vendorStatusLabel(resolveStatusLabel(profile.getVendorStatus()))
+                .canReceiveOrders(profile.canReceiveOrders())
+                .isProvisional(profile.isProvisional())
+                // Deprecated booleans (kept for backward compat)
                 .isVerified(profile.getIsVerified())
                 .isActive(profile.getIsActive())
                 .verifiedAt(profile.getVerifiedAt())
+
+                // Food handling certificate
+                .foodHandlingCertUrl(profile.getFoodHandlingCertUrl())
+                .foodHandlingCertNumber(profile.getFoodHandlingCertNumber())
+                .foodHandlingCertIssuingBody(profile.getFoodHandlingCertIssuingBody())
+                .foodHandlingCertExpiry(profile.getFoodHandlingCertExpiry())
+                .certExpired(profile.isCertExpired())
+                .certVerifiedAt(profile.getCertVerifiedAt())
 
                 // Operating hours
                 .weeklySchedule(weeklySchedule)
@@ -132,5 +147,20 @@ public class VendorMapper {
         });
 
         return entityHours;
+    }
+
+    /**
+     * Returns a human-readable status label for display in the vendor dashboard.
+     */
+    private String resolveStatusLabel(VendorStatus status) {
+        if (status == null) return "Unknown";
+        return switch (status) {
+            case PENDING_PROFILE  -> "Complete Your Profile";
+            case PENDING_REVIEW   -> "Under Review";
+            case PROVISIONAL      -> "Provisionally Active — Upload Food Handling Certificate";
+            case VERIFIED         -> "Verified";
+            case SUSPENDED        -> "Suspended";
+            case REJECTED         -> "Application Rejected";
+        };
     }
 }

@@ -4,6 +4,7 @@ import com.afrochow.address.dto.AddressResponseDto;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.common.enums.OrderStatus;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.common.enums.PaymentMethod;
 import com.afrochow.common.enums.PaymentStatus;
 import com.afrochow.common.enums.Province;
@@ -127,11 +128,23 @@ public class OrderService {
         VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(request.getVendorPublicId())
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
 
-        if (!vendor.getIsActive()) {
-            throw new IllegalStateException("Vendor is not active");
-        }
-        if (!vendor.getIsVerified()) {
-            throw new IllegalStateException("Vendor is not verified");
+        if (!vendor.canReceiveOrders()) {
+            // Give a status-specific message so the frontend can guide the user
+            String reason = switch (vendor.getVendorStatus()) {
+                case PENDING_PROFILE, PENDING_REVIEW ->
+                        "This vendor is not yet accepting orders.";
+                case PROVISIONAL ->
+                        "This vendor is not currently accepting orders " +
+                        "(no active products or operating hours set).";
+                case VERIFIED ->
+                        "This vendor is not currently accepting orders " +
+                        "(no active products or operating hours set).";
+                case SUSPENDED ->
+                        "This vendor is temporarily unavailable.";
+                case REJECTED ->
+                        "This vendor is no longer available on the platform.";
+            };
+            throw new IllegalStateException(reason);
         }
 
         // ── Resolve fulfillment type and delivery address ─────────────────────

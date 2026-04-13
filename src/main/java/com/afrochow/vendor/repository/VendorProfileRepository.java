@@ -2,6 +2,7 @@ package com.afrochow.vendor.repository;
 
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.common.enums.Province;
+import com.afrochow.common.enums.VendorStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -39,7 +40,14 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     List<VendorProfile> findByRestaurantNameContainingIgnoreCase(String name);
 
-    // ========== FILTER BY STATUS ==========
+    // ========== FILTER BY STATUS (new state machine) ==========
+
+    List<VendorProfile> findByVendorStatus(VendorStatus vendorStatus);
+
+    @Query("SELECT COUNT(v) FROM VendorProfile v WHERE v.vendorStatus = :status")
+    long countByVendorStatus(@Param("status") VendorStatus status);
+
+    // ========== FILTER BY STATUS (legacy booleans — kept for backward compat) ==========
 
     List<VendorProfile> findByIsVerifiedAndIsActive(Boolean isVerified, Boolean isActive);
 

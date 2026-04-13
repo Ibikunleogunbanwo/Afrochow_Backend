@@ -1,5 +1,7 @@
 package com.afrochow.vendor.dto;
+
 import com.afrochow.address.dto.AddressResponseDto;
+import com.afrochow.common.enums.VendorStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,33 +29,65 @@ public class VendorProfileResponseDto {
     private String stripeAccountId;
     private Boolean stripeOnboardingComplete;
 
-    // Verification Status
+    // ── Status (new state machine) ──
+    private VendorStatus vendorStatus;
+
+    /**
+     * Human-readable label for the vendor's current status, suitable for display
+     * in the vendor dashboard (e.g. "Pending Review", "Provisionally Active").
+     */
+    private String vendorStatusLabel;
+
+    /**
+     * Whether the vendor can currently receive orders
+     * (true for PROVISIONAL and VERIFIED with operating days + active products).
+     */
+    private Boolean canReceiveOrders;
+
+    /**
+     * True if the vendor is live but food handling cert is not yet verified.
+     * When true, a daily order cap applies.
+     */
+    private Boolean isProvisional;
+
+    // ── Deprecated booleans (kept for backward compatibility) ──
+    /** @deprecated Use vendorStatus instead */
+    @Deprecated
     private Boolean isVerified;
+    /** @deprecated Use vendorStatus instead */
+    @Deprecated
     private Boolean isActive;
+
     private LocalDateTime verifiedAt;
 
+    // ── Food Handling Certificate ──
+    private String foodHandlingCertUrl;
+    private String foodHandlingCertNumber;
+    private String foodHandlingCertIssuingBody;
+    private LocalDateTime foodHandlingCertExpiry;
+    private Boolean certExpired;
+    private LocalDateTime certVerifiedAt;
 
+    // ── Operating Hours ──
     private Map<String, OperatingHoursDto> weeklySchedule;
-
-
     private String todayHoursFormatted;
     private Boolean isOpenNow;
 
-    // Service Options
+    // ── Service Options ──
     private Boolean offersDelivery;
     private Boolean offersPickup;
     private Integer preparationTime;
 
-    // Delivery Settings
+    // ── Delivery Settings ──
     private BigDecimal deliveryFee;
     private BigDecimal minimumOrderAmount;
     private Integer estimatedDeliveryMinutes;
     private BigDecimal maxDeliveryDistanceKm;
 
-    // Location
+    // ── Location ──
     private AddressResponseDto address;
 
-    // Statistics
+    // ── Statistics ──
     private Integer totalOrdersCompleted;
     private BigDecimal totalRevenue;
     private Double averageRating;
@@ -62,7 +96,7 @@ public class VendorProfileResponseDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // Inner class for operating hours
+    // ── Inner class for operating hours ──
     @Data
     @Builder
     @NoArgsConstructor

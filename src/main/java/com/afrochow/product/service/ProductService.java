@@ -1,6 +1,7 @@
 package com.afrochow.product.service;
 
 import com.afrochow.common.enums.ScheduleType;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.product.dto.ProductRequestDto;
 import com.afrochow.product.dto.ProductUpdateRequestDto;
 import com.afrochow.product.dto.ProductResponseDto;
@@ -178,9 +179,13 @@ public class ProductService {
         VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
                 .orElseThrow(() -> new EntityNotFoundException("Vendor profile not found"));
 
-        // Check if vendor is verified
-        if (!vendor.getIsVerified()) {
-            throw new IllegalStateException("Only verified vendors can create products");
+        // Products can be created once the vendor is PROVISIONAL or VERIFIED.
+        // (PROVISIONAL vendors need to be able to add products — it's part of completing their setup.)
+        VendorStatus vs = vendor.getVendorStatus();
+        if (vs != VendorStatus.PROVISIONAL && vs != VendorStatus.VERIFIED) {
+            throw new IllegalStateException(
+                    "Products can only be created once your store has been approved. " +
+                    "Current status: " + vs);
         }
 
         // Map to entity

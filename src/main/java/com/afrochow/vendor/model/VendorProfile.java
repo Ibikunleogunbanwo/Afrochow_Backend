@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import com.afrochow.common.enums.Province;
+import com.afrochow.common.enums.VendorStatus;
 
 @Entity
 @Table(name = "vendor_profile", indexes = {
@@ -72,6 +73,12 @@ public class VendorProfile {
     @Builder.Default
     private Boolean stripeOnboardingComplete = false;
 
+    // ========== VENDOR STATUS (STATE MACHINE) ==========
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private VendorStatus vendorStatus = VendorStatus.PENDING_PROFILE;
+
     // ========== BUSINESS VERIFICATION ==========
     @Column(length = 255)
     private String businessLicenseUrl;
@@ -79,15 +86,63 @@ public class VendorProfile {
     @Column(length = 50)
     private String taxId;
 
+    /**
+     * @deprecated Use {@link #vendorStatus} instead.
+     * Retained for backward compatibility during migration period.
+     * Will be removed once all references are updated to use VendorStatus.
+     */
+    @Deprecated
     @Column(nullable = false)
     @Builder.Default
     private Boolean isVerified = false;
 
+    /**
+     * @deprecated Use {@link #vendorStatus} instead.
+     * Retained for backward compatibility during migration period.
+     */
+    @Deprecated
     @Column(nullable = false)
     @Builder.Default
     private Boolean isActive = true;
 
     private LocalDateTime verifiedAt;
+
+    // ========== FOOD HANDLING CERTIFICATION (Canada) ==========
+    /**
+     * URL to the uploaded food handling certificate document (PDF or image).
+     * Province-specific certs: FoodSafe (BC), Smart Serve (ON), etc.
+     */
+    @Column(length = 500)
+    private String foodHandlingCertUrl;
+
+    /**
+     * Certificate number as printed on the document, for cross-reference.
+     */
+    @Column(length = 100)
+    private String foodHandlingCertNumber;
+
+    /**
+     * Issuing body, e.g. "FoodSafe BC", "Manitoba Food Handler", "CFIA".
+     */
+    @Column(length = 150)
+    private String foodHandlingCertIssuingBody;
+
+    /**
+     * Expiry date of the certificate. Most Canadian food handler certs expire after 5 years.
+     * Null if not yet uploaded or not applicable.
+     */
+    private LocalDateTime foodHandlingCertExpiry;
+
+    /**
+     * Timestamp when an admin confirmed the certificate is valid.
+     */
+    private LocalDateTime certVerifiedAt;
+
+    /**
+     * Public user ID of the admin who verified the certificate.
+     */
+    @Column(length = 36)
+    private String certVerifiedByAdminId;
 
     // ========== TIMEZONE ==========
     @Column(length = 50)
@@ -268,7 +323,7 @@ public class VendorProfile {
 
     @Transient
     public boolean isOpenNow() {
-        if (!isActive) return false;
+        if (vendorStatus != VendorStatus.PROVISIONAL && vendorStatus != VendorStatus.VERIFIED) return false;
 
         Map<String, DayHours> hours = getOperatingHours();
         if (hours == null || hours.isEmpty()) return false;
@@ -368,12 +423,38 @@ public class VendorProfile {
 
     @Transient
     public boolean canReceiveOrders() {
-        return isActive && isVerified && hasOperatingDays() && hasActiveProducts();
+        return (vendorStatus == VendorStatus.PROVISIONAL || vendorStatus == VendorStatus.VERIFIED)
+                && hasOperatingDays()
+                && hasActiveProducts();
+    }
+
+    /**
+     * Returns true if the vendor is in a provisional state — live but cert not yet verified.
+     * A daily order cap should be enforced for provisional vendors.
+     */
+    @Transient
+    public boolean isProvisional() {
+        return vendorStatus == VendorStatus.PROVISIONAL;
+    }
+
+    @Transient
+    public boolean isFullyVerified() {
+        return vendorStatus == VendorStatus.VERIFIED;
+    }
+
+    @Transient
+    public boolean hasFoodHandlingCert() {
+        return foodHandlingCertUrl != null && !foodHandlingCertUrl.isBlank();
+    }
+
+    @Transient
+    public boolean isCertExpired() {
+        return foodHandlingCertExpiry != null && foodHandlingCertExpiry.isBefore(LocalDateTime.now());
     }
 
     @Transient
     public boolean canReceivePayouts() {
-        return isVerified && taxId != null && !taxId.isEmpty();
+        return vendorStatus == VendorStatus.VERIFIED && taxId != null && !taxId.isEmpty();
     }
 
     // ========== INNER CLASS FOR DAY HOURS ==========

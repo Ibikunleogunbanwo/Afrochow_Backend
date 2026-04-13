@@ -4,9 +4,11 @@ import com.afrochow.address.dto.AddressRequestDto;
 import com.afrochow.address.dto.AddressResponseDto;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.image.ImageUploadService;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
+import com.afrochow.vendor.dto.FoodHandlingCertUploadRequestDto;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import com.afrochow.vendor.dto.VendorProfileUpdateRequestDto;
 import com.afrochow.vendor.VendorMapper;
@@ -19,10 +21,23 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Service for managing vendor profiles
+ * Service for managing vendor profiles.
+ *
+ * Status transitions owned by this service (vendor-initiated):
+ *   PENDING_PROFILE  → PENDING_REVIEW   (via updateProfile when profile is sufficiently complete)
+ *   REJECTED         → PENDING_REVIEW   (via resubmitForReview)
+ *   PROVISIONAL      → PROVISIONAL      (cert upload — triggers admin review of cert)
+ *
+ * Status transitions owned by AdminVendorManagementService (admin-initiated):
+ *   PENDING_REVIEW   → PROVISIONAL / REJECTED
+ *   PROVISIONAL      → VERIFIED / REJECTED
+ *   VERIFIED         → SUSPENDED / REJECTED
+ *   SUSPENDED        → VERIFIED
  */
 @Service
 @RequiredArgsConstructor
@@ -34,23 +49,37 @@ public class VendorProfileService {
     private final ImageUploadService imageUploadService;
     private final VendorMapper vendorMapper;
 
-    /**
-     * Get vendor profile
-     */
+    /** Statuses from which a vendor can still edit their own profile. */
+    private static final Set<VendorStatus> EDITABLE_STATUSES = EnumSet.of(
+            VendorStatus.PENDING_PROFILE,
+            VendorStatus.PENDING_REVIEW,
+            VendorStatus.PROVISIONAL,
+            VendorStatus.REJECTED
+    );
+
+    // ========== READ ==========
+
     @Transactional(readOnly = true)
     public VendorProfileResponseDto getProfile(Long userId) {
         VendorProfile vendorProfile = getVendorProfileByUserId(userId);
         return vendorMapper.toResponseDto(vendorProfile);
     }
 
+    // ========== PROFILE UPDATE ==========
+
     /**
-     * Update vendor profile
+     * Update vendor profile. If the vendor is in PENDING_PROFILE and the updated
+     * profile is now sufficiently complete, auto-advance to PENDING_REVIEW.
      */
     @Transactional
     public VendorProfileResponseDto updateProfile(Long userId, VendorProfileUpdateRequestDto request) {
         VendorProfile vendorProfile = getVendorProfileByUserId(userId);
 
-        // Validate business rules before updating
+        if (!EDITABLE_STATUSES.contains(vendorProfile.getVendorStatus())) {
+            throw new IllegalStateException(
+                    "Profile cannot be edited in status: " + vendorProfile.getVendorStatus());
+        }
+
         validateUpdateRequest(request);
 
         // Update basic information
@@ -82,14 +111,21 @@ public class VendorProfileService {
         updateIfNotNull(request.getEstimatedDeliveryMinutes(), vendorProfile::setEstimatedDeliveryMinutes);
         updateIfNotNull(request.getMaxDeliveryDistanceKm(), vendorProfile::setMaxDeliveryDistanceKm);
 
-        vendorProfileRepository.save(vendorProfile);
+        // Auto-advance: PENDING_PROFILE → PENDING_REVIEW when profile is complete
+        if (vendorProfile.getVendorStatus() == VendorStatus.PENDING_PROFILE
+                && isProfileComplete(vendorProfile)) {
+            vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);
+            // Keep deprecated booleans in sync
+            vendorProfile.setIsActive(true);
+            vendorProfile.setIsVerified(false);
+        }
 
+        vendorProfileRepository.save(vendorProfile);
         return vendorMapper.toResponseDto(vendorProfile);
     }
 
-    /**
-     * Update vendor address (vendors have exactly one address)
-     */
+    // ========== ADDRESS UPDATE ==========
+
     @Transactional
     public AddressResponseDto updateAddress(Long userId, AddressRequestDto request) {
         VendorProfile vendorProfile = getVendorProfileByUserId(userId);
@@ -99,7 +135,6 @@ public class VendorProfileService {
             throw new EntityNotFoundException("Vendor address not found");
         }
 
-        // Update address fields
         updateIfNotNull(request.getAddressLine(), address::setAddressLine);
         updateIfNotNull(request.getCity(), address::setCity);
         updateIfNotNull(request.getProvince(), address::setProvince);
@@ -107,13 +142,11 @@ public class VendorProfileService {
         updateIfNotNull(request.getCountry(), address::setCountry);
 
         address = addressRepository.save(address);
-
         return vendorMapper.toAddressResponseDto(address);
     }
 
-    /**
-     * Upload vendor logo or banner image
-     */
+    // ========== IMAGE UPLOAD ==========
+
     @Transactional
     public VendorProfileResponseDto uploadImage(String username, MultipartFile file, String type) throws IOException {
         if (type == null || type.isBlank()) {
@@ -151,31 +184,73 @@ public class VendorProfileService {
         return vendorMapper.toResponseDto(vendorProfile);
     }
 
-    // ========== HELPER METHODS ==========
+    // ========== FOOD HANDLING CERTIFICATE UPLOAD ==========
 
     /**
-     * Resubmit a rejected vendor application for admin review.
-     * Sets isActive back to true so the vendor appears in the admin pending queue.
-     * Throws if the vendor is already verified (no need to resubmit).
+     * Vendor uploads their food handling certificate.
+     * Only allowed when status is PROVISIONAL (cert is the missing step before VERIFIED).
+     * Saves the cert metadata and notifies admins via the existing outbox pattern
+     * (the admin controller handles the actual cert verification step).
+     */
+    @Transactional
+    public VendorProfileResponseDto uploadFoodHandlingCert(Long userId,
+                                                            MultipartFile certFile,
+                                                            FoodHandlingCertUploadRequestDto metadata)
+            throws IOException {
+
+        VendorProfile vendorProfile = getVendorProfileByUserId(userId);
+
+        if (vendorProfile.getVendorStatus() != VendorStatus.PROVISIONAL) {
+            throw new IllegalStateException(
+                    "Food handling certificate can only be uploaded when your store is in PROVISIONAL status. " +
+                    "Current status: " + vendorProfile.getVendorStatus());
+        }
+
+        // Delete old cert if one exists
+        deleteImageIfExists(vendorProfile.getFoodHandlingCertUrl());
+
+        String certUrl = imageUploadService.uploadImageForRegistrationAndGetUrl(
+                certFile, "vendors/certifications");
+
+        vendorProfile.setFoodHandlingCertUrl(certUrl);
+        vendorProfile.setFoodHandlingCertNumber(metadata.getCertNumber());
+        vendorProfile.setFoodHandlingCertIssuingBody(metadata.getIssuingBody());
+        vendorProfile.setFoodHandlingCertExpiry(metadata.getCertExpiry());
+
+        // Clear any previous cert verification since a new doc was uploaded
+        vendorProfile.setCertVerifiedAt(null);
+        vendorProfile.setCertVerifiedByAdminId(null);
+
+        vendorProfileRepository.save(vendorProfile);
+        return vendorMapper.toResponseDto(vendorProfile);
+    }
+
+    // ========== RESUBMIT AFTER REJECTION ==========
+
+    /**
+     * Vendor resubmits their application after being rejected.
+     * Moves status back to PENDING_REVIEW so it appears in the admin queue.
      */
     @Transactional
     public VendorProfileResponseDto resubmitForReview(Long userId) {
         VendorProfile vendorProfile = getVendorProfileByUserId(userId);
 
-        if (Boolean.TRUE.equals(vendorProfile.getIsVerified())) {
-            throw new IllegalStateException("Your store is already verified and does not need resubmission.");
+        if (vendorProfile.getVendorStatus() != VendorStatus.REJECTED) {
+            throw new IllegalStateException(
+                    "Only rejected vendors can resubmit. Current status: " + vendorProfile.getVendorStatus());
         }
 
+        vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);
+        // Keep deprecated booleans in sync
         vendorProfile.setIsActive(true);
+        vendorProfile.setIsVerified(false);
+
         vendorProfileRepository.save(vendorProfile);
         return vendorMapper.toResponseDto(vendorProfile);
     }
 
-    /**
-     * Get vendor profile by user ID with validation.
-     * publicVendorId is @Transient on VendorProfile — use findByUser_PublicUserId
-     * from the repository for public ID lookups (handled in SearchService).
-     */
+    // ========== PRIVATE HELPERS ==========
+
     private VendorProfile getVendorProfileByUserId(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
@@ -193,24 +268,30 @@ public class VendorProfileService {
     }
 
     /**
-     * Update field only if value is not null
+     * A profile is considered complete enough to enter the review queue when it has
+     * a restaurant name, cuisine type, logo, at least one service option, and an address.
      */
+    private boolean isProfileComplete(VendorProfile profile) {
+        return profile.getRestaurantName() != null && !profile.getRestaurantName().isBlank()
+                && profile.getCuisineType() != null && !profile.getCuisineType().isBlank()
+                && profile.getLogoUrl() != null && !profile.getLogoUrl().isBlank()
+                && (Boolean.TRUE.equals(profile.getOffersDelivery())
+                        || Boolean.TRUE.equals(profile.getOffersPickup()))
+                && profile.getAddress() != null
+                && profile.hasOperatingDays();
+    }
+
     private <T> void updateIfNotNull(T value, java.util.function.Consumer<T> setter) {
         if (value != null) {
             setter.accept(value);
         }
     }
 
-    /**
-     * Delete image if URL exists and is not empty
-     */
     private void deleteImageIfExists(String imageUrl) {
         if (imageUrl != null && !imageUrl.isEmpty()) {
             imageUploadService.deleteImage(imageUrl);
         }
     }
-
-    // ========== VALIDATION METHODS ==========
 
     private void validateUpdateRequest(VendorProfileUpdateRequestDto request) {
         if (request.getOffersDelivery() != null || request.getOffersPickup() != null) {
@@ -223,7 +304,6 @@ public class VendorProfileService {
             throw new IllegalArgumentException(
                     "Vendor must be open at least one day per week");
         }
-
         if (Boolean.TRUE.equals(request.getOffersDelivery())) {
             if (request.getDeliveryFee() == null) {
                 throw new IllegalArgumentException(
