@@ -5,6 +5,7 @@ import com.afrochow.address.dto.AddressResponseDto;
 import com.afrochow.common.ApiResponse;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.model.User;
+import com.afrochow.vendor.dto.FoodHandlingCertUploadRequestDto;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import com.afrochow.vendor.dto.VendorProfileUpdateRequestDto;
 import com.afrochow.vendor.service.VendorProfileService;
@@ -103,6 +104,42 @@ public class VendorProfileController {
         Long userId = userDetails.getUserId();
         VendorProfileResponseDto profile = vendorProfileService.resubmitForReview(userId);
         return ResponseEntity.ok(ApiResponse.success("Application resubmitted for review", profile));
+    }
+
+    /**
+     * Upload food handling certificate (PROVISIONAL vendors only).
+     * Accepts a multipart file (PDF or image) plus certificate metadata as form fields.
+     * After upload, the cert enters admin review — status moves to VERIFIED once an admin
+     * calls PATCH /admin/vendors/{id}/verify-cert.
+     */
+    @PostMapping(value = "/food-handling-cert", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('VENDOR')")
+    @Operation(
+        summary = "Upload food handling certificate",
+        description = "Upload your Canadian food handling certificate. Only available when your store is in PROVISIONAL status."
+    )
+    public ResponseEntity<ApiResponse<VendorProfileResponseDto>> uploadFoodHandlingCert(
+            @RequestParam("file") MultipartFile certFile,
+            @RequestParam("certNumber") String certNumber,
+            @RequestParam("issuingBody") String issuingBody,
+            @RequestParam(value = "certExpiry", required = false) String certExpiry,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) throws IOException {
+
+        FoodHandlingCertUploadRequestDto metadata = FoodHandlingCertUploadRequestDto.builder()
+                .certNumber(certNumber)
+                .issuingBody(issuingBody)
+                .certExpiry(certExpiry != null
+                        ? java.time.LocalDateTime.parse(certExpiry)
+                        : null)
+                .build();
+
+        Long userId = userDetails.getUserId();
+        VendorProfileResponseDto profile = vendorProfileService
+                .uploadFoodHandlingCert(userId, certFile, metadata);
+
+        return ResponseEntity.ok(ApiResponse.success(
+                "Food handling certificate uploaded successfully. Pending admin review.", profile));
     }
 
     /**

@@ -1,9 +1,12 @@
 package com.afrochow.admin.controller;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.outbox.service.OutboxEventService;
+import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
@@ -45,23 +48,49 @@ public class AdminVendorManagementController {
     }
 
     @GetMapping("/pending")
-    @Operation(summary = "Get pending vendors", description = "Get all unverified vendors awaiting approval")
+    @Operation(summary = "Get pending vendors", description = "Vendors in PENDING_REVIEW status awaiting admin action")
     public ResponseEntity<ApiResponse<List<VendorSummaryDto>>> getPendingVendors() {
-        List<VendorSummaryDto> vendors = vendorProfileRepository.findByIsVerified(false)
+        List<VendorSummaryDto> vendors = vendorProfileRepository
+                .findByVendorStatus(VendorStatus.PENDING_REVIEW)
                 .stream()
                 .map(this::toSummary)
                 .toList();
         return ResponseEntity.ok(ApiResponse.success("Pending vendors retrieved", vendors));
     }
 
+    @GetMapping("/provisional")
+    @Operation(summary = "Get provisional vendors",
+               description = "Vendors approved provisionally — live but food handling cert not yet verified")
+    public ResponseEntity<ApiResponse<List<VendorSummaryDto>>> getProvisionalVendors() {
+        List<VendorSummaryDto> vendors = vendorProfileRepository
+                .findByVendorStatus(VendorStatus.PROVISIONAL)
+                .stream()
+                .map(this::toSummary)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Provisional vendors retrieved", vendors));
+    }
+
     @GetMapping("/verified")
-    @Operation(summary = "Get verified vendors", description = "Get all verified vendors")
+    @Operation(summary = "Get verified vendors", description = "Fully verified vendors")
     public ResponseEntity<ApiResponse<List<VendorSummaryDto>>> getVerifiedVendors() {
-        List<VendorSummaryDto> vendors = vendorProfileRepository.findByIsVerified(true)
+        List<VendorSummaryDto> vendors = vendorProfileRepository
+                .findByVendorStatus(VendorStatus.VERIFIED)
                 .stream()
                 .map(this::toSummary)
                 .toList();
         return ResponseEntity.ok(ApiResponse.success("Verified vendors retrieved", vendors));
+    }
+
+    @GetMapping("/by-status/{status}")
+    @Operation(summary = "Get vendors by status", description = "Get vendors in any specific status")
+    public ResponseEntity<ApiResponse<List<VendorSummaryDto>>> getVendorsByStatus(
+            @PathVariable VendorStatus status) {
+        List<VendorSummaryDto> vendors = vendorProfileRepository
+                .findByVendorStatus(status)
+                .stream()
+                .map(this::toSummary)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Vendors retrieved for status: " + status, vendors));
     }
 
     @GetMapping("/{publicVendorId}")
@@ -72,21 +101,30 @@ public class AdminVendorManagementController {
         return ResponseEntity.ok(ApiResponse.success("Vendor detail retrieved", toDetail(vendor)));
     }
 
-    // ========== VERIFY / UNVERIFY ==========
+    // ========== STATUS TRANSITIONS ==========
 
     @Transactional
-    @PatchMapping("/{publicVendorId}/verify")
-    @Operation(summary = "Verify vendor", description = "Approve and verify a vendor's business")
-    public ResponseEntity<ApiResponse<VendorSummaryDto>> verifyVendor(
+    @PatchMapping("/{publicVendorId}/approve-provisional")
+    @Operation(summary = "Approve vendor provisionally",
+               description = "Move a PENDING_REVIEW vendor to PROVISIONAL. " +
+                             "Vendor goes live with order cap; cert upload still required for full verification.")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> approveProvisional(
             @PathVariable String publicVendorId) {
 
         VendorProfile vendor = getVendor(publicVendorId);
-        vendor.setIsVerified(true);
-        vendor.setIsActive(true);  // ensure vendor is active (re-approval after rejection)
-        vendor.setVerifiedAt(LocalDateTime.now());
-        if (vendor.getUser() != null) {
-            vendor.getUser().setIsActive(true);
+
+        if (vendor.getVendorStatus() != VendorStatus.PENDING_REVIEW) {
+            return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                    .success(false)
+                    .message("Vendor must be in PENDING_REVIEW to approve provisionally. Current: "
+                             + vendor.getVendorStatus())
+                    .build());
         }
+
+        vendor.setVendorStatus(VendorStatus.PROVISIONAL);
+        vendor.setIsActive(true);
+        vendor.setIsVerified(false);
+        if (vendor.getUser() != null) vendor.getUser().setIsActive(true);
         vendorProfileRepository.save(vendor);
 
         if (vendor.getUser() != null) {
@@ -97,38 +135,136 @@ public class AdminVendorManagementController {
                     vendor.getRestaurantName());
         }
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vendor verified successfully", toSummary(vendor)));
+        return ResponseEntity.ok(ApiResponse.success("Vendor approved provisionally", toSummary(vendor)));
     }
 
     @Transactional
-    @PatchMapping("/{publicVendorId}/unverify")
-    @Operation(summary = "Revoke vendor verification", description = "Revoke a vendor's verified status")
-    public ResponseEntity<ApiResponse<VendorSummaryDto>> unverifyVendor(
-            @PathVariable String publicVendorId) {
+    @PatchMapping("/{publicVendorId}/verify-cert")
+    @Operation(summary = "Verify food handling certificate",
+               description = "Confirm the vendor's food handling certificate and promote to VERIFIED status.")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> verifyCertAndPromote(
+            @PathVariable String publicVendorId,
+            @AuthenticationPrincipal CustomUserDetails adminDetails) {
 
         VendorProfile vendor = getVendor(publicVendorId);
-        vendor.setIsVerified(false);
-        vendor.setVerifiedAt(null);
+
+        if (vendor.getVendorStatus() != VendorStatus.PROVISIONAL) {
+            return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                    .success(false)
+                    .message("Vendor must be in PROVISIONAL status to verify cert. Current: "
+                             + vendor.getVendorStatus())
+                    .build());
+        }
+
+        if (!vendor.hasFoodHandlingCert()) {
+            return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                    .success(false)
+                    .message("Vendor has not uploaded a food handling certificate yet.")
+                    .build());
+        }
+
+        if (vendor.isCertExpired()) {
+            return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                    .success(false)
+                    .message("The uploaded certificate has already expired.")
+                    .build());
+        }
+
+        vendor.setVendorStatus(VendorStatus.VERIFIED);
+        vendor.setVerifiedAt(LocalDateTime.now());
+        vendor.setCertVerifiedAt(LocalDateTime.now());
+        vendor.setCertVerifiedByAdminId(
+                adminDetails != null ? adminDetails.getPublicUserId() : "system");
+        // Keep deprecated booleans in sync
+        vendor.setIsVerified(true);
+        vendor.setIsActive(true);
+        if (vendor.getUser() != null) vendor.getUser().setIsActive(true);
         vendorProfileRepository.save(vendor);
 
         return ResponseEntity.ok(ApiResponse.success(
-                "Vendor verification revoked", toSummary(vendor)));
+                "Certificate verified — vendor is now fully verified", toSummary(vendor)));
     }
 
-    // ========== ACTIVATE / DEACTIVATE ==========
+    @Transactional
+    @PatchMapping("/{publicVendorId}/verify")
+    @Operation(summary = "Fully verify vendor (bypass cert)",
+               description = "Directly promote a vendor to VERIFIED without requiring cert upload. " +
+                             "Use only in exceptional circumstances (e.g. manual offline verification).")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> verifyVendor(
+            @PathVariable String publicVendorId,
+            @AuthenticationPrincipal CustomUserDetails adminDetails) {
+
+        VendorProfile vendor = getVendor(publicVendorId);
+        vendor.setVendorStatus(VendorStatus.VERIFIED);
+        vendor.setVerifiedAt(LocalDateTime.now());
+        vendor.setIsVerified(true);
+        vendor.setIsActive(true);
+        if (vendor.getUser() != null) vendor.getUser().setIsActive(true);
+        vendorProfileRepository.save(vendor);
+
+        if (vendor.getUser() != null) {
+            outboxEventService.vendorApproved(
+                    vendor.getUser().getPublicUserId(),
+                    vendor.getUser().getEmail(),
+                    vendor.getUser().getFirstName(),
+                    vendor.getRestaurantName());
+        }
+
+        return ResponseEntity.ok(ApiResponse.success("Vendor fully verified", toSummary(vendor)));
+    }
 
     @Transactional
-    @PatchMapping("/{publicVendorId}/activate")
-    @Operation(summary = "Activate vendor", description = "Reinstate a suspended vendor profile")
-    public ResponseEntity<ApiResponse<VendorSummaryDto>> activateVendor(
+    @PatchMapping("/{publicVendorId}/suspend")
+    @Operation(summary = "Suspend vendor", description = "Suspend a live vendor (VERIFIED or PROVISIONAL). Prevents receiving orders.")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> suspendVendor(
             @PathVariable String publicVendorId) {
 
         VendorProfile vendor = getVendor(publicVendorId);
-        vendor.setIsActive(true);
-        if (vendor.getUser() != null) {
-            vendor.getUser().setIsActive(true);
+
+        if (vendor.getVendorStatus() != VendorStatus.VERIFIED
+                && vendor.getVendorStatus() != VendorStatus.PROVISIONAL) {
+            return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                    .success(false)
+                    .message("Only VERIFIED or PROVISIONAL vendors can be suspended. Current: "
+                             + vendor.getVendorStatus())
+                    .build());
         }
+
+        vendor.setVendorStatus(VendorStatus.SUSPENDED);
+        vendor.setIsActive(false);
+        if (vendor.getUser() != null) vendor.getUser().setIsActive(false);
+        vendorProfileRepository.save(vendor);
+
+        if (vendor.getUser() != null) {
+            outboxEventService.vendorSuspended(
+                    vendor.getUser().getPublicUserId(),
+                    vendor.getUser().getEmail(),
+                    vendor.getUser().getFirstName(),
+                    vendor.getRestaurantName());
+        }
+
+        return ResponseEntity.ok(ApiResponse.success("Vendor suspended", toSummary(vendor)));
+    }
+
+    @Transactional
+    @PatchMapping("/{publicVendorId}/reinstate")
+    @Operation(summary = "Reinstate vendor", description = "Reinstate a SUSPENDED vendor back to VERIFIED.")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> reinstateVendor(
+            @PathVariable String publicVendorId) {
+
+        VendorProfile vendor = getVendor(publicVendorId);
+
+        if (vendor.getVendorStatus() != VendorStatus.SUSPENDED) {
+            return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                    .success(false)
+                    .message("Only SUSPENDED vendors can be reinstated. Current: "
+                             + vendor.getVendorStatus())
+                    .build());
+        }
+
+        vendor.setVendorStatus(VendorStatus.VERIFIED);
+        vendor.setIsActive(true);
+        if (vendor.getUser() != null) vendor.getUser().setIsActive(true);
         vendorProfileRepository.save(vendor);
 
         if (vendor.getUser() != null) {
@@ -139,38 +275,10 @@ public class AdminVendorManagementController {
                     vendor.getRestaurantName());
         }
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vendor reinstated successfully", toSummary(vendor)));
+        return ResponseEntity.ok(ApiResponse.success("Vendor reinstated", toSummary(vendor)));
     }
 
-    @Transactional
-    @PatchMapping("/{publicVendorId}/deactivate")
-    @Operation(summary = "Deactivate vendor", description = "Suspend a vendor profile (prevents receiving orders)")
-    public ResponseEntity<ApiResponse<VendorSummaryDto>> deactivateVendor(
-            @PathVariable String publicVendorId) {
-
-        VendorProfile vendor = getVendor(publicVendorId);
-        boolean wasVerified = Boolean.TRUE.equals(vendor.getIsVerified());
-        vendor.setIsActive(false);
-        if (vendor.getUser() != null) {
-            vendor.getUser().setIsActive(false);
-        }
-        vendorProfileRepository.save(vendor);
-
-        // Only notify verified vendors — rejected applicants go through /reject.
-        if (wasVerified && vendor.getUser() != null) {
-            outboxEventService.vendorSuspended(
-                    vendor.getUser().getPublicUserId(),
-                    vendor.getUser().getEmail(),
-                    vendor.getUser().getFirstName(),
-                    vendor.getRestaurantName());
-        }
-
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vendor deactivated successfully", toSummary(vendor)));
-    }
-
-    // ========== REJECT (pending applicants) ==========
+    // ========== REJECT ==========
 
     @lombok.Data
     public static class RejectRequestDto {
@@ -180,17 +288,25 @@ public class AdminVendorManagementController {
     @Transactional
     @PostMapping("/{publicVendorId}/reject")
     @Operation(summary = "Reject vendor application",
-               description = "Reject a pending vendor application with an optional reason sent to the vendor via email")
+               description = "Reject a vendor at PENDING_REVIEW or PROVISIONAL stage. Sends rejection email with reason.")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> rejectVendor(
             @PathVariable String publicVendorId,
             @RequestBody(required = false) RejectRequestDto body) {
 
         VendorProfile vendor = getVendor(publicVendorId);
+
+        if (vendor.getVendorStatus() == VendorStatus.VERIFIED
+                || vendor.getVendorStatus() == VendorStatus.SUSPENDED) {
+            return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                    .success(false)
+                    .message("Use /suspend to remove a verified vendor. Reject is for pending/provisional vendors.")
+                    .build());
+        }
+
+        vendor.setVendorStatus(VendorStatus.REJECTED);
         vendor.setIsActive(false);
         vendor.setIsVerified(false);
-        if (vendor.getUser() != null) {
-            vendor.getUser().setIsActive(false);
-        }
+        if (vendor.getUser() != null) vendor.getUser().setIsActive(false);
         vendorProfileRepository.save(vendor);
 
         if (vendor.getUser() != null) {
@@ -203,8 +319,29 @@ public class AdminVendorManagementController {
                     reason);
         }
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vendor application rejected", toSummary(vendor)));
+        return ResponseEntity.ok(ApiResponse.success("Vendor application rejected", toSummary(vendor)));
+    }
+
+    // ========== DEPRECATED (kept for compatibility) ==========
+
+    /** @deprecated Use /approve-provisional or /verify instead */
+    @Deprecated
+    @Transactional
+    @PatchMapping("/{publicVendorId}/activate")
+    @Operation(summary = "[Deprecated] Activate vendor", description = "Deprecated — use /reinstate for suspended vendors")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> activateVendor(
+            @PathVariable String publicVendorId) {
+        return reinstateVendor(publicVendorId);
+    }
+
+    /** @deprecated Use /suspend instead */
+    @Deprecated
+    @Transactional
+    @PatchMapping("/{publicVendorId}/deactivate")
+    @Operation(summary = "[Deprecated] Deactivate vendor", description = "Deprecated — use /suspend instead")
+    public ResponseEntity<ApiResponse<VendorSummaryDto>> deactivateVendor(
+            @PathVariable String publicVendorId) {
+        return suspendVendor(publicVendorId);
     }
 
     // ========== STRIPE ACCOUNT LINKING ==========
@@ -274,11 +411,14 @@ public class AdminVendorManagementController {
                 .publicVendorId(vendor.getUser() != null ? vendor.getUser().getPublicUserId() : null)
                 .restaurantName(vendor.getRestaurantName())
                 .cuisineType(vendor.getCuisineType())
+                .vendorStatus(vendor.getVendorStatus())
                 .isVerified(vendor.getIsVerified())
                 .isActive(vendor.getIsActive())
                 .verifiedAt(vendor.getVerifiedAt())
                 .createdAt(vendor.getCreatedAt())
                 .stripeOnboardingComplete(vendor.getStripeOnboardingComplete())
+                .hasFoodHandlingCert(vendor.hasFoodHandlingCert())
+                .certVerifiedAt(vendor.getCertVerifiedAt())
                 .build();
     }
 
@@ -301,9 +441,18 @@ public class AdminVendorManagementController {
                 .taxId(v.getTaxId())
                 .businessLicenseUrl(v.getBusinessLicenseUrl())
                 // Status
+                .vendorStatus(v.getVendorStatus())
                 .isVerified(v.getIsVerified())
                 .isActive(v.getIsActive())
                 .verifiedAt(v.getVerifiedAt())
+                // Food Handling Certificate
+                .foodHandlingCertUrl(v.getFoodHandlingCertUrl())
+                .foodHandlingCertNumber(v.getFoodHandlingCertNumber())
+                .foodHandlingCertIssuingBody(v.getFoodHandlingCertIssuingBody())
+                .foodHandlingCertExpiry(v.getFoodHandlingCertExpiry())
+                .certExpired(v.isCertExpired())
+                .certVerifiedAt(v.getCertVerifiedAt())
+                .certVerifiedByAdminId(v.getCertVerifiedByAdminId())
                 // Operations
                 .offersDelivery(v.getOffersDelivery())
                 .offersPickup(v.getOffersPickup())
@@ -337,11 +486,16 @@ public class AdminVendorManagementController {
         private String publicVendorId;
         private String restaurantName;
         private String cuisineType;
-        private Boolean isVerified;
-        private Boolean isActive;
-        private java.time.LocalDateTime verifiedAt;
-        private java.time.LocalDateTime createdAt;
+        private VendorStatus vendorStatus;
+        /** @deprecated Use vendorStatus */
+        @Deprecated private Boolean isVerified;
+        /** @deprecated Use vendorStatus */
+        @Deprecated private Boolean isActive;
+        private LocalDateTime verifiedAt;
+        private LocalDateTime createdAt;
         private Boolean stripeOnboardingComplete;
+        private Boolean hasFoodHandlingCert;
+        private LocalDateTime certVerifiedAt;
     }
 
     @lombok.Data
@@ -363,9 +517,18 @@ public class AdminVendorManagementController {
         private String taxId;
         private String businessLicenseUrl;
         // Status
-        private Boolean isVerified;
-        private Boolean isActive;
+        private VendorStatus vendorStatus;
+        /** @deprecated Use vendorStatus */ @Deprecated private Boolean isVerified;
+        /** @deprecated Use vendorStatus */ @Deprecated private Boolean isActive;
         private LocalDateTime verifiedAt;
+        // Food Handling Certificate
+        private String foodHandlingCertUrl;
+        private String foodHandlingCertNumber;
+        private String foodHandlingCertIssuingBody;
+        private LocalDateTime foodHandlingCertExpiry;
+        private Boolean certExpired;
+        private LocalDateTime certVerifiedAt;
+        private String certVerifiedByAdminId;
         // Operations
         private Boolean offersDelivery;
         private Boolean offersPickup;
