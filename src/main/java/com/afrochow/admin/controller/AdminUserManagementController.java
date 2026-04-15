@@ -1,6 +1,7 @@
 package com.afrochow.admin.controller;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.common.enums.OrderStatus;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.user.model.User;
@@ -254,6 +255,14 @@ public class AdminUserManagementController {
         return user.getPhone() != null && !user.getPhone().isBlank();
     }
 
+    private String resolveOrderLabel(User user) {
+        return switch (user.getRole()) {
+            case CUSTOMER   -> "Orders Placed";
+            case VENDOR     -> "Orders Fulfilled";
+            default         -> null;
+        };
+    }
+
     private UserSummaryDto toUserSummary(User user) {
         Long totalOrders = countOrders(user);
         String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
@@ -277,6 +286,7 @@ public class AdminUserManagementController {
                 .vendorStatus(vendorStatus)
                 .profileImageUrl(user.getProfileImageUrl())
                 .totalOrders(totalOrders)
+                .orderLabel(resolveOrderLabel(user))
                 .createdAt(user.getCreatedAt())
                 .isProfileComplete(resolveProfileComplete(user, vendorStatus))
                 .authProvider(authProvider)
@@ -308,6 +318,7 @@ public class AdminUserManagementController {
                 .userStatus(resolveUserStatus(user, isLocked))
                 .vendorStatus(vendorStatus)
                 .totalOrders(totalOrders)
+                .orderLabel(resolveOrderLabel(user))
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .lastLoginAt(user.getLastLoginAt())
@@ -316,11 +327,29 @@ public class AdminUserManagementController {
                 .build();
     }
 
-    /** Returns order count for customers; 0 for vendors/admins who don't place orders. */
+    /**
+     * Returns the most meaningful order count for the given user role.
+     *
+     * <ul>
+     *   <li>CUSTOMER — all orders ever placed (including cancelled/refunded).
+     *       Gives the admin a complete picture of engagement and any problem patterns.</li>
+     *   <li>VENDOR   — only DELIVERED orders. This is the vendor's actual fulfilment
+     *       track record, excluding cancellations, refunds, and in-progress orders.</li>
+     *   <li>ADMIN    — not applicable; returns null.</li>
+     * </ul>
+     */
     private Long countOrders(User user) {
-        CustomerProfile profile = user.getCustomerProfile();
-        if (profile == null) return 0L;
-        return orderRepository.countByCustomer(profile);
+        if (user.getRole() == Role.CUSTOMER) {
+            CustomerProfile profile = user.getCustomerProfile();
+            if (profile == null) return 0L;
+            return orderRepository.countByCustomer(profile);
+        }
+        if (user.getRole() == Role.VENDOR) {
+            if (user.getVendorProfile() == null) return 0L;
+            return orderRepository.countByVendorAndStatus(
+                    user.getVendorProfile(), OrderStatus.DELIVERED);
+        }
+        return null; // admins don't have orders
     }
 
     // ========== INNER CLASSES ==========
@@ -342,7 +371,10 @@ public class AdminUserManagementController {
         /** Vendor workflow state — non-null only when role == VENDOR. */
         private VendorStatus vendorStatus;
         private String profileImageUrl;
+        /** Role-appropriate order count (see countOrders javadoc). Null for admins. */
         private Long totalOrders;
+        /** Human-readable label for totalOrders: "Orders Placed" for customers, "Orders Fulfilled" for vendors. */
+        private String orderLabel;
         private java.time.LocalDateTime createdAt;
         private Boolean isProfileComplete;
         private String authProvider;
@@ -367,7 +399,10 @@ public class AdminUserManagementController {
         private UserStatus userStatus;
         /** Vendor workflow state — non-null only when role == VENDOR. */
         private VendorStatus vendorStatus;
+        /** Role-appropriate order count (see countOrders javadoc). Null for admins. */
         private Long totalOrders;
+        /** Human-readable label for totalOrders: "Orders Placed" for customers, "Orders Fulfilled" for vendors. */
+        private String orderLabel;
         private java.time.LocalDateTime createdAt;
         private java.time.LocalDateTime updatedAt;
         private java.time.LocalDateTime lastLoginAt;
