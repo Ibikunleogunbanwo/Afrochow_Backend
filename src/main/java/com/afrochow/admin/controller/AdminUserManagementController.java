@@ -14,12 +14,17 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/users")
@@ -34,14 +39,71 @@ public class AdminUserManagementController {
 
     // ========== VIEW USERS ==========
 
+    /**
+     * Paginated user list with optional server-side filtering.
+     *
+     * Query params:
+     *   page   (default 0)      — zero-based page number
+     *   size   (default 25)     — page size, capped at 100
+     *   role   (optional)       — CUSTOMER | VENDOR | ADMIN | SUPERADMIN
+     *   active (optional bool)  — true = active only, false = inactive only
+     *   q      (optional)       — search by first/last name (min 2 chars)
+     *
+     * Response includes pagination metadata so the frontend can drive the page controls.
+     */
     @GetMapping
-    @Operation(summary = "Get all users", description = "Get all users in the system (admin only)")
-    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getAllUsers() {
-        List<User> users = userRepository.findAll();
-        List<UserSummaryDto> summaries = users.stream()
+    @Operation(summary = "Get users (paginated)", description = "Paginated, filterable user list")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAllUsers(
+            @RequestParam(defaultValue = "0")   int     page,
+            @RequestParam(defaultValue = "25")  int     size,
+            @RequestParam(required = false)     Role    role,
+            @RequestParam(required = false)     Boolean active,
+            @RequestParam(required = false)     String  q) {
+
+        size = Math.min(size, 100); // hard cap — never return more than 100 at once
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+
+        Page<User> userPage;
+        if (q != null && q.length() >= 2) {
+            // Search trumps other filters — return matching users across all roles/statuses
+            List<User> matched = userRepository
+                    .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(q, q);
+            // Wrap in a slice manually (search result sets are small in practice)
+            int start = (int) pageable.getOffset();
+            int end   = Math.min(start + size, matched.size());
+            List<UserSummaryDto> content = (start >= matched.size())
+                    ? List.of()
+                    : matched.subList(start, end).stream().map(this::toUserSummary).toList();
+            Map<String, Object> body = Map.of(
+                    "content",        content,
+                    "totalElements",  matched.size(),
+                    "totalPages",     (int) Math.ceil((double) matched.size() / size),
+                    "page",           page,
+                    "size",           size
+            );
+            return ResponseEntity.ok(ApiResponse.success(body));
+        } else if (role != null && active != null) {
+            userPage = userRepository.findByRoleAndIsActive(role, active, pageable);
+        } else if (role != null) {
+            userPage = userRepository.findAllByRole(role, pageable);
+        } else if (active != null) {
+            userPage = userRepository.findByIsActive(active, pageable);
+        } else {
+            userPage = userRepository.findAll(pageable);
+        }
+
+        List<UserSummaryDto> summaries = userPage.getContent().stream()
                 .map(this::toUserSummary)
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success(summaries));
+
+        Map<String, Object> body = Map.of(
+                "content",        summaries,
+                "totalElements",  userPage.getTotalElements(),
+                "totalPages",     userPage.getTotalPages(),
+                "page",           userPage.getNumber(),
+                "size",           userPage.getSize()
+        );
+        return ResponseEntity.ok(ApiResponse.success(body));
     }
 
     @GetMapping("/{publicUserId}")
@@ -53,33 +115,24 @@ public class AdminUserManagementController {
     }
 
     @GetMapping("/role/{role}")
-    @Operation(summary = "Get users by role", description = "Get all users with a specific role")
+    @Operation(summary = "Get users by role (paginated)", description = "Get users with a specific role — use the main /admin/users?role= endpoint instead")
     public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getUsersByRole(@PathVariable Role role) {
         List<User> users = userRepository.findByRole(role);
-        List<UserSummaryDto> summaries = users.stream()
-                .map(this::toUserSummary)
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success(summaries));
+        return ResponseEntity.ok(ApiResponse.success(users.stream().map(this::toUserSummary).toList()));
     }
 
     @GetMapping("/active")
-    @Operation(summary = "Get active users", description = "Get all active users")
+    @Operation(summary = "Get active users (legacy)", description = "Use /admin/users?active=true instead")
     public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getActiveUsers() {
         List<User> users = userRepository.findByIsActive(true);
-        List<UserSummaryDto> summaries = users.stream()
-                .map(this::toUserSummary)
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success(summaries));
+        return ResponseEntity.ok(ApiResponse.success(users.stream().map(this::toUserSummary).toList()));
     }
 
     @GetMapping("/inactive")
-    @Operation(summary = "Get inactive users", description = "Get all inactive/suspended users")
+    @Operation(summary = "Get inactive users (legacy)", description = "Use /admin/users?active=false instead")
     public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getInactiveUsers() {
         List<User> users = userRepository.findByIsActive(false);
-        List<UserSummaryDto> summaries = users.stream()
-                .map(this::toUserSummary)
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success(summaries));
+        return ResponseEntity.ok(ApiResponse.success(users.stream().map(this::toUserSummary).toList()));
     }
 
     @GetMapping("/search")
@@ -198,15 +251,16 @@ public class AdminUserManagementController {
     // ========== STATISTICS ==========
 
     @GetMapping("/stats")
-    @Operation(summary = "Get user statistics", description = "Get system-wide user statistics")
+    @Operation(summary = "Get user statistics", description = "Get system-wide user statistics using efficient COUNT queries")
     public ResponseEntity<ApiResponse<UserStats>> getUserStats() {
-        long totalUsers = userRepository.count();
-        long activeUsers = userRepository.findByIsActive(true).size();
+        // Use COUNT queries — never load full user lists just to call .size()
+        long totalUsers    = userRepository.count();
+        long customers     = userRepository.countByRole(Role.CUSTOMER);
+        long vendors       = userRepository.countByRole(Role.VENDOR);
+        long admins        = userRepository.countByRole(Role.ADMIN);
+        long superAdmins   = userRepository.countByRole(Role.SUPERADMIN);
+        long activeUsers   = userRepository.countByIsActiveTrue();
         long inactiveUsers = totalUsers - activeUsers;
-        long customers = userRepository.findByRole(Role.CUSTOMER).size();
-        long vendors = userRepository.findByRole(Role.VENDOR).size();
-        long admins = userRepository.findByRole(Role.ADMIN).size();
-        long superAdmins = userRepository.findByRole(Role.SUPERADMIN).size();
 
         UserStats stats = UserStats.builder()
                 .totalUsers(totalUsers)
