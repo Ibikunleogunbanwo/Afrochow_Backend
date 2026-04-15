@@ -352,7 +352,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                 .user(vendorUser)
                 .restaurantName(config.name)
                 .description(config.description)
-                .cuisineType(category.getName())
+                .storeCategory(category.getName())
                 .logoUrl(generateVendorLogoUrl(config.name))
                 .bannerUrl("https://picsum.photos/seed/" + config.specialty + vendorIndex + "/1200/400")
                 .businessLicenseUrl("https://storage.cloud.example.com/business-licenses/"

@@ -6,7 +6,7 @@ import com.afrochow.category.dto.CategoryResponseDto;
 import com.afrochow.category.service.CategoryService;
 import com.afrochow.common.ApiResponse;
 import com.afrochow.common.ResponseBuilder;
-import com.afrochow.common.enums.CuisineType;
+import com.afrochow.common.enums.StoreCategory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -45,13 +45,13 @@ public class CategoryController {
     // ========== PUBLIC ENDPOINTS ==========
 
     /**
-     * Get all vendor cuisine/product types from the authoritative CuisineType enum.
+     * Get all vendor store categories from the authoritative StoreCategory enum.
      * Consumed by vendor registration and profile dropdowns so they never go out of sync.
      */
-    @GetMapping("/categories/cuisine-types")
-    @Operation(summary = "Get cuisine types", description = "Get all valid vendor product/cuisine types for dropdown menus")
-    public ResponseEntity<ApiResponse<List<String>>> getCuisineTypes() {
-        return ResponseBuilder.ok("Cuisine types retrieved successfully", CuisineType.labels());
+    @GetMapping("/categories/store-categories")
+    @Operation(summary = "Get store categories", description = "Get all valid vendor product/store categories for dropdown menus")
+    public ResponseEntity<ApiResponse<List<String>>> getStoreCategories() {
+        return ResponseBuilder.ok("Store categories retrieved successfully", StoreCategory.labels());
     }
 
     /**

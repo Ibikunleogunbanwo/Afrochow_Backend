@@ -31,7 +31,7 @@ import com.afrochow.common.enums.VendorStatus;
 @Entity
 @Table(name = "vendor_profile", indexes = {
         @Index(name = "idx_is_verified", columnList = "isVerified"),
-        @Index(name = "idx_cuisine_type", columnList = "cuisineType")
+        @Index(name = "idx_store_category", columnList = "cuisineType")
 })
 @Getter
 @Setter
@@ -59,8 +59,9 @@ public class VendorProfile {
     @Column(length = 1000)
     private String description;
 
-    @Column(length = 50)
-    private String cuisineType;
+    // Column name kept as "cuisineType" to avoid a DB migration.
+    @Column(name = "cuisineType", length = 50)
+    private String storeCategory;
 
     private String logoUrl;
     private String bannerUrl;

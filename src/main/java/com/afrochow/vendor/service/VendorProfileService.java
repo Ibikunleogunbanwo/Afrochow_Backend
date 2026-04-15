@@ -85,7 +85,7 @@ public class VendorProfileService {
         // Update basic information
         updateIfNotNull(request.getRestaurantName(), vendorProfile::setRestaurantName);
         updateIfNotNull(request.getDescription(), vendorProfile::setDescription);
-        updateIfNotNull(request.getCuisineType(), vendorProfile::setCuisineType);
+        updateIfNotNull(request.getStoreCategory(), vendorProfile::setStoreCategory);
         updateIfNotNull(request.getLogoUrl(), vendorProfile::setLogoUrl);
         updateIfNotNull(request.getBannerUrl(), vendorProfile::setBannerUrl);
 
@@ -251,7 +251,7 @@ public class VendorProfileService {
         // First-time submission: enforce profile completeness before advancing.
         if (current == VendorStatus.PENDING_PROFILE && !isProfileComplete(vendorProfile)) {
             throw new IllegalStateException(
-                    "Profile is incomplete. Please fill in your restaurant name, cuisine type, " +
+                    "Profile is incomplete. Please fill in your restaurant name, store category, " +
                     "logo, service options, address, and operating hours before submitting.");
         }
 
@@ -284,11 +284,11 @@ public class VendorProfileService {
 
     /**
      * A profile is considered complete enough to enter the review queue when it has
-     * a restaurant name, cuisine type, logo, at least one service option, and an address.
+     * a restaurant name, store category, logo, at least one service option, and an address.
      */
     private boolean isProfileComplete(VendorProfile profile) {
         return profile.getRestaurantName() != null && !profile.getRestaurantName().isBlank()
-                && profile.getCuisineType() != null && !profile.getCuisineType().isBlank()
+                && profile.getStoreCategory() != null && !profile.getStoreCategory().isBlank()
                 && profile.getLogoUrl() != null && !profile.getLogoUrl().isBlank()
                 && (Boolean.TRUE.equals(profile.getOffersDelivery())
                         || Boolean.TRUE.equals(profile.getOffersPickup()))

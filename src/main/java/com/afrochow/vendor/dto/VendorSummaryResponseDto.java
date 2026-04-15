@@ -15,7 +15,7 @@ public class VendorSummaryResponseDto {
 
     private String publicUserId;
     private String restaurantName;
-    private String cuisineType;
+    private String storeCategory;
     private String logoUrl;
     private BigDecimal deliveryFee;
     private BigDecimal minimumOrderAmount;

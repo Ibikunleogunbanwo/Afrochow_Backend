@@ -420,7 +420,7 @@ public class AdminVendorManagementController {
         return VendorSummaryDto.builder()
                 .publicVendorId(vendor.getUser() != null ? vendor.getUser().getPublicUserId() : null)
                 .restaurantName(vendor.getRestaurantName())
-                .cuisineType(vendor.getCuisineType())
+                .storeCategory(vendor.getStoreCategory())
                 .vendorStatus(vendor.getVendorStatus())
                 .isVerified(vendor.getIsVerified())
                 .isActive(vendor.getIsActive())
@@ -445,7 +445,7 @@ public class AdminVendorManagementController {
                 // Store
                 .restaurantName(v.getRestaurantName())
                 .description(v.getDescription())
-                .cuisineType(v.getCuisineType())
+                .storeCategory(v.getStoreCategory())
                 .logoUrl(v.getLogoUrl())
                 .bannerUrl(v.getBannerUrl())
                 .taxId(v.getTaxId())
@@ -495,7 +495,7 @@ public class AdminVendorManagementController {
     public static class VendorSummaryDto {
         private String publicVendorId;
         private String restaurantName;
-        private String cuisineType;
+        private String storeCategory;
         private VendorStatus vendorStatus;
         /** @deprecated Use vendorStatus */
         @Deprecated private Boolean isVerified;
@@ -521,7 +521,7 @@ public class AdminVendorManagementController {
         // Store
         private String restaurantName;
         private String description;
-        private String cuisineType;
+        private String storeCategory;
         private String logoUrl;
         private String bannerUrl;
         private String taxId;

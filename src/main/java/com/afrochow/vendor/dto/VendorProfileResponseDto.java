@@ -21,7 +21,7 @@ public class VendorProfileResponseDto {
     private String publicUserId;
     private String restaurantName;
     private String description;
-    private String cuisineType;
+    private String storeCategory;
     private String logoUrl;
     private String bannerUrl;
 

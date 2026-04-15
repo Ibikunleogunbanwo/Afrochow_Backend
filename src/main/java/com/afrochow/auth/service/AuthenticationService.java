@@ -646,7 +646,7 @@ public class AuthenticationService {
                 .user(user)
                 .restaurantName(request.getRestaurantName())
                 .description(request.getDescription())
-                .cuisineType(request.getCuisineType())
+                .storeCategory(request.getStoreCategory())
                 .logoUrl(request.getLogoUrl())
                 .bannerUrl(request.getBannerUrl())
                 .businessLicenseUrl(request.getBusinessLicenseUrl())
@@ -684,12 +684,12 @@ public class AuthenticationService {
      * Mirrors the completeness check in {@code VendorProfileService.isProfileComplete()}.
      * Keep both in sync if the criteria ever change.
      *
-     * Required: restaurant name, cuisine type, logo, at least one service
+     * Required: restaurant name, store category, logo, at least one service
      * (delivery or pickup), a saved address, and at least one open operating day.
      */
     private boolean isVendorProfileComplete(VendorProfile profile) {
         return profile.getRestaurantName() != null && !profile.getRestaurantName().isBlank()
-                && profile.getCuisineType()    != null && !profile.getCuisineType().isBlank()
+                && profile.getStoreCategory()    != null && !profile.getStoreCategory().isBlank()
                 && profile.getLogoUrl()        != null && !profile.getLogoUrl().isBlank()
                 && (Boolean.TRUE.equals(profile.getOffersDelivery())
                         || Boolean.TRUE.equals(profile.getOffersPickup()))

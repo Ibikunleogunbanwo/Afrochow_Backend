@@ -2,9 +2,9 @@ package com.afrochow.search;
 
 import com.afrochow.category.dto.CategoryResponseDto;
 import com.afrochow.common.ApiResponse;
-import com.afrochow.common.enums.CuisineType;
+import com.afrochow.common.enums.StoreCategory;
 import com.afrochow.product.dto.ProductResponseDto;
-import com.afrochow.search.dto.PopularCuisineDto;
+import com.afrochow.search.dto.PopularcategoryDto;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,16 +42,16 @@ public class SearchController {
     }
 
     @GetMapping("/vendors")
-    @Operation(summary = "Search vendors", description = "Search for vendors by name or cuisine type")
+    @Operation(summary = "Search vendors", description = "Search for vendors by name or category type")
     public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> searchVendors(@RequestParam String query) {
         List<VendorProfileResponseDto> vendors = searchService.searchVendors(query);
         return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 
-    @GetMapping("/vendors/cuisine/{cuisineType}")
-    @Operation(summary = "Get vendors by cuisine", description = "Get all vendors offering a specific cuisine type")
-    public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getVendorsByCuisine(@PathVariable String cuisineType) {
-        List<VendorProfileResponseDto> vendors = searchService.getVendorsByCuisine(cuisineType);
+    @GetMapping("/vendors/category/{categoryType}")
+    @Operation(summary = "Get vendors by category", description = "Get all vendors offering a specific category type")
+    public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getVendorsByCategory(@PathVariable String storeCategory) {
+        List<VendorProfileResponseDto> vendors = searchService.getVendorsByCategory(categoryType);
         return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 
@@ -92,31 +92,31 @@ public class SearchController {
         return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 
-    @GetMapping("/vendors/cuisine-types")
-    @Operation(summary = "Get allowed cuisine/product types",
-            description = "Returns the ordered list of valid cuisine type labels for the vendor profile dropdown")
-    public ResponseEntity<ApiResponse<List<String>>> getCuisineTypes() {
-        return ResponseEntity.ok(ApiResponse.success("Cuisine types retrieved", CuisineType.labels()));
+    @GetMapping("/vendors/store-categories")
+    @Operation(summary = "Get allowed category/product types",
+            description = "Returns the ordered list of valid category type labels for the vendor profile dropdown")
+    public ResponseEntity<ApiResponse<List<String>>> getStoreCategories() {
+        return ResponseEntity.ok(ApiResponse.success("store categories retrieved", StoreCategory.labels()));
     }
 
-    @GetMapping("/cuisines/popular")
-    @Operation(summary = "Get popular cuisines",
-               description = "Get list of cuisines with vendor count, total orders, and average rating, sorted by popularity")
-    public ResponseEntity<ApiResponse<List<PopularCuisineDto>>> getPopularCuisines() {
-        List<PopularCuisineDto> popularCuisines = searchService.getPopularCuisines();
-        return ResponseEntity.ok(ApiResponse.success("Popular cuisines retrieved successfully", popularCuisines));
+    @GetMapping("/store-categories/popular")
+    @Operation(summary = "Get popular categorys",
+               description = "Get list of categorys with vendor count, total orders, and average rating, sorted by popularity")
+    public ResponseEntity<ApiResponse<List<PopularcategoryDto>>> getPopularcategorys() {
+        List<PopularcategoryDto> popularcategorys = searchService.getPopularcategorys();
+        return ResponseEntity.ok(ApiResponse.success("Popular categorys retrieved successfully", popularcategorys));
     }
 
     @GetMapping("/vendors/advanced")
     @Operation(summary = "Advanced vendor search", description = "Search vendors with multiple filters")
     public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> advancedVendorSearch(
             @RequestParam(required = false) String query,
-            @RequestParam(required = false) String cuisineType,
+            @RequestParam(required = false) String storeCategory,
             @RequestParam(required = false) String city,
             @RequestParam(required = false) Boolean isVerified,
             @RequestParam(required = false) Boolean isOpenNow) {
         List<VendorProfileResponseDto> vendors = searchService.advancedVendorSearch(
-                query, cuisineType, city, isVerified, isOpenNow);
+                query, categoryType, city, isVerified, isOpenNow);
         return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 

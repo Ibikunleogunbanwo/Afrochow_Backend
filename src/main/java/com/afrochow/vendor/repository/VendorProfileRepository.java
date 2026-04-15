@@ -57,9 +57,9 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     // ========== SEARCH BY CUISINE ==========
 
-    List<VendorProfile> findByCuisineTypeIgnoreCase(String cuisineType);
+    List<VendorProfile> findByStoreCategoryIgnoreCase(String storeCategory);
 
-    List<VendorProfile> findByCuisineTypeContainingIgnoreCase(String cuisineType);
+    List<VendorProfile> findByStoreCategoryContainingIgnoreCase(String storeCategory);
 
     // ========== ACTIVE + VERIFIED ==========
 

@@ -38,7 +38,7 @@ public class FavoriteResponseDto {
         private String publicVendorId;
         private String restaurantName;
         private String logoUrl;
-        private String cuisine;
+        private String storeCategory;
         private Double rating;
         private Boolean isActive;
     }

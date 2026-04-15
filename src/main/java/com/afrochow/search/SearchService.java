@@ -74,7 +74,7 @@ public class SearchService {
         public List<VendorProfileResponseDto> searchVendors(String query) {
                 List<VendorProfile> vendors = new ArrayList<>(
                                 vendorProfileRepository.findByRestaurantNameContainingIgnoreCase(query));
-                vendors.addAll(vendorProfileRepository.findByCuisineTypeContainingIgnoreCase(query));
+                vendors.addAll(vendorProfileRepository.findByStoreCategoryContainingIgnoreCase(query));
 
                 return vendors.stream()
                                 .distinct()
@@ -107,8 +107,8 @@ public class SearchService {
          * Only returns active and verified vendors.
          */
         @Transactional(readOnly = true)
-        public List<VendorProfileResponseDto> getVendorsByCuisine(String cuisineType) {
-                return vendorProfileRepository.findByCuisineTypeIgnoreCase(cuisineType).stream()
+        public List<VendorProfileResponseDto> getVendorsByCategory(String storeCategory) {
+                return vendorProfileRepository.findByStoreCategoryIgnoreCase(storeCategory).stream()
                                 .filter(v -> v.getIsActive() && v.getIsVerified())
                                 .map(vendorMapper::toResponseDto)
                                 .toList();
@@ -169,12 +169,12 @@ public class SearchService {
                 List<VendorProfile> allVendors = vendorProfileRepository.findByIsActiveWithProducts(true);
 
                 Map<String, List<VendorProfile>> cuisineGroups = allVendors.stream()
-                                .filter(v -> v.getCuisineType() != null && !v.getCuisineType().isBlank())
-                                .collect(Collectors.groupingBy(VendorProfile::getCuisineType));
+                                .filter(v -> v.getStoreCategory() != null && !v.getStoreCategory().isBlank())
+                                .collect(Collectors.groupingBy(VendorProfile::getStoreCategory));
 
                 return cuisineGroups.entrySet().stream()
                                 .map(entry -> {
-                                        String cuisineType = entry.getKey();
+                                        String storeCategory = entry.getKey();
                                         List<VendorProfile> vendors = entry.getValue();
 
                                         long totalOrders = vendors.stream()
@@ -229,7 +229,7 @@ public class SearchService {
                                                                         .orElse(null));
 
                                         return PopularCuisineDto.builder()
-                                                        .cuisineType(cuisineType)
+                                                        .storeCategory(storeCategory)
                                                         .vendorCount((long) vendors.size())
                                                         .totalOrders(totalOrders)
                                                         .averageRating(Math.round(averageRating * 10.0) / 10.0)
@@ -646,7 +646,7 @@ public class SearchService {
         @Transactional(readOnly = true)
         public List<VendorProfileResponseDto> advancedVendorSearch(
                         String query,
-                        String cuisineType,
+                        String storeCategory,
                         String city,
                         Boolean isVerified,
                         Boolean isOpenNow) {
@@ -656,7 +656,7 @@ public class SearchService {
                 if (query != null && !query.isBlank()) {
                         vendors = new ArrayList<>(
                                         vendorProfileRepository.findByRestaurantNameContainingIgnoreCase(query));
-                        vendors.addAll(vendorProfileRepository.findByCuisineTypeContainingIgnoreCase(query));
+                        vendors.addAll(vendorProfileRepository.findByStoreCategoryContainingIgnoreCase(query));
                         vendors = vendors.stream().distinct().collect(Collectors.toList());
                 } else {
                         vendors = new ArrayList<>(vendorProfileRepository.findByIsVerifiedAndIsActive(true, true));
@@ -664,9 +664,9 @@ public class SearchService {
 
                 return vendors.stream()
                                 .filter(VendorProfile::getIsActive)
-                                .filter(v -> cuisineType == null
-                                                || (v.getCuisineType() != null
-                                                                && v.getCuisineType().equalsIgnoreCase(cuisineType)))
+                                .filter(v -> storeCategory == null
+                                                || (v.getStoreCategory() != null
+                                                                && v.getStoreCategory().equalsIgnoreCase(storeCategory)))
                                 .filter(v -> city == null
                                                 || (v.getAddress() != null
                                                                 && v.getAddress().getCity().equalsIgnoreCase(city)))
