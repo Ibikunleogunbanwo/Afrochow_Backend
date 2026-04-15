@@ -38,6 +38,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findByIsActive(Boolean isActive);
 
+    Page<User> findByIsActive(Boolean isActive, Pageable pageable);
+
+    Page<User> findByRoleAndIsActive(Role role, Boolean isActive, Pageable pageable);
 
     List<User> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(
             String firstName, String lastName);
@@ -54,6 +57,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByScheduledForDeletionAtBefore(LocalDateTime cutoff);
 
     // ========== COUNT METHODS ==========
+
+    Long countByIsActiveTrue();
+
+    Long countByIsActiveFalse();
 
     @Query("SELECT COUNT(u) FROM User u WHERE u.role = :role")
     Long countByRole(@Param("role") Role role);

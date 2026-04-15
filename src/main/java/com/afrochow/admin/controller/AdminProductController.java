@@ -160,6 +160,67 @@ public class AdminProductController {
                 pinned.size() + " product(s) removed from featured section", data));
     }
 
+    // ========== PRODUCT VISIBILITY & DELETION ==========
+
+    /**
+     * Toggle a product's availability (visible ↔ hidden from customers).
+     * Does NOT delete the product — the vendor can re-enable it from their dashboard.
+     */
+    @Transactional
+    @PatchMapping("/{publicProductId}/visibility")
+    @Operation(summary = "Toggle product visibility",
+               description = "Hide or show a product without deleting it. Hidden products are invisible to customers.")
+    public ResponseEntity<ApiResponse<AdminProductSummary>> toggleVisibility(
+            @PathVariable String publicProductId) {
+
+        Product product = productRepository.findByPublicProductId(publicProductId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found: " + publicProductId));
+
+        product.setAvailable(!Boolean.TRUE.equals(product.getAvailable()));
+        productRepository.save(product);
+
+        String msg = Boolean.TRUE.equals(product.getAvailable())
+                ? "Product is now visible to customers"
+                : "Product is now hidden from customers";
+
+        return ResponseEntity.ok(ApiResponse.success(msg, toSummary(product)));
+    }
+
+    /**
+     * Permanently delete a product. This action is irreversible.
+     * Prefer toggling visibility if you only want to hide it temporarily.
+     */
+    @Transactional
+    @DeleteMapping("/{publicProductId}")
+    @PreAuthorize("hasRole('SUPERADMIN')")
+    @Operation(summary = "Delete product (SUPERADMIN only)",
+               description = "Permanently deletes a product. Irreversible. Use visibility toggle to hide temporarily.")
+    public ResponseEntity<ApiResponse<Void>> deleteProduct(
+            @PathVariable String publicProductId) {
+
+        Product product = productRepository.findByPublicProductId(publicProductId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found: " + publicProductId));
+
+        productRepository.delete(product);
+        return ResponseEntity.ok(ApiResponse.success("Product permanently deleted"));
+    }
+
+    /** Map a Product entity to the summary DTO. */
+    private AdminProductSummary toSummary(Product product) {
+        return new AdminProductSummary(
+                product.getPublicProductId(),
+                product.getName(),
+                product.getPrice(),
+                product.getImageUrl(),
+                product.getAvailable(),
+                product.getVendor() != null ? product.getVendor().getRestaurantName() : null,
+                product.getVendor() != null ? product.getVendor().getPublicVendorId() : null,
+                product.getCategory() != null ? product.getCategory().getName() : null,
+                product.getIsFeatured(),
+                product.getFeaturedAt()
+        );
+    }
+
     // ========== DTOs ==========
 
     public record AdminProductSummary(
