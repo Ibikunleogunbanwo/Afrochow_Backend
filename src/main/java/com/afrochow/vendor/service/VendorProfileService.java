@@ -228,16 +228,31 @@ public class VendorProfileService {
     // ========== RESUBMIT AFTER REJECTION ==========
 
     /**
-     * Vendor resubmits their application after being rejected.
-     * Moves status back to PENDING_REVIEW so it appears in the admin queue.
+     * Submits a vendor's application for admin review.
+     *
+     * Allowed from:
+     * <ul>
+     *   <li>{@code PENDING_PROFILE} – first-time submission. Requires the profile
+     *       to be complete (same check as the auto-advance in updateProfile).</li>
+     *   <li>{@code REJECTED} – resubmission after a rejection decision.</li>
+     * </ul>
      */
     @Transactional
     public VendorProfileResponseDto resubmitForReview(Long userId) {
         VendorProfile vendorProfile = getVendorProfileByUserId(userId);
 
-        if (vendorProfile.getVendorStatus() != VendorStatus.REJECTED) {
+        VendorStatus current = vendorProfile.getVendorStatus();
+
+        if (current != VendorStatus.REJECTED && current != VendorStatus.PENDING_PROFILE) {
             throw new IllegalStateException(
-                    "Only rejected vendors can resubmit. Current status: " + vendorProfile.getVendorStatus());
+                    "Cannot submit for review from current status: " + current);
+        }
+
+        // First-time submission: enforce profile completeness before advancing.
+        if (current == VendorStatus.PENDING_PROFILE && !isProfileComplete(vendorProfile)) {
+            throw new IllegalStateException(
+                    "Profile is incomplete. Please fill in your restaurant name, cuisine type, " +
+                    "logo, service options, address, and operating hours before submitting.");
         }
 
         vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);

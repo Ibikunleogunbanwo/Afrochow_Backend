@@ -238,9 +238,24 @@ public class AdminUserManagementController {
         return UserStatus.ACTIVE;
     }
 
+    /**
+     * Role-aware profile completeness:
+     * <ul>
+     *   <li>VENDOR   – profile is considered complete once the vendor has submitted
+     *                  it for review (status has advanced past PENDING_PROFILE).</li>
+     *   <li>CUSTOMER / ADMIN – complete when a phone number is present (basic
+     *                  indicator that the account setup was finished).</li>
+     * </ul>
+     */
+    private boolean resolveProfileComplete(User user, VendorStatus vendorStatus) {
+        if (user.getRole() == Role.VENDOR) {
+            return vendorStatus != null && vendorStatus != VendorStatus.PENDING_PROFILE;
+        }
+        return user.getPhone() != null && !user.getPhone().isBlank();
+    }
+
     private UserSummaryDto toUserSummary(User user) {
         Long totalOrders = countOrders(user);
-        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
         boolean isLocked = loginAttemptService.isAccountLocked(user.getEmail());
         VendorStatus vendorStatus = user.getVendorProfile() != null
@@ -259,14 +274,13 @@ public class AdminUserManagementController {
                 .profileImageUrl(user.getProfileImageUrl())
                 .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
-                .isProfileComplete(profileComplete)
+                .isProfileComplete(resolveProfileComplete(user, vendorStatus))
                 .authProvider(authProvider)
                 .build();
     }
 
     private UserDetailDto toUserDetail(User user) {
         Long totalOrders = countOrders(user);
-        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
         boolean isLocked = loginAttemptService.isAccountLocked(user.getEmail());
         VendorStatus vendorStatus = user.getVendorProfile() != null
@@ -289,7 +303,7 @@ public class AdminUserManagementController {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .lastLoginAt(user.getLastLoginAt())
-                .isProfileComplete(profileComplete)
+                .isProfileComplete(resolveProfileComplete(user, vendorStatus))
                 .authProvider(authProvider)
                 .build();
     }

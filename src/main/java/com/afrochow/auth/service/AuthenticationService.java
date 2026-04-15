@@ -15,6 +15,7 @@ import com.afrochow.auth.dto.ResetPasswordRequestDto;
 import com.afrochow.common.enums.AdminAccessLevel;
 import com.afrochow.common.enums.AuthProvider;
 import com.afrochow.common.enums.Role;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.common.exceptions.*;
 import com.afrochow.customer.dto.CustomerProfileRequestDto;
 import com.afrochow.customer.model.CustomerProfile;
@@ -665,9 +666,35 @@ public class AuthenticationService {
 
         vendorProfile.setOperatingHours(operatingHours);
 
+        // Auto-advance: if all required profile fields were submitted during
+        // registration, move straight to PENDING_REVIEW so the vendor appears
+        // in the admin approval queue immediately — no dashboard visit required.
+        // This mirrors the same check in VendorProfileService.updateProfile().
+        if (isVendorProfileComplete(vendorProfile)) {
+            vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);
+        }
+        // Otherwise the @Builder.Default leaves it at PENDING_PROFILE.
+
         user.setVendorProfile(vendorProfile);
 
         vendorProfileRepository.save(vendorProfile);
+    }
+
+    /**
+     * Mirrors the completeness check in {@code VendorProfileService.isProfileComplete()}.
+     * Keep both in sync if the criteria ever change.
+     *
+     * Required: restaurant name, cuisine type, logo, at least one service
+     * (delivery or pickup), a saved address, and at least one open operating day.
+     */
+    private boolean isVendorProfileComplete(VendorProfile profile) {
+        return profile.getRestaurantName() != null && !profile.getRestaurantName().isBlank()
+                && profile.getCuisineType()    != null && !profile.getCuisineType().isBlank()
+                && profile.getLogoUrl()        != null && !profile.getLogoUrl().isBlank()
+                && (Boolean.TRUE.equals(profile.getOffersDelivery())
+                        || Boolean.TRUE.equals(profile.getOffersPickup()))
+                && profile.getAddress()  != null
+                && profile.hasOperatingDays();
     }
 
     private void createAdminProfile(User user, AdminProfileRequestDto request) {
