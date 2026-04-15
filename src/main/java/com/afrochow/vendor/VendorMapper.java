@@ -31,7 +31,7 @@ public class VendorMapper {
                 .publicUserId(profile.getPublicVendorId())
                 .restaurantName(profile.getRestaurantName())
                 .description(profile.getDescription())
-                .cuisineType(profile.getCuisineType())
+                .storeCategory(profile.getStoreCategory())
                 .logoUrl(profile.getLogoUrl())
                 .bannerUrl(profile.getBannerUrl())
                 .stripeAccountId(profile.getStripeAccountId())

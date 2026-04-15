@@ -261,10 +261,14 @@ public class AdminUserManagementController {
         VendorStatus vendorStatus = user.getVendorProfile() != null
                 ? user.getVendorProfile().getVendorStatus()
                 : null;
+        String restaurantName = user.getVendorProfile() != null
+                ? user.getVendorProfile().getRestaurantName()
+                : null;
         return UserSummaryDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
+                .restaurantName(restaurantName)
                 .role(user.getRole())
                 .isActive(user.getIsActive())
                 .emailVerified(user.getEmailVerified())
@@ -286,6 +290,9 @@ public class AdminUserManagementController {
         VendorStatus vendorStatus = user.getVendorProfile() != null
                 ? user.getVendorProfile().getVendorStatus()
                 : null;
+        String restaurantName = user.getVendorProfile() != null
+                ? user.getVendorProfile().getRestaurantName()
+                : null;
         return UserDetailDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
@@ -294,6 +301,7 @@ public class AdminUserManagementController {
                 .phone(user.getPhone())
                 .profileImageUrl(user.getProfileImageUrl())
                 .role(user.getRole())
+                .restaurantName(restaurantName)
                 .isActive(user.getIsActive())
                 .emailVerified(user.getEmailVerified())
                 .isLocked(isLocked)
@@ -323,6 +331,8 @@ public class AdminUserManagementController {
         private String publicUserId;
         private String email;
         private String fullName;
+        /** Store name — non-null only when role == VENDOR. Use instead of fullName for display. */
+        private String restaurantName;
         private Role role;
         private Boolean isActive;
         private Boolean emailVerified;
@@ -348,6 +358,8 @@ public class AdminUserManagementController {
         private String phone;
         private String profileImageUrl;
         private Role role;
+        /** Store name — non-null only when role == VENDOR. Use instead of fullName for display. */
+        private String restaurantName;
         private Boolean isActive;
         private Boolean emailVerified;
         private boolean isLocked;

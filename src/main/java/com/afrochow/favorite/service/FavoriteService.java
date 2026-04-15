@@ -274,7 +274,7 @@ public class FavoriteService {
                     .publicVendorId(vendor.getPublicVendorId())
                     .restaurantName(vendor.getRestaurantName())
                     .logoUrl(vendor.getLogoUrl())
-                    .cuisine(vendor.getCuisineType())
+                    .storeCategory(vendor.getStoreCategory())
                     .rating(vendor.getAverageRating())
                     .isActive(vendor.getIsActive())
                     .build());

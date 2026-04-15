@@ -19,7 +19,7 @@ public class PopularCuisineDto {
     /**
      * Cuisine type name
      */
-    private String cuisineType;
+    private String storeCategory;
 
     /**
      * Number of vendors offering this cuisine

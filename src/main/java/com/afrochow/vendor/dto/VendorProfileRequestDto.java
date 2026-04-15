@@ -37,7 +37,7 @@ public class VendorProfileRequestDto extends BaseRegistrationRequest {
 
     @NotBlank(message = "Cuisine type is required")
     @Size(max = 50, message = "Cuisine type must not exceed 50 characters")
-    private String cuisineType;
+    private String storeCategory;
 
     // ========== BRANDING & DOCUMENTS ==========
     @NotBlank(message = "Logo URL is required")

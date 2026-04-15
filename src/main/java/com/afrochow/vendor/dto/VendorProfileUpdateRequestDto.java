@@ -24,7 +24,7 @@ public class VendorProfileUpdateRequestDto {
     private String description;
 
     @Size(max = 50, message = "Cuisine type must not exceed 50 characters")
-    private String cuisineType;
+    private String storeCategory;
 
     private String logoUrl;
     private String bannerUrl;
