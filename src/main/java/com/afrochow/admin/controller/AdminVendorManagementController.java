@@ -107,19 +107,13 @@ public class AdminVendorManagementController {
     @PatchMapping("/{publicVendorId}/approve-provisional")
     @Operation(summary = "Approve vendor provisionally",
                description = "Move a PENDING_REVIEW vendor to PROVISIONAL. " +
-                             "Also accepts vendors with a null vendorStatus (legacy stores created before the state machine) " +
-                             "treating them as PENDING_REVIEW for backward compatibility. " +
                              "Vendor goes live; cert upload still required for full verification.")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> approveProvisional(
             @PathVariable String publicVendorId) {
 
         VendorProfile vendor = getVendor(publicVendorId);
 
-        // Accept null vendorStatus (legacy stores pre-dating the state machine) as equivalent to PENDING_REVIEW.
-        boolean canApprove = vendor.getVendorStatus() == VendorStatus.PENDING_REVIEW
-                          || vendor.getVendorStatus() == null;
-
-        if (!canApprove) {
+        if (vendor.getVendorStatus() != VendorStatus.PENDING_REVIEW) {
             return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
                     .success(false)
                     .message("Vendor must be in PENDING_REVIEW to approve provisionally. Current: "
@@ -348,69 +342,6 @@ public class AdminVendorManagementController {
     public ResponseEntity<ApiResponse<VendorSummaryDto>> deactivateVendor(
             @PathVariable String publicVendorId) {
         return suspendVendor(publicVendorId);
-    }
-
-    // ========== LEGACY MIGRATION ==========
-
-    /**
-     * One-time backfill: derives vendorStatus from legacy isVerified/isActive booleans
-     * for every vendor whose vendorStatus is still null (created before the state machine).
-     *
-     * Mapping:
-     *   isVerified=true,  isActive=true  → VERIFIED
-     *   isVerified=true,  isActive=false → SUSPENDED
-     *   isVerified=false, isActive=true  → PENDING_REVIEW
-     *   isVerified=false, isActive=false → REJECTED
-     *
-     * Safe to run multiple times — only touches records where vendorStatus IS NULL.
-     */
-    @Transactional
-    @PostMapping("/backfill-status")
-    @Operation(summary = "Backfill vendorStatus for legacy stores",
-               description = "One-time migration that sets vendorStatus from isVerified/isActive for stores " +
-                             "created before the state machine. Only updates rows where vendorStatus is null. " +
-                             "Safe to run multiple times.")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> backfillVendorStatus() {
-
-        List<VendorProfile> legacy = vendorProfileRepository.findAll()
-                .stream()
-                .filter(v -> v.getVendorStatus() == null)
-                .toList();
-
-        int verified = 0, suspended = 0, pendingReview = 0, rejected = 0;
-
-        for (VendorProfile v : legacy) {
-            boolean active   = Boolean.TRUE.equals(v.getIsActive());
-            boolean verified_ = Boolean.TRUE.equals(v.getIsVerified());
-
-            if (verified_ && active) {
-                v.setVendorStatus(VendorStatus.VERIFIED);
-                verified++;
-            } else if (verified_ && !active) {
-                v.setVendorStatus(VendorStatus.SUSPENDED);
-                suspended++;
-            } else if (!verified_ && active) {
-                v.setVendorStatus(VendorStatus.PENDING_REVIEW);
-                pendingReview++;
-            } else {
-                // isVerified=false, isActive=false
-                v.setVendorStatus(VendorStatus.REJECTED);
-                rejected++;
-            }
-        }
-
-        vendorProfileRepository.saveAll(legacy);
-
-        Map<String, Object> result = Map.of(
-                "totalMigrated", legacy.size(),
-                "VERIFIED",      verified,
-                "SUSPENDED",     suspended,
-                "PENDING_REVIEW", pendingReview,
-                "REJECTED",      rejected
-        );
-
-        return ResponseEntity.ok(ApiResponse.success(
-                "Backfill complete — " + legacy.size() + " vendor(s) updated", result));
     }
 
     // ========== STRIPE ACCOUNT LINKING ==========

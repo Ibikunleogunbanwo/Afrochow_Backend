@@ -5,6 +5,8 @@ import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.Role;
+import com.afrochow.common.enums.UserStatus;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.security.Services.LoginAttemptService;
 import com.afrochow.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -220,17 +222,40 @@ public class AdminUserManagementController {
 
     // ========== HELPER METHODS ==========
 
+    /**
+     * Derives the canonical {@link UserStatus} for a user.
+     *
+     * Priority (highest → lowest):
+     *   1. SUSPENDED  – admin has deactivated the account
+     *   2. LOCKED     – too many failed login attempts
+     *   3. PENDING_VERIFICATION – email not yet confirmed
+     *   4. ACTIVE     – everything is in order
+     */
+    private UserStatus resolveUserStatus(User user, boolean isLocked) {
+        if (Boolean.FALSE.equals(user.getIsActive())) return UserStatus.SUSPENDED;
+        if (isLocked)                                   return UserStatus.LOCKED;
+        if (Boolean.FALSE.equals(user.getEmailVerified())) return UserStatus.PENDING_VERIFICATION;
+        return UserStatus.ACTIVE;
+    }
+
     private UserSummaryDto toUserSummary(User user) {
         Long totalOrders = countOrders(user);
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
+        boolean isLocked = loginAttemptService.isAccountLocked(user.getEmail());
+        VendorStatus vendorStatus = user.getVendorProfile() != null
+                ? user.getVendorProfile().getVendorStatus()
+                : null;
         return UserSummaryDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .role(user.getRole())
                 .isActive(user.getIsActive())
-                .isLocked(loginAttemptService.isAccountLocked(user.getEmail()))
+                .emailVerified(user.getEmailVerified())
+                .isLocked(isLocked)
+                .userStatus(resolveUserStatus(user, isLocked))
+                .vendorStatus(vendorStatus)
                 .profileImageUrl(user.getProfileImageUrl())
                 .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
@@ -243,6 +268,10 @@ public class AdminUserManagementController {
         Long totalOrders = countOrders(user);
         boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
         String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
+        boolean isLocked = loginAttemptService.isAccountLocked(user.getEmail());
+        VendorStatus vendorStatus = user.getVendorProfile() != null
+                ? user.getVendorProfile().getVendorStatus()
+                : null;
         return UserDetailDto.builder()
                 .publicUserId(user.getPublicUserId())
                 .email(user.getEmail())
@@ -252,6 +281,10 @@ public class AdminUserManagementController {
                 .profileImageUrl(user.getProfileImageUrl())
                 .role(user.getRole())
                 .isActive(user.getIsActive())
+                .emailVerified(user.getEmailVerified())
+                .isLocked(isLocked)
+                .userStatus(resolveUserStatus(user, isLocked))
+                .vendorStatus(vendorStatus)
                 .totalOrders(totalOrders)
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
@@ -278,7 +311,12 @@ public class AdminUserManagementController {
         private String fullName;
         private Role role;
         private Boolean isActive;
+        private Boolean emailVerified;
         private boolean isLocked;
+        /** Canonical account-level state. */
+        private UserStatus userStatus;
+        /** Vendor workflow state — non-null only when role == VENDOR. */
+        private VendorStatus vendorStatus;
         private String profileImageUrl;
         private Long totalOrders;
         private java.time.LocalDateTime createdAt;
@@ -297,6 +335,12 @@ public class AdminUserManagementController {
         private String profileImageUrl;
         private Role role;
         private Boolean isActive;
+        private Boolean emailVerified;
+        private boolean isLocked;
+        /** Canonical account-level state. */
+        private UserStatus userStatus;
+        /** Vendor workflow state — non-null only when role == VENDOR. */
+        private VendorStatus vendorStatus;
         private Long totalOrders;
         private java.time.LocalDateTime createdAt;
         private java.time.LocalDateTime updatedAt;
