@@ -202,6 +202,19 @@ public class OutboxEventService {
 
     // ── Vendor admin lifecycle ────────────────────────────────────────────────
 
+    /** Fires when a vendor is provisionally approved — live but cert still required. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void vendorProvisional(String publicUserId, String email,
+                                  String firstName, String restaurantName) {
+        save(OutboxEventType.VENDOR_PROVISIONAL, Map.of(
+                "publicUserId",   publicUserId,
+                "email",          email,
+                "firstName",      firstName,
+                "restaurantName", restaurantName
+        ));
+    }
+
+    /** Fires when a vendor is fully verified (cert confirmed → VERIFIED). */
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorApproved(String publicUserId, String email,
                                String firstName, String restaurantName) {

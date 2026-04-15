@@ -184,6 +184,12 @@ public class OutboxPoller {
                             p.get("verificationToken"));
 
             // ── Vendor admin lifecycle ────────────────────────────────────
+            case VENDOR_PROVISIONAL ->
+                    notificationService.notifyVendorProvisional(
+                            p.get("email"),
+                            p.get("firstName"),
+                            p.get("restaurantName"));
+
             case VENDOR_APPROVED ->
                     notificationService.notifyVendorApproved(
                             p.get("email"),

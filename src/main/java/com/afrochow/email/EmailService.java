@@ -361,7 +361,9 @@ public class EmailService {
             context.setVariable("totalAmount", String.format("$%.2f", totalAmount));
             context.setVariable("appName", appName);
             context.setVariable("appUrl", appUrl);
-            context.setVariable("orderManagementUrl", String.format("%s/vendor/orders/%s", appUrl, orderPublicId));
+            // The vendor orders page uses a query param to highlight a specific order,
+            // not a path segment — /vendor/orders/{id} does not exist as a route.
+            context.setVariable("orderManagementUrl", String.format("%s/vendor/orders?highlight=%s", appUrl, orderPublicId));
 
             String subject = String.format("New Order #%s - %s", orderPublicId, appName);
             String htmlContent = processTemplate("vendor-new-order", context);
@@ -442,7 +444,9 @@ public class EmailService {
             context.setVariable("reason", reason);
             context.setVariable("appName", appName);
             context.setVariable("appUrl", appUrl);
-            context.setVariable("retryUrl", String.format("%s/retry-payment/%s", appUrl, orderPublicId));
+            // /retry-payment/ does not exist as a route — send the customer to the
+            // order confirmation page where they can see the failure and retry.
+            context.setVariable("retryUrl", String.format("%s/order-confirmation/%s", appUrl, orderPublicId));
 
             String subject = String.format("Payment Failed - %s", appName);
             String htmlContent = processTemplate("payment-failed", context);
@@ -491,7 +495,38 @@ public class EmailService {
     // ========== VENDOR APPROVAL / REJECTION / SUSPENSION EMAILS ==========
 
     /**
-     * Send approval confirmation email to a vendor whose store was verified by an admin.
+     * Send provisional approval email — vendor is now live but must upload
+     * their food handling certificate for full verification.
+     */
+    public void sendVendorProvisionalApprovalEmail(String toEmail, String firstName, String restaurantName) {
+        if (!emailEnabled) {
+            logger.info("Email disabled. Would send vendor provisional approval email to: {}", toEmail);
+            return;
+        }
+
+        try {
+            validateEmail(toEmail);
+
+            Context context = new Context();
+            context.setVariable("firstName", firstName);
+            context.setVariable("restaurantName", restaurantName);
+            context.setVariable("appName", appName);
+            context.setVariable("appUrl", appUrl);
+
+            String subject = String.format("You're live on %s — one step left!", appName);
+            String htmlContent = processTemplate("vendor-provisional", context);
+
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            logger.info("Vendor provisional approval email sent to: {}", toEmail);
+
+        } catch (Exception e) {
+            logger.error("Failed to send vendor provisional approval email to: {}", toEmail, e);
+        }
+    }
+
+    /**
+     * Send full verification email — vendor's food handling cert has been confirmed
+     * and their store is now fully verified with no restrictions.
      */
     public void sendVendorApprovalEmail(String toEmail, String firstName, String restaurantName) {
         if (!emailEnabled) {

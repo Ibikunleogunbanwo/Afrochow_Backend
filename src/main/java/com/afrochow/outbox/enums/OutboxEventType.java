@@ -33,7 +33,8 @@ public enum OutboxEventType {
     EMAIL_VERIFICATION_SENT,    // → notifyEmailVerificationSent (verification email only)
 
     // ── Vendor admin lifecycle ───────────────────────────────────────────────
-    VENDOR_APPROVED,            // → notifyVendorApproved
+    VENDOR_PROVISIONAL,         // → notifyVendorProvisional  (live, cert upload required)
+    VENDOR_APPROVED,            // → notifyVendorApproved     (fully verified after cert check)
     VENDOR_REJECTED,            // → notifyVendorRejected
     VENDOR_SUSPENDED,           // → notifyVendorSuspended
     VENDOR_REINSTATED           // → notifyVendorReinstated

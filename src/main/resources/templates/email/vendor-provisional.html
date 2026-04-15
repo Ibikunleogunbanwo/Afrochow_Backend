@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="color-scheme" content="light">
     <meta name="supported-color-schemes" content="light">
-    <title th:text="|Store Approved — ${appName}|">Store Approved</title>
+    <title th:text="|You're live! Next step — ${appName}|">You're live!</title>
     <!--[if mso]>
     <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch><o:AllowPNG/></o:OfficeDocumentSettings></xml>
     <![endif]-->
@@ -33,31 +33,14 @@
             .heading { font-size: 24px !important; }
             .btn-primary, .btn-outline { padding: 14px 32px !important; font-size: 15px !important; display: block !important; text-align: center !important; margin: 8px 0 !important; }
         }
-
-        /* ============================================================
-           DARK MODE DEFENSE
-           Forces all clients (Apple Mail, Gmail iOS, Outlook on Mac)
-           to render in light mode regardless of system preference.
-           ============================================================ */
         @media (prefers-color-scheme: dark) {
-            html, body, .email-wrapper,
-            table[class="email-wrapper"] {
-                background-color: #ffffff !important;
-                color: #1C1109 !important;
-                color-scheme: light !important;
+            html, body, .email-wrapper, table[class="email-wrapper"] {
+                background-color: #ffffff !important; color: #1C1109 !important; color-scheme: light !important;
             }
-            .content-cell, .content-inner {
-                background-color: #ffffff !important;
-            }
-            .body-text {
-                color: #5A4A3F !important;
-            }
-            .heading {
-                color: #1C1109 !important;
-            }
-            a {
-                color: #FF6B35 !important;
-            }
+            .content-cell, .content-inner { background-color: #ffffff !important; }
+            .body-text { color: #5A4A3F !important; }
+            .heading { color: #1C1109 !important; }
+            a { color: #FF6B35 !important; }
         }
     </style>
 </head>
@@ -76,66 +59,88 @@
                     </td>
                 </tr>
             </table>
-            <!-- Approved badge -->
+
+            <!-- Provisional badge -->
             <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                <tr><td style="background-color:#F0FDF4;padding:14px 24px;text-align:center;">
-                    <span style="font-family:'Lato',Arial,sans-serif;font-size:13px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:1.5px;border:1.5px solid #86EFAC;background-color:#DCFCE7;padding:6px 20px;border-radius:100px;">Store Approved</span>
+                <tr><td style="background-color:#FFFBEB;padding:14px 24px;text-align:center;">
+                    <span style="font-family:'Lato',Arial,sans-serif;font-size:13px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:1.5px;border:1.5px solid #FCD34D;background-color:#FEF3C7;padding:6px 20px;border-radius:100px;">Provisionally Approved — You&apos;re Live!</span>
                 </td></tr>
             </table>
 
             <table cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr><td class="content-inner" style="padding:44px 40px 36px;">
-                    <h1 class="heading">Congratulations, <span th:text="${firstName}">there</span>!</h1>
-                    <p class="body-text">Great news &mdash; your store has been reviewed and <strong>officially approved</strong> on <strong th:text="${appName}">Afrochow</strong>. You're now live and ready to start receiving orders!</p>
+                    <h1 class="heading">You&apos;re live, <span th:text="${firstName}">there</span>!</h1>
+                    <p class="body-text">Great news &mdash; your store application has been reviewed and <strong>provisionally approved</strong> on <strong th:text="${appName}">Afrochow</strong>. You can now receive orders from customers right away!</p>
 
-                                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FFF8F3;border:1.5px solid #FFD0B5;border-radius:12px;margin-bottom:24px;">
-                        <tr><td style="padding:12px 20px 6px;font-family:'Lato',Arial,sans-serif;font-size:12px;font-weight:700;color:#FF6B35;text-transform:uppercase;letter-spacing:1.5px;">Approved Store</td></tr>
+                    <!-- Store name box -->
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FFF8F3;border:1.5px solid #FFD0B5;border-radius:12px;margin-bottom:24px;">
+                        <tr><td style="padding:12px 20px 6px;font-family:'Lato',Arial,sans-serif;font-size:12px;font-weight:700;color:#FF6B35;text-transform:uppercase;letter-spacing:1.5px;">Your Store</td></tr>
                         <tr><td style="padding:4px 20px 18px;font-family:'Playfair Display',Georgia,serif;font-size:22px;font-weight:700;color:#1C1109;" th:text="${restaurantName}">Your Store</td></tr>
                     </table>
 
-                    <!-- Success bar -->
-                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F0FDF4;border-left:4px solid #22C55E;border-radius:0 10px 10px 0;margin-bottom:32px;">
-                        <tr><td style="padding:14px 20px;font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:600;color:#166534;line-height:1.6;">
-                            Your store is now verified and visible to customers on the marketplace.
+                    <!-- Provisional status info bar -->
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FFFBEB;border-left:4px solid #F59E0B;border-radius:0 10px 10px 0;margin-bottom:32px;">
+                        <tr><td style="padding:14px 20px;font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:600;color:#92400E;line-height:1.6;">
+                            Your store is now visible to customers. To remove any order limits and reach <strong>Full Verification</strong>, please upload your food handling certificate.
                         </td></tr>
                     </table>
 
+                    <!-- Certificate upload CTA — most important action -->
+                    <p style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:700;color:#1C1109;margin:0 0 16px;text-align:center;">One step away from full verification</p>
+
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FFF8F3;border:1.5px solid #FFD0B5;border-radius:12px;margin-bottom:28px;">
+                        <tr><td style="padding:20px 24px;">
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr>
+                                    <td style="width:40px;vertical-align:top;padding-top:2px;">
+                                        <table cellpadding="0" cellspacing="0" border="0" width="32" height="32" style="background-color:#FEF3C7;border-radius:8px;">
+                                            <tr><td style="text-align:center;font-size:18px;line-height:32px;">&#128196;</td></tr>
+                                        </table>
+                                    </td>
+                                    <td style="padding-left:14px;vertical-align:top;">
+                                        <p style="font-family:'Lato',Arial,sans-serif;font-size:15px;font-weight:700;color:#1C1109;margin:0 0 4px;">Upload your food handling certificate</p>
+                                        <p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A6A60;margin:0;line-height:1.5;">Go to your vendor dashboard &rsaquo; Profile &rsaquo; Certification section. Accepted formats: PDF, JPG, PNG (max 10MB).</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td></tr>
+                    </table>
+
+                    <!-- Primary CTA -->
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px;">
+                        <tr><td style="text-align:center;"><a th:href="|${appUrl}/vendor/profile?tab=certification|" class="btn-primary">Upload Certificate Now</a></td></tr>
+                    </table>
+
                     <!-- Next steps -->
-                    <p style="font-family:'Playfair Display',Georgia,serif;font-size:20px;font-weight:700;color:#1C1109;margin:0 0 20px;text-align:center;">What to do next</p>
+                    <p style="font-family:'Playfair Display',Georgia,serif;font-size:18px;font-weight:700;color:#1C1109;margin:32px 0 16px;text-align:center;">While you wait for full verification</p>
 
                     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:10px;">
                         <tr>
                             <td style="width:40px;vertical-align:top;padding-top:2px;"><table cellpadding="0" cellspacing="0" border="0" width="32" height="32" style="background-color:#FFF0E8;border-radius:8px;"><tr><td style="text-align:center;font-size:16px;line-height:32px;">&#128203;</td></tr></table></td>
-                            <td style="padding-left:14px;vertical-align:top;"><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:700;color:#1C1109;margin:0 0 3px;">Add your products</p><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A6A60;margin:0;line-height:1.5;">Upload your menu items so customers can start ordering right away.</p></td>
+                            <td style="padding-left:14px;vertical-align:top;"><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:700;color:#1C1109;margin:0 0 3px;">Add your menu products</p><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A6A60;margin:0;line-height:1.5;">Upload your menu items so customers can browse and order right away.</p></td>
                         </tr>
                     </table>
                     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:10px;">
                         <tr>
                             <td style="width:40px;vertical-align:top;padding-top:2px;"><table cellpadding="0" cellspacing="0" border="0" width="32" height="32" style="background-color:#FFF0E8;border-radius:8px;"><tr><td style="text-align:center;font-size:16px;line-height:32px;">&#128336;</td></tr></table></td>
-                            <td style="padding-left:14px;vertical-align:top;"><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:700;color:#1C1109;margin:0 0 3px;">Set your operating hours</p><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A6A60;margin:0;line-height:1.5;">Configure your delivery options and hours in store settings.</p></td>
+                            <td style="padding-left:14px;vertical-align:top;"><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:700;color:#1C1109;margin:0 0 3px;">Confirm your operating hours</p><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A6A60;margin:0;line-height:1.5;">Make sure your schedule is accurate so customers see the right open times.</p></td>
                         </tr>
                     </table>
                     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:32px;">
                         <tr>
                             <td style="width:40px;vertical-align:top;padding-top:2px;"><table cellpadding="0" cellspacing="0" border="0" width="32" height="32" style="background-color:#FFF0E8;border-radius:8px;"><tr><td style="text-align:center;font-size:16px;line-height:32px;">&#128202;</td></tr></table></td>
-                            <td style="padding-left:14px;vertical-align:top;"><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:700;color:#1C1109;margin:0 0 3px;">Monitor your dashboard</p><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A6A60;margin:0;line-height:1.5;">Check orders and track sales performance from your vendor dashboard.</p></td>
+                            <td style="padding-left:14px;vertical-align:top;"><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:700;color:#1C1109;margin:0 0 3px;">Track orders from your dashboard</p><p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A6A60;margin:0;line-height:1.5;">Accept incoming orders and update their status in real time.</p></td>
                         </tr>
                     </table>
 
-                    <!-- CTA -->
+                    <!-- Secondary CTA -->
                     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px;">
-                        <tr><td style="text-align:center;"><a th:href="|${appUrl}/vendor/dashboard|" class="btn-primary">Go to Your Dashboard</a></td></tr>
+                        <tr><td style="text-align:center;"><a th:href="|${appUrl}/vendor/dashboard|" class="btn-outline">Go to Dashboard</a></td></tr>
                     </table>
 
-                    <!-- Tip -->
-                    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FFF8F3;border:1px solid #FFD0B5;border-radius:10px;">
-                        <tr><td style="padding:16px 20px;">
-                            <p style="font-family:'Lato',Arial,sans-serif;font-size:14px;font-weight:700;color:#7A3010;margin:0 0 6px;">Pro Tip</p>
-                            <p style="font-family:'Lato',Arial,sans-serif;font-size:14px;color:#7A4A30;margin:0;line-height:1.6;">Stores with complete profiles, clear product photos, and competitive pricing attract more customers. Take a few minutes to polish your listing!</p>
-                        </td></tr>
-                    </table>
                 </td></tr>
             </table>
+
             <!-- FOOTER -->
             <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#2D1A0E;">
                 <tr>
@@ -145,7 +150,7 @@
                         <div style="font-family:'Lato',Arial,sans-serif;font-size:12px;color:#6B5045;line-height:1.8;">
                             <a th:href="${appUrl}" style="color:#A08070;text-decoration:none;" th:text="${appName}">Afrochow</a>
                             &nbsp;&bull;&nbsp;
-                            <a th:href="|${appUrl}/help|" style="color:#A08070;text-decoration:none;">Help Centre</a>
+                            <a th:href="|${appUrl}/vendor/help|" style="color:#A08070;text-decoration:none;">Vendor Help</a>
                             &nbsp;&bull;&nbsp;
                             <a th:href="|${appUrl}/help|" style="color:#A08070;text-decoration:none;">Contact Us</a>
                         </div>

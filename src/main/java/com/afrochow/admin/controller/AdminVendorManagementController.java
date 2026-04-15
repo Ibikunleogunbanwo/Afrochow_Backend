@@ -128,7 +128,8 @@ public class AdminVendorManagementController {
         vendorProfileRepository.save(vendor);
 
         if (vendor.getUser() != null) {
-            outboxEventService.vendorApproved(
+            // Fire the provisional event — sends the provisional email (cert upload required)
+            outboxEventService.vendorProvisional(
                     vendor.getUser().getPublicUserId(),
                     vendor.getUser().getEmail(),
                     vendor.getUser().getFirstName(),
@@ -180,6 +181,15 @@ public class AdminVendorManagementController {
         vendor.setIsActive(true);
         if (vendor.getUser() != null) vendor.getUser().setIsActive(true);
         vendorProfileRepository.save(vendor);
+
+        if (vendor.getUser() != null) {
+            // Fire the full approval event — sends the "fully verified" email
+            outboxEventService.vendorApproved(
+                    vendor.getUser().getPublicUserId(),
+                    vendor.getUser().getEmail(),
+                    vendor.getUser().getFirstName(),
+                    vendor.getRestaurantName());
+        }
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Certificate verified — vendor is now fully verified", toSummary(vendor)));
