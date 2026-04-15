@@ -850,6 +850,15 @@ public class NotificationService {
     // ========== VENDOR ADMIN LIFECYCLE ==========
 
     @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    public void notifyVendorProvisional(String email, String firstName, String restaurantName) {
+        try {
+            emailService.sendVendorProvisionalApprovalEmail(email, firstName, restaurantName);
+        } catch (Exception e) {
+            log.error("notifyVendorProvisional — email failed for {}: {}", email, e.getMessage());
+        }
+    }
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     public void notifyVendorApproved(String email, String firstName, String restaurantName) {
         try {
             emailService.sendVendorApprovalEmail(email, firstName, restaurantName);
