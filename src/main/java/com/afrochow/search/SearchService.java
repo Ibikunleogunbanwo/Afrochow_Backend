@@ -8,7 +8,7 @@ import com.afrochow.common.enums.ScheduleType;
 import com.afrochow.product.dto.ProductResponseDto;
 import com.afrochow.product.model.Product;
 import com.afrochow.product.repository.ProductRepository;
-import com.afrochow.search.dto.PopularCuisineDto;
+import com.afrochow.search.dto.PopularCategoryDto;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import com.afrochow.vendor.VendorMapper;
 import com.afrochow.vendor.model.VendorProfile;
@@ -165,7 +165,7 @@ public class SearchService {
          * Uses JOIN FETCH to load vendors + products in one query (avoids N+1).
          */
         @Transactional(readOnly = true)
-        public List<PopularCuisineDto> getPopularCuisines() {
+        public List<PopularCategoryDto> getPopularCategories() {
                 List<VendorProfile> allVendors = vendorProfileRepository.findByIsActiveWithProducts(true);
 
                 Map<String, List<VendorProfile>> cuisineGroups = allVendors.stream()
@@ -186,12 +186,12 @@ public class SearchService {
                                                         .average()
                                                         .orElse(0.0);
 
-                                        List<PopularCuisineDto.VendorSummary> sampleVendors = vendors.stream()
+                                        List<PopularCategoryDto.VendorSummary> sampleVendors = vendors.stream()
                                                         .sorted(Comparator.comparingInt(
                                                                         VendorProfile::getTotalOrdersCompleted)
                                                                         .reversed())
                                                         .limit(3)
-                                                        .map(v -> PopularCuisineDto.VendorSummary.builder()
+                                                        .map(v -> PopularCategoryDto.VendorSummary.builder()
                                                                         .publicVendorId(v.getPublicVendorId())
                                                                         .restaurantName(v.getRestaurantName())
                                                                         .logoUrl(v.getLogoUrl())
@@ -201,13 +201,13 @@ public class SearchService {
                                                                         .build())
                                                         .toList();
 
-                                        List<PopularCuisineDto.ProductSummary> sampleProducts = vendors.stream()
+                                        List<PopularCategoryDto.ProductSummary> sampleProducts = vendors.stream()
                                                         .flatMap(v -> v.getProducts().stream())
                                                         .filter(Product::getAvailable)
                                                         .sorted(Comparator.comparingInt(Product::getTotalOrders)
                                                                         .reversed())
                                                         .limit(6)
-                                                        .map(p -> PopularCuisineDto.ProductSummary.builder()
+                                                        .map(p -> PopularCategoryDto.ProductSummary.builder()
                                                                         .publicProductId(p.getPublicProductId())
                                                                         .productName(p.getName())
                                                                         .imageUrl(p.getImageUrl())
@@ -223,12 +223,12 @@ public class SearchService {
                                                         .filter(url -> url != null && !url.isBlank())
                                                         .findFirst()
                                                         .orElseGet(() -> sampleProducts.stream()
-                                                                        .map(PopularCuisineDto.ProductSummary::getImageUrl)
+                                                                        .map(PopularCategoryDto.ProductSummary::getImageUrl)
                                                                         .filter(url -> url != null && !url.isBlank())
                                                                         .findFirst()
                                                                         .orElse(null));
 
-                                        return PopularCuisineDto.builder()
+                                        return PopularCategoryDto.builder()
                                                         .storeCategory(storeCategory)
                                                         .vendorCount((long) vendors.size())
                                                         .totalOrders(totalOrders)
@@ -238,7 +238,7 @@ public class SearchService {
                                                         .imageUrl(imageUrl)
                                                         .build();
                                 })
-                                .sorted(Comparator.comparingLong(PopularCuisineDto::getTotalOrders).reversed())
+                                .sorted(Comparator.comparingLong(PopularCategoryDto::getTotalOrders).reversed())
                                 .toList();
         }
 

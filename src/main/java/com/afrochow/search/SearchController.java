@@ -4,7 +4,7 @@ import com.afrochow.category.dto.CategoryResponseDto;
 import com.afrochow.common.ApiResponse;
 import com.afrochow.common.enums.StoreCategory;
 import com.afrochow.product.dto.ProductResponseDto;
-import com.afrochow.search.dto.PopularcategoryDto;
+import com.afrochow.search.dto.PopularCategoryDto;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,10 +48,10 @@ public class SearchController {
         return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 
-    @GetMapping("/vendors/category/{categoryType}")
-    @Operation(summary = "Get vendors by category", description = "Get all vendors offering a specific category type")
+    @GetMapping("/vendors/category/{storeCategory}")
+    @Operation(summary = "Get vendors by category", description = "Get all vendors offering a specific store category")
     public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getVendorsByCategory(@PathVariable String storeCategory) {
-        List<VendorProfileResponseDto> vendors = searchService.getVendorsByCategory(categoryType);
+        List<VendorProfileResponseDto> vendors = searchService.getVendorsByCategory(storeCategory);
         return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 
@@ -100,11 +100,11 @@ public class SearchController {
     }
 
     @GetMapping("/store-categories/popular")
-    @Operation(summary = "Get popular categorys",
-               description = "Get list of categorys with vendor count, total orders, and average rating, sorted by popularity")
-    public ResponseEntity<ApiResponse<List<PopularcategoryDto>>> getPopularcategorys() {
-        List<PopularcategoryDto> popularcategorys = searchService.getPopularcategorys();
-        return ResponseEntity.ok(ApiResponse.success("Popular categorys retrieved successfully", popularcategorys));
+    @Operation(summary = "Get popular store categories",
+               description = "Get list of store categories with vendor count, total orders, and average rating, sorted by popularity")
+    public ResponseEntity<ApiResponse<List<PopularCategoryDto>>> getPopularCategories() {
+        List<PopularCategoryDto> categories = searchService.getPopularCategories();
+        return ResponseEntity.ok(ApiResponse.success("Popular store categories retrieved successfully", categories));
     }
 
     @GetMapping("/vendors/advanced")
@@ -116,7 +116,7 @@ public class SearchController {
             @RequestParam(required = false) Boolean isVerified,
             @RequestParam(required = false) Boolean isOpenNow) {
         List<VendorProfileResponseDto> vendors = searchService.advancedVendorSearch(
-                query, categoryType, city, isVerified, isOpenNow);
+                query, storeCategory, city, isVerified, isOpenNow);
         return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 

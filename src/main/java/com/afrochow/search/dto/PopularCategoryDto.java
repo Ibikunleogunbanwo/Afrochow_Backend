@@ -8,52 +8,37 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * DTO for popular cuisine statistics with sample vendors and products
+ * DTO for popular store category statistics with sample vendors and products.
+ * Covers restaurants, grocery stores, farm produce, bakeries, and all other
+ * store categories on the platform.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PopularCuisineDto {
+public class PopularCategoryDto {
 
-    /**
-     * Cuisine type name
-     */
+    /** Store category name (e.g. "African Restaurant", "Farm Produce"). */
     private String storeCategory;
 
-    /**
-     * Number of vendors offering this cuisine
-     */
+    /** Number of vendors offering this store category. */
     private Long vendorCount;
 
-    /**
-     * Total number of orders for this cuisine across all vendors
-     */
+    /** Total number of orders across all vendors in this category. */
     private Long totalOrders;
 
-    /**
-     * Average rating across all vendors for this cuisine
-     */
+    /** Average rating across all vendors in this category. */
     private Double averageRating;
 
-    /**
-     * Sample top vendors for this cuisine (max 3)
-     */
+    /** Sample top vendors for this category (max 3). */
     private List<VendorSummary> sampleVendors;
 
-    /**
-     * Sample popular products for this cuisine (max 6)
-     */
+    /** Sample popular products for this category (max 6). */
     private List<ProductSummary> sampleProducts;
 
-    /**
-     * Representative image URL for the cuisine (from top vendor or product)
-     */
+    /** Representative image URL for the category (from top vendor or product). */
     private String imageUrl;
 
-    /**
-     * Summary info for a vendor
-     */
     @Data
     @Builder
     @NoArgsConstructor
@@ -67,9 +52,6 @@ public class PopularCuisineDto {
         private Boolean isActive;
     }
 
-    /**
-     * Summary info for a product
-     */
     @Data
     @Builder
     @NoArgsConstructor
