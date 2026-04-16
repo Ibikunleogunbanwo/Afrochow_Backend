@@ -75,7 +75,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /**
      * Products sorted by order count from active and verified vendors only.
      */
-    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true AND p.vendor.isActive = true ORDER BY SIZE(p.orderLines) DESC")
+    @Query("SELECT p FROM Product p WHERE p.available = true AND p.adminVisible = true AND p.vendor.isVerified = true AND p.vendor.isActive = true ORDER BY SIZE(p.orderLines) DESC")
     List<Product> findPopularProducts();
 
     // ========== TOP RATED PRODUCTS ==========
@@ -84,7 +84,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * Products with at least one review, from active and verified vendors only,
      * sorted by review count descending.
      */
-    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true AND p.vendor.isActive = true AND SIZE(p.reviews) > 0 ORDER BY SIZE(p.reviews) DESC")
+    @Query("SELECT p FROM Product p WHERE p.available = true AND p.adminVisible = true AND p.vendor.isVerified = true AND p.vendor.isActive = true AND SIZE(p.reviews) > 0 ORDER BY SIZE(p.reviews) DESC")
     List<Product> findTopRatedProducts();
 
     // ========== CHEF SPECIALS ==========
@@ -93,7 +93,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * Top products from African Kitchen or African Soups categories,
      * from active and verified vendors only, sorted by order count.
      */
-    @Query("SELECT p FROM Product p WHERE p.available = true AND p.vendor.isVerified = true AND p.vendor.isActive = true AND " +
+    @Query("SELECT p FROM Product p WHERE p.available = true AND p.adminVisible = true AND p.vendor.isVerified = true AND p.vendor.isActive = true AND " +
             "(p.category.name = 'African Kitchen' OR p.category.name = 'African Soups') " +
             "ORDER BY SIZE(p.orderLines) DESC")
     List<Product> findChefSpecials();
@@ -110,6 +110,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             SELECT p FROM Product p
             JOIN p.orderLines ol
             WHERE p.available          = true
+              AND p.adminVisible       = true
               AND p.vendor.isVerified  = true
               AND p.vendor.isActive    = true
               AND ol.order.createdAt  >= :cutoff
@@ -127,6 +128,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("""
             SELECT p FROM Product p
             WHERE p.available         = true
+              AND p.adminVisible      = true
               AND p.vendor.isVerified = true
               AND p.vendor.isActive   = true
               AND SIZE(p.orderLines)  > 0
@@ -143,6 +145,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("""
             SELECT p FROM Product p
             WHERE p.available         = true
+              AND p.adminVisible      = true
               AND p.vendor.isVerified = true
               AND p.vendor.isActive   = true
             ORDER BY SIZE(p.reviews) DESC,
@@ -157,6 +160,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("""
             SELECT p FROM Product p
             WHERE p.available         = true
+              AND p.adminVisible      = true
               AND p.vendor.isVerified = true
               AND p.vendor.isActive   = true
               AND p.isFeatured        = true
@@ -177,6 +181,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                 LEFT JOIN v.reviews r
                 LEFT JOIN p.orderLines ol
                 WHERE p.available = true
+                  AND p.adminVisible = true
                   AND v.isActive = true
                   AND v.isVerified = true
                   AND a.city = :city
@@ -194,6 +199,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      */
     @Query("SELECT p FROM Product p JOIN p.orderLines ol JOIN ol.order o " +
             "WHERE p.available = true " +
+            "AND p.adminVisible = true " +
             "AND p.vendor.isVerified = true " +
             "AND p.vendor.isActive = true " +
             "AND o.orderTime >= :startOfMonth " +
@@ -207,6 +213,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      */
     @Query("SELECT p FROM Product p JOIN p.orderLines ol JOIN ol.order o " +
             "WHERE p.available = true " +
+            "AND p.adminVisible = true " +
             "AND p.vendor.isVerified = true " +
             "AND p.vendor.isActive = true " +
             "AND o.orderTime >= :startOfMonth " +
@@ -230,6 +237,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         JOIN p.vendor v
         JOIN v.address a
         WHERE p.available = true
+          AND p.adminVisible = true
           AND v.isVerified = true
           AND v.isActive = true
           AND (:name IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :name, '%')))
@@ -263,6 +271,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         JOIN p.vendor v
         JOIN v.address a
         WHERE p.available = true
+          AND p.adminVisible = true
           AND v.isVerified = true
           AND v.isActive = true
           AND a.latitude IS NOT NULL
@@ -349,6 +358,28 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Page<Product> searchForAdminWithFeatured(
             @Param("query")    String query,
             @Param("featured") Boolean featured,
+            Pageable pageable);
+
+    // ========== ADMIN VISIBILITY FILTER ==========
+
+    /** Filter all products by adminVisible (true = platform-visible, false = suspended). */
+    Page<Product> findByAdminVisible(Boolean adminVisible, Pageable pageable);
+
+    /** Admin search filtered by adminVisible status. */
+    @Query("""
+        SELECT p FROM Product p
+        LEFT JOIN p.vendor v
+        LEFT JOIN p.category c
+        WHERE p.adminVisible = :adminVisible
+          AND (LOWER(p.name)           LIKE LOWER(CONCAT('%', :query, '%'))
+           OR  LOWER(v.restaurantName) LIKE LOWER(CONCAT('%', :query, '%'))
+           OR  LOWER(c.name)           LIKE LOWER(CONCAT('%', :query, '%')))
+        ORDER BY LOCATE(LOWER(:query), LOWER(p.name)) ASC,
+                 p.name ASC
+        """)
+    Page<Product> searchForAdminWithAdminVisible(
+            @Param("query")        String query,
+            @Param("adminVisible") Boolean adminVisible,
             Pageable pageable);
 
     // ========== COUNTS ==========

@@ -389,6 +389,7 @@ public class ProductService {
                 .price(product.getPrice())
                 .imageUrl(product.getImageUrl())
                 .available(product.getAvailable())
+                .adminVisible(product.getAdminVisible())
                 .preparationTimeMinutes(product.getPreparationTimeMinutes())
                 .scheduleType(product.getScheduleType())
                 .advanceNoticeHours(product.getAdvanceNoticeHours())

@@ -24,7 +24,8 @@ import java.util.UUID;
         @Index(name = "idx_public_product_id", columnList = "publicProductId"),
         @Index(name = "idx_vendor_id", columnList = "vendor_profile_id"),
         @Index(name = "idx_category_id", columnList = "category_id"),
-        @Index(name = "idx_available", columnList = "available")
+        @Index(name = "idx_available", columnList = "available"),
+        @Index(name = "idx_admin_visible", columnList = "adminVisible")
 })
 @Data
 @Builder
@@ -59,6 +60,16 @@ public class Product {
     @Column(nullable = false)
     @Builder.Default
     private Boolean available = true;
+
+    /**
+     * Platform-controlled visibility flag — set by admins only.
+     * When false, the product is suspended from customer view regardless of the vendor's
+     * own {@code available} flag. Vendors cannot override this.
+     * Use case: policy enforcement, contraband removal, compliance holds.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean adminVisible = true;
 
     @Column(nullable = false)
     @Builder.Default

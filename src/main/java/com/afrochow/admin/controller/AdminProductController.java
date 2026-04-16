@@ -46,20 +46,26 @@ public class AdminProductController {
     public ResponseEntity<ApiResponse<Page<AdminProductSummary>>> getAllProducts(
             @RequestParam(required = false)    String search,
             @RequestParam(required = false)    Boolean featured,
+            @RequestParam(required = false)    Boolean adminVisible,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
-        boolean hasSearch   = search != null && !search.isBlank();
-        boolean hasFeatured = featured != null;
+        Pageable pageable   = PageRequest.of(page, size);
+        boolean hasSearch       = search != null && !search.isBlank();
+        boolean hasFeatured     = featured != null;
+        boolean hasAdminVisible = adminVisible != null;
 
         Page<AdminProductSummary> result;
         if (hasSearch && hasFeatured) {
             result = productRepository.searchForAdminWithFeatured(search.trim(), featured, pageable).map(this::toAdminSummary);
+        } else if (hasSearch && hasAdminVisible) {
+            result = productRepository.searchForAdminWithAdminVisible(search.trim(), adminVisible, pageable).map(this::toAdminSummary);
         } else if (hasSearch) {
             result = productRepository.searchForAdmin(search.trim(), pageable).map(this::toAdminSummary);
         } else if (hasFeatured) {
             result = productRepository.findByIsFeaturedOrderByFeaturedAtDesc(featured, pageable).map(this::toAdminSummary);
+        } else if (hasAdminVisible) {
+            result = productRepository.findByAdminVisible(adminVisible, pageable).map(this::toAdminSummary);
         } else {
             result = productRepository.findAllForAdmin(pageable).map(this::toAdminSummary);
         }
@@ -74,6 +80,7 @@ public class AdminProductController {
                 p.getPrice(),
                 p.getImageUrl(),
                 p.getAvailable(),
+                p.getAdminVisible(),
                 p.getVendor() != null ? p.getVendor().getRestaurantName() : null,
                 p.getVendor() != null ? p.getVendor().getPublicVendorId() : null,
                 p.getCategory() != null ? p.getCategory().getName() : null,
@@ -176,12 +183,12 @@ public class AdminProductController {
         Product product = productRepository.findByPublicProductId(publicProductId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found: " + publicProductId));
 
-        product.setAvailable(!Boolean.TRUE.equals(product.getAvailable()));
+        product.setAdminVisible(!Boolean.TRUE.equals(product.getAdminVisible()));
         productRepository.save(product);
 
-        String msg = Boolean.TRUE.equals(product.getAvailable())
+        String msg = Boolean.TRUE.equals(product.getAdminVisible())
                 ? "Product is now visible to customers"
-                : "Product is now hidden from customers";
+                : "Product has been suspended from customer view";
 
         return ResponseEntity.ok(ApiResponse.success(msg, toSummary(product)));
     }
@@ -213,6 +220,7 @@ public class AdminProductController {
                 product.getPrice(),
                 product.getImageUrl(),
                 product.getAvailable(),
+                product.getAdminVisible(),
                 product.getVendor() != null ? product.getVendor().getRestaurantName() : null,
                 product.getVendor() != null ? product.getVendor().getPublicVendorId() : null,
                 product.getCategory() != null ? product.getCategory().getName() : null,
@@ -228,7 +236,8 @@ public class AdminProductController {
             String name,
             java.math.BigDecimal price,
             String imageUrl,
-            Boolean available,
+            Boolean available,       // vendor-controlled
+            Boolean adminVisible,    // platform-controlled — false = admin-suspended
             String vendorName,
             String publicVendorId,
             String categoryName,
