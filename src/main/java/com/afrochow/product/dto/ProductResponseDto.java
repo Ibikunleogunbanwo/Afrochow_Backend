@@ -19,7 +19,8 @@ public class ProductResponseDto {
     private String description;
     private BigDecimal price;
     private String imageUrl;
-    private Boolean available;
+    private Boolean available;       // vendor-controlled
+    private Boolean adminVisible;    // platform-controlled — false = admin-suspended
     private Integer preparationTimeMinutes;
     private ScheduleType scheduleType;
     private Integer advanceNoticeHours;
