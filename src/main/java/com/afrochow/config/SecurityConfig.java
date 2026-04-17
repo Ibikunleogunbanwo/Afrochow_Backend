@@ -146,7 +146,6 @@ public class SecurityConfig {
                                 "/auth/google",
                                 "/auth/refresh",
                                 "/auth/logout",
-                                "/auth/logout-all/**",
                                 "/auth/forgot-password",
                                 "/auth/reset-password",
                                 "/auth/verify-email",
@@ -154,6 +153,14 @@ public class SecurityConfig {
                                 "/v1/public/**",
                                 "/public/**"
                         ).permitAll()
+
+                        // ── AUTHENTICATED AUTH OPS ────────────────────────
+                        // logout-all must require auth — otherwise anyone who
+                        // scrapes a publicUserId can trigger session revocation.
+                        // The controller also has @PreAuthorize("isAuthenticated()")
+                        // but Security filter chain is the first line of defence.
+                        .requestMatchers("/auth/logout-all/**", "/auth/change-password")
+                                .authenticated()
 
                         // ── ADMIN ─────────────────────────────────────────
                         .requestMatchers("/auth/register/admin").hasRole("SUPERADMIN")

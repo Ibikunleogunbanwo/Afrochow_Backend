@@ -11,6 +11,7 @@ import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
 import com.afrochow.common.validation.PhoneUtils;
 import com.afrochow.image.ImageUploadService;
+import com.afrochow.security.Services.PasswordPolicyService;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
@@ -38,6 +39,7 @@ public class CustomerProfileService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final ImageUploadService imageUploadService;
+    private final PasswordPolicyService passwordPolicyService;
 
 
     /* ---------------------------------------------------------- */
@@ -93,17 +95,25 @@ public class CustomerProfileService {
         // Update other fields as needed...
         Optional.ofNullable(dto.getFirstName()).filter(s -> !s.isBlank()).ifPresent(user::setFirstName);
         Optional.ofNullable(dto.getLastName()).filter(s -> !s.isBlank()).ifPresent(user::setLastName);
+
+        // Phone update: enforce uniqueness. A repeat submission of the SAME phone
+        // must not throw — only a phone already belonging to a different user should.
         Optional.ofNullable(dto.getPhone()).filter(s -> !s.isBlank())
                 .map(PhoneUtils::normalize)
-                .ifPresent(user::setPhone);
-        Optional.ofNullable(dto.getEmail()).filter(s -> !s.isBlank()).ifPresent(email -> {
-            if (!email.equalsIgnoreCase(user.getEmail())) {
-                userRepository.findByEmail(email).ifPresent(u -> {
-                    throw new IllegalStateException("Email already in use");
+                .ifPresent(normalizedPhone -> {
+                    if (!normalizedPhone.equals(user.getPhone())) {
+                        userRepository.findByPhone(normalizedPhone).ifPresent(existing -> {
+                            if (!existing.getPublicUserId().equals(user.getPublicUserId())) {
+                                throw new IllegalStateException("Phone number already in use");
+                            }
+                        });
+                        user.setPhone(normalizedPhone);
+                    }
                 });
-                user.setEmail(email);
-            }
-        });
+
+        // NOTE: email change intentionally not handled here. The canonical path is
+        // PUT /user/profile (UserController), which is expected to gain a verification
+        // step. Accepting email changes in two places invites drift + audit gaps.
 
         // Update CustomerProfile fields
         Optional.ofNullable(dto.getDefaultDeliveryInstructions()).ifPresent(profile::setDefaultDeliveryInstructions);
@@ -175,6 +185,16 @@ public class CustomerProfileService {
             throw new IllegalArgumentException("New passwords do not match");
         }
 
+        // Belt-and-suspenders: DTO @Pattern already checks char classes, but we also
+        // run the authoritative policy so this endpoint behaves identically to
+        // /auth/change-password if the regexes ever drift again.
+        passwordPolicyService.validatePassword(dto.getNewPassword());
+
+        // Reject re-using the current password (parity with AuthenticationService.changePassword)
+        if (passwordEncoder.matches(dto.getNewPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("New password must be different from the current password");
+        }
+
         user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
         userRepository.save(user);
     }
@@ -188,7 +208,10 @@ public class CustomerProfileService {
     public CustomerProfileResponseDto uploadProfileImage(MultipartFile file,
                                                          CustomUserDetails currentUser) throws IOException {
 
-        User user = userRepository.findById(currentUser.getUserId())
+        // Every other customer endpoint keys off publicUserId; keeping a stray
+        // findById() here created a subtle auth-surface asymmetry (numeric
+        // internal ID vs the opaque public ID everyone else uses).
+        User user = userRepository.findByPublicUserId(currentUser.getPublicUserId())
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
         if (!user.isCustomer()) {
@@ -199,10 +222,18 @@ public class CustomerProfileService {
             throw new EntityNotFoundException("Customer profile not found");
         }
 
-        /* delete previous image */
+        /* delete previous image — but only if it looks like one WE uploaded.
+         * Google-registered users often have an https://lh3.googleusercontent.com
+         * avatar; we must never try to delete those from our storage. */
         String oldImage = user.getProfileImageUrl();
-        if (oldImage != null && !oldImage.isBlank()) {
-            imageUploadService.deleteImage(oldImage);
+        if (isSelfHostedImage(oldImage)) {
+            try {
+                imageUploadService.deleteImage(oldImage);
+            } catch (Exception e) {
+                // Don't block the new upload just because cleanup failed — the
+                // old file becomes an orphan, not a hard error.
+                log.warn("Failed to delete previous profile image {}: {}", oldImage, e.getMessage());
+            }
         }
 
         /* store new one */
@@ -211,6 +242,24 @@ public class CustomerProfileService {
         userRepository.save(user);
 
         return toResponseDto(profile);
+    }
+
+    /**
+     * An image URL is "self-hosted" if it lives inside our own storage
+     * namespace. Anything else (e.g. Google avatars) must be left alone.
+     */
+    private boolean isSelfHostedImage(String url) {
+        if (url == null || url.isBlank()) return false;
+        // Relative paths like "customer/profile_image/abc.jpg" are ours.
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            return true;
+        }
+        // Absolute URLs: allow only if the path begins with one of our buckets/prefixes.
+        // We match loosely on well-known internal prefixes to avoid coupling to an
+        // environment-specific CDN host.
+        return url.contains("/customer/profile_image/")
+                || url.contains("/vendor/profile_image/")
+                || url.contains("/afrochow-uploads/");
     }
 
 

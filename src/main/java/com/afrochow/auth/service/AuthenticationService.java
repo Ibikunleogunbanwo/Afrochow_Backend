@@ -296,6 +296,41 @@ public class AuthenticationService {
         clearAuthCookies(httpResponse);
     }
 
+    /**
+     * Password-gated variant used by the user-facing "Sign out of all devices"
+     * control. Verifying the password here prevents a leaked access token from
+     * being used to lock the account owner out of every session.
+     */
+    @Transactional
+    public void logoutAllDevicesWithPasswordCheck(String publicUserId,
+                                                  String password,
+                                                  HttpServletRequest httpRequest,
+                                                  HttpServletResponse httpResponse) {
+        if (!StringUtils.hasText(password)) {
+            throw new IllegalArgumentException("Password must be provided");
+        }
+        User user = userRepository.findByPublicUserId(publicUserId)
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            // Audit the failed attempt — same log type we use for password
+            // mismatches elsewhere so ops can correlate brute-force activity.
+            securityEventService.logPasswordResetRequest(user.getEmail(), httpRequest);
+            throw new InvalidCredentialsException("Password is incorrect");
+        }
+
+        String clientIp = SecurityUtils.getClientIP(httpRequest);
+        // revokeAllUserTokens currently keys off username; fall back to email for
+        // email-registered users whose username column is null.
+        String tokenKey = (user.getUsername() != null && !user.getUsername().isBlank())
+                ? user.getUsername()
+                : user.getEmail();
+        refreshTokenService.revokeAllUserTokens(tokenKey);
+        log.info("User {} logged out from all devices (IP: {})", user.getPublicUserId(), clientIp);
+
+        clearAuthCookies(httpResponse);
+    }
+
 
     /* ==========================================================
        REGISTRATION
@@ -438,11 +473,24 @@ public class AuthenticationService {
 
     /**
      * Change password for an already-authenticated user.
+     *
+     * <p>Requires the caller to prove knowledge of the current password — this
+     * prevents session-hijack-based account takeover (a stolen cookie alone
+     * cannot change the password).
+     *
+     * <p>Note: we do NOT apply the password-reset rate limit here; that bucket
+     * is for unauthenticated "forgot password" flows. Authenticated password
+     * changes are naturally rate-limited by requiring the current password.
      */
     @Transactional
-    public void changePassword(String publicUserId, String newPassword, HttpServletRequest httpRequest) {
-        rateLimitService.verifyPasswordResetLimit(publicUserId);
+    public void changePassword(String publicUserId,
+                               String currentPassword,
+                               String newPassword,
+                               HttpServletRequest httpRequest) {
 
+        if (!StringUtils.hasText(currentPassword)) {
+            throw new IllegalArgumentException("Current password must be provided");
+        }
         if (!StringUtils.hasText(newPassword)) {
             throw new IllegalArgumentException("New password must be provided");
         }
@@ -450,7 +498,13 @@ public class AuthenticationService {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
 
-        // Enforce same password policy as registration
+        // Verify the caller knows the current password BEFORE doing anything else
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            securityEventService.logPasswordResetRequest(user.getEmail(), httpRequest);
+            throw new InvalidCredentialsException("Current password is incorrect");
+        }
+
+        // Enforce the same password policy as registration
         passwordPolicyService.validatePassword(newPassword);
 
         if (passwordEncoder.matches(newPassword, user.getPassword())) {
