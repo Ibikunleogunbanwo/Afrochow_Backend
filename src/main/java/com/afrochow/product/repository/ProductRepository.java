@@ -78,6 +78,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByNameContainingIgnoreCaseAndAvailable(String name, Boolean available);
 
     /**
+     * Derived-query search by name OR description (case-insensitive partial match).
+     * Does not filter on availability or admin visibility — callers apply those
+     * filters in Java (see SearchService.searchProducts / getVendorsByProductName).
+     */
+    List<Product> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
+            String name, String description);
+
+    /**
      * Public search — matches name or description but only returns platform-visible products.
      */
     @Query("""
