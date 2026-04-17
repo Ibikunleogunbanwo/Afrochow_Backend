@@ -148,12 +148,14 @@ public class AdminProductController {
     /**
      * Unpin all currently featured products in one operation.
      * Used by the "Clear All Featured" button in the admin dashboard.
+     * Uses findAllFeaturedForAdmin() (no visibility/availability filter) so that
+     * suspended-but-featured products are also correctly unpinned.
      */
     @DeleteMapping("/featured/clear")
     @Transactional
     @Operation(summary = "Clear all featured products", description = "Unpin every product from the featured section")
     public ResponseEntity<ApiResponse<Map<String, Object>>> clearAllFeatured() {
-        List<Product> pinned = productRepository.findAdminFeaturedProducts();
+        List<Product> pinned = productRepository.findAllFeaturedForAdmin();
         pinned.forEach(p -> {
             p.setIsFeatured(false);
             p.setFeaturedAt(null);
@@ -190,7 +192,7 @@ public class AdminProductController {
                 ? "Product is now visible to customers"
                 : "Product has been suspended from customer view";
 
-        return ResponseEntity.ok(ApiResponse.success(msg, toSummary(product)));
+        return ResponseEntity.ok(ApiResponse.success(msg, toAdminSummary(product)));
     }
 
     /**
@@ -210,23 +212,6 @@ public class AdminProductController {
 
         productRepository.delete(product);
         return ResponseEntity.ok(ApiResponse.success("Product permanently deleted"));
-    }
-
-    /** Map a Product entity to the summary DTO. */
-    private AdminProductSummary toSummary(Product product) {
-        return new AdminProductSummary(
-                product.getPublicProductId(),
-                product.getName(),
-                product.getPrice(),
-                product.getImageUrl(),
-                product.getAvailable(),
-                product.getAdminVisible(),
-                product.getVendor() != null ? product.getVendor().getRestaurantName() : null,
-                product.getVendor() != null ? product.getVendor().getPublicVendorId() : null,
-                product.getCategory() != null ? product.getCategory().getName() : null,
-                product.getIsFeatured(),
-                product.getFeaturedAt()
-        );
     }
 
     // ========== DTOs ==========
