@@ -37,30 +37,70 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     // ========== FIND BY VENDOR ==========
 
+    /** Admin / vendor-authenticated use — returns ALL of a vendor's products regardless of suspension. */
     List<Product> findByVendor(VendorProfile vendor);
 
+    /** Admin / vendor-authenticated use — returns available products ignoring adminVisible. */
     List<Product> findByVendorAndAvailable(VendorProfile vendor, Boolean available);
+
+    /**
+     * Public use — available products from this vendor that are also platform-visible.
+     * Respects admin suspension so customers never see suspended products.
+     */
+    List<Product> findByVendorAndAvailableTrueAndAdminVisibleTrue(VendorProfile vendor);
+
+    /**
+     * Public use — ALL (available or not) products from this vendor that are platform-visible.
+     * Used when availableOnly=false on the public vendor products endpoint.
+     */
+    List<Product> findByVendorAndAdminVisibleTrue(VendorProfile vendor);
 
     // ========== FIND BY CATEGORY ==========
 
+    /** Admin use — all products in a category regardless of suspension. */
     List<Product> findByCategory(Category category);
 
+    /** Admin use — available products in a category ignoring adminVisible. */
     List<Product> findByCategoryAndAvailable(Category category, Boolean available);
+
+    /**
+     * Public use — available, platform-visible products in a category.
+     */
+    List<Product> findByCategoryAndAvailableTrueAndAdminVisibleTrue(Category category);
+
+    /**
+     * Public use — all platform-visible products in a category (available or not).
+     */
+    List<Product> findByCategoryAndAdminVisibleTrue(Category category);
 
     // ========== SEARCH BY NAME / DESCRIPTION ==========
 
     List<Product> findByNameContainingIgnoreCaseAndAvailable(String name, Boolean available);
 
-    List<Product> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-            String name, String description);
+    /**
+     * Public search — matches name or description but only returns platform-visible products.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        WHERE p.adminVisible = true
+          AND (LOWER(p.name)        LIKE LOWER(CONCAT('%', :query, '%'))
+           OR  LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')))
+        """)
+    List<Product> searchPublic(@Param("query") String query);
 
     // ========== FIND BY AVAILABILITY ==========
 
     List<Product> findByAvailable(Boolean available);
 
+    /** Public use — available AND platform-visible products. */
+    List<Product> findByAvailableTrueAndAdminVisibleTrue();
+
     // ========== FIND BY PRICE RANGE ==========
 
     List<Product> findByPriceBetweenAndAvailable(BigDecimal minPrice, BigDecimal maxPrice, Boolean available);
+
+    /** Public use — available, platform-visible products within a price range. */
+    List<Product> findByPriceBetweenAndAvailableTrueAndAdminVisibleTrue(BigDecimal minPrice, BigDecimal maxPrice);
 
     // ========== FIND BY DIETARY ==========
 
@@ -69,6 +109,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByIsVeganAndAvailable(Boolean isVegan, Boolean available);
 
     List<Product> findByIsGlutenFreeAndAvailable(Boolean isGlutenFree, Boolean available);
+
+    /** Public dietary filters — platform-visible only. */
+    List<Product> findByIsVegetarianTrueAndAvailableTrueAndAdminVisibleTrue();
+
+    List<Product> findByIsVeganTrueAndAvailableTrueAndAdminVisibleTrue();
+
+    List<Product> findByIsGlutenFreeTrueAndAvailableTrueAndAdminVisibleTrue();
 
     // ========== POPULAR PRODUCTS ==========
 
@@ -381,6 +428,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("query")        String query,
             @Param("adminVisible") Boolean adminVisible,
             Pageable pageable);
+
+    /**
+     * Admin use — returns ALL featured products regardless of visibility or availability.
+     * Used by clearAllFeatured() so suspended-but-featured products are also unpinned.
+     */
+    @Query("SELECT p FROM Product p WHERE p.isFeatured = true")
+    List<Product> findAllFeaturedForAdmin();
 
     // ========== COUNTS ==========
 

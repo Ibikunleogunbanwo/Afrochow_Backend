@@ -67,7 +67,7 @@ public class Product {
      * own {@code available} flag. Vendors cannot override this.
      * Use case: policy enforcement, contraband removal, compliance holds.
      */
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "BOOLEAN NOT NULL DEFAULT TRUE")
     @Builder.Default
     private Boolean adminVisible = true;
 

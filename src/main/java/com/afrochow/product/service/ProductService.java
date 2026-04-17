@@ -24,7 +24,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 
@@ -57,11 +56,14 @@ public class ProductService {
     // ========== PUBLIC METHODS (no authentication required) ==========
 
     /**
-     * Get all available products
+     * Get all available products.
+     * Only returns products that are both available (vendor-controlled) AND
+     * platform-visible (adminVisible=true), so admin-suspended products are
+     * never shown to customers.
      */
     @Transactional(readOnly = true)
     public List<ProductSummaryResponseDto> getAllAvailableProducts() {
-        List<Product> products = productRepository.findByAvailable(true);
+        List<Product> products = productRepository.findByAvailableTrueAndAdminVisibleTrue();
         return products.stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
@@ -78,7 +80,9 @@ public class ProductService {
     }
 
     /**
-     * Get products by vendor public ID
+     * Get products by vendor public ID (public endpoint).
+     * Always respects adminVisible so suspended products are never shown to customers,
+     * regardless of the availableOnly flag.
      */
     @Transactional(readOnly = true)
     public List<ProductSummaryResponseDto> getProductsByVendor(String publicVendorId, Boolean availableOnly) {
@@ -86,8 +90,8 @@ public class ProductService {
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
 
         List<Product> products = availableOnly
-                ? productRepository.findByVendorAndAvailable(vendor, true)
-                : productRepository.findByVendor(vendor);
+                ? productRepository.findByVendorAndAvailableTrueAndAdminVisibleTrue(vendor)
+                : productRepository.findByVendorAndAdminVisibleTrue(vendor);
 
         return products.stream()
                 .map(this::toSummaryResponseDto)
@@ -95,7 +99,8 @@ public class ProductService {
     }
 
     /**
-     * Get products by category
+     * Get products by category (public endpoint).
+     * Always filters by adminVisible=true so suspended products are not shown to customers.
      */
     @Transactional(readOnly = true)
     public List<ProductSummaryResponseDto> getProductsByCategory(Long categoryId, Boolean availableOnly) {
@@ -103,8 +108,8 @@ public class ProductService {
                 .orElseThrow(() -> new EntityNotFoundException("Category not found"));
 
         List<Product> products = availableOnly
-                ? productRepository.findByCategoryAndAvailable(category, true)
-                : productRepository.findByCategory(category);
+                ? productRepository.findByCategoryAndAvailableTrueAndAdminVisibleTrue(category)
+                : productRepository.findByCategoryAndAdminVisibleTrue(category);
 
         return products.stream()
                 .map(this::toSummaryResponseDto)
@@ -112,56 +117,60 @@ public class ProductService {
     }
 
     /**
-     * Search products by name or description
+     * Search products by name or description (public endpoint).
+     * Only returns platform-visible products so suspended items never appear in search results.
      */
     @Transactional(readOnly = true)
     public List<ProductSummaryResponseDto> searchProducts(String query) {
-        List<Product> products = productRepository
-                .findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query);
+        List<Product> products = productRepository.searchPublic(query);
         return products.stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Filter products by price range
+     * Filter products by price range (public endpoint).
+     * Only returns platform-visible products.
      */
     @Transactional(readOnly = true)
     public List<ProductSummaryResponseDto> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-        List<Product> products = productRepository.findByPriceBetweenAndAvailable(minPrice, maxPrice, true);
+        List<Product> products = productRepository.findByPriceBetweenAndAvailableTrueAndAdminVisibleTrue(minPrice, maxPrice);
         return products.stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Get vegetarian products
+     * Get vegetarian products (public endpoint).
+     * Only returns platform-visible products.
      */
     @Transactional(readOnly = true)
     public List<ProductSummaryResponseDto> getVegetarianProducts() {
-        List<Product> products = productRepository.findByIsVegetarianAndAvailable(true, true);
+        List<Product> products = productRepository.findByIsVegetarianTrueAndAvailableTrueAndAdminVisibleTrue();
         return products.stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Get vegan products
+     * Get vegan products (public endpoint).
+     * Only returns platform-visible products.
      */
     @Transactional(readOnly = true)
     public List<ProductSummaryResponseDto> getVeganProducts() {
-        List<Product> products = productRepository.findByIsVeganAndAvailable(true, true);
+        List<Product> products = productRepository.findByIsVeganTrueAndAvailableTrueAndAdminVisibleTrue();
         return products.stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
     }
 
     /**
-     * Get gluten-free products
+     * Get gluten-free products (public endpoint).
+     * Only returns platform-visible products.
      */
     @Transactional(readOnly = true)
     public List<ProductSummaryResponseDto> getGlutenFreeProducts() {
-        List<Product> products = productRepository.findByIsGlutenFreeAndAvailable(true, true);
+        List<Product> products = productRepository.findByIsGlutenFreeTrueAndAvailableTrueAndAdminVisibleTrue();
         return products.stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
@@ -188,9 +197,9 @@ public class ProductService {
                     "Current status: " + vs);
         }
 
-        // Map to entity
+        // Map to entity and wire up relationships
         Product product = toEntity(request);
-        // Don't set vendor here yet - let vendor.addProduct() handle it
+        product.setVendor(vendor);
 
         // Set category if provided
         if (request.getCategoryId() != null) {
@@ -199,28 +208,22 @@ public class ProductService {
             product.setCategory(category);
         }
 
-        // Use vendor's addProduct method to maintain bidirectional relationship
-        vendor.addProduct(product);
-
-        // This will cascade and save the product
-        vendorProfileRepository.save(vendor);
-
-        // Now we can get the saved product from the vendor's collection
-        Product savedProduct = vendor.getProducts().stream()
-                .filter(p -> p.getName().equals(product.getName()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Failed to save product"));
+        // Save directly — avoids the cascade-then-search-by-name approach which
+        // breaks when a vendor has two products with the same name.
+        Product savedProduct = productRepository.save(product);
 
         return toResponseDto(savedProduct);
     }
 
     /**
-     * Get all products for a vendor (including unavailable ones)
+     * Get all products for the authenticated vendor (including unavailable and suspended ones).
+     * Vendors can see every product they own so they know when one has been platform-suspended.
      */
     @Transactional(readOnly = true)
     public List<ProductResponseDto> getVendorProducts(String username) {
-        Optional<User> user = userRepository.findByUsername(username);
-        VendorProfile vendor = vendorProfileRepository.findByUser_UserId(user.get().getUserId())
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new EntityNotFoundException("User not found: " + username));
+        VendorProfile vendor = vendorProfileRepository.findByUser_UserId(user.getUserId())
                 .orElseThrow(() -> new EntityNotFoundException("Vendor profile not found"));
 
         List<Product> products = productRepository.findByVendor(vendor);
