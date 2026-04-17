@@ -264,13 +264,19 @@ public class AuthController {
     @PreAuthorize("isAuthenticated()")
     @Operation(
             summary = "Logout from all devices",
-            description = "Revoke all refresh tokens for the authenticated user"
+            description = "Revoke all refresh tokens for the authenticated user. Requires password re-entry."
     )
     public ResponseEntity<ApiResponse<Void>> logoutAllDevices(
+            @Valid @RequestBody LogoutAllRequestDto request,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        authenticationService.logoutAllDevices(httpRequest, httpResponse);
+        authenticationService.logoutAllDevicesWithPasswordCheck(
+                userDetails.getPublicUserId(),
+                request.getPassword(),
+                httpRequest,
+                httpResponse);
         return ResponseEntity.ok(
                 ApiResponse.success("Logged out from all devices successfully")
         );
@@ -376,20 +382,25 @@ public class AuthController {
     @PostMapping("/change-password")
     @Operation(
             summary = "Change password",
-            description = "Change password for the authenticated user"
+            description = "Change password for the authenticated user. Requires current password for verification."
     )
     public ResponseEntity<ApiResponse<Void>> changePassword(
-            @Valid @RequestBody NewPasswordRequest request,
+            @Valid @RequestBody ChangePasswordRequestDto request,
             @AuthenticationPrincipal CustomUserDetails userDetails,
             HttpServletRequest httpRequest
     ) {
 
         String publicUserId = userDetails.getPublicUserId();
 
+        // Defense in depth — frontend also checks, but never trust the client
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new IllegalArgumentException("New password and confirmation do not match");
+        }
 
         authenticationService.changePassword(
                 publicUserId,
-                request.newPassword(),
+                request.getCurrentPassword(),
+                request.getNewPassword(),
                 httpRequest
         );
 

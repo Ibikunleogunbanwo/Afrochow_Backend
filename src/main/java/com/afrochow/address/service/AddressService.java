@@ -80,11 +80,18 @@ public class AddressService {
                 && !request.getAddressLine().equals(address.getAddressLine());
         boolean cityChanged = request.getCity() != null
                 && !request.getCity().equals(address.getCity());
+        boolean postalCodeChanged = request.getPostalCode() != null
+                && !request.getPostalCode().equals(address.getPostalCode());
+        boolean provinceChanged = request.getProvince() != null
+                && !request.getProvince().equals(address.getProvince());
 
         updateEntityFromDto(request, address);
 
-        // Re-geocode only if the physical address changed
-        if (addressLineChanged || cityChanged) {
+        // Re-geocode whenever any field that could move the lat/lng changes.
+        // Previously only addressLine/city were considered — editing just a
+        // postal code (or province) silently left stale coordinates, which
+        // breaks the "nearest vendor" radius query on the home page.
+        if (addressLineChanged || cityChanged || postalCodeChanged || provinceChanged) {
             geocodeAndAttach(address);
         }
 
