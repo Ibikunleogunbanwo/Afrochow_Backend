@@ -38,8 +38,10 @@ public class Product {
     private Long productId;
 
     /** Optimistic-locking version — prevents concurrent availability-toggle races.
-     *  Primitive long: a null DB value is read as 0, never propagated as null. */
+     *  Primitive long: the DB column MUST be NOT NULL (see V26 migration); a NULL
+     *  value would blow up Hibernate's setter with PropertyAccessException. */
     @Version
+    @Column(nullable = false, columnDefinition = "BIGINT NOT NULL DEFAULT 0")
     private long version;
 
     @Column(unique = true, nullable = false)
