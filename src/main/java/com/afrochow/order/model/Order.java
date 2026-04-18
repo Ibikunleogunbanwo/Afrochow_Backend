@@ -41,10 +41,10 @@ public class Order {
     private Long orderId;
 
     /** Optimistic-locking version — prevents lost-update race conditions on status changes.
-     *  Primitive long (not boxed Long) ensures Hibernate never sees a null version value;
-     *  a null DB column is read as 0 by JDBC instead of propagating null and causing
-     *  a NullPointerException during version-increment at flush time. */
+     *  Primitive long: the DB column MUST be NOT NULL (see V26 migration); a NULL
+     *  value would blow up Hibernate's setter with PropertyAccessException. */
     @Version
+    @Column(nullable = false, columnDefinition = "BIGINT NOT NULL DEFAULT 0")
     private long version;
 
     @Column(unique = true, nullable = false)

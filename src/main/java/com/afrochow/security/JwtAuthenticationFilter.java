@@ -195,12 +195,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     /**
      * Skip JWT processing entirely for public paths.
-     * Uses startsWith so /api/images/ covers /api/images/VendorProfileImage/abc.png etc.
+     *
+     * <p>Matching convention for {@link #PUBLIC_PATHS}:
+     * <ul>
+     *   <li>Entries that end with {@code "/"} are treated as <b>prefix</b> matches
+     *       — e.g. {@code "/api/images/"} covers {@code /api/images/foo/bar.png}.</li>
+     *   <li>Entries without a trailing slash are treated as <b>exact</b> matches
+     *       — this prevents accidental shadowing such as {@code "/auth/logout"}
+     *       swallowing requests to {@code /auth/logout-all}, which is now an
+     *       authenticated endpoint and must reach the filter to populate the
+     *       SecurityContext from the JWT cookie.</li>
+     * </ul>
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        boolean isPublic = PUBLIC_PATHS.stream().anyMatch(path::startsWith);
+        boolean isPublic = PUBLIC_PATHS.stream().anyMatch(entry ->
+                entry.endsWith("/") ? path.startsWith(entry) : path.equals(entry));
         if (isPublic) {
             logger.debug("Skipping JWT filter for public path: {}", path);
         }

@@ -10,6 +10,7 @@ import com.afrochow.common.enums.UserStatus;
 import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.security.Services.LoginAttemptService;
 import com.afrochow.user.repository.UserRepository;
+import com.afrochow.user.repository.UserSpecifications;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
@@ -18,11 +19,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -42,14 +46,21 @@ public class AdminUserManagementController {
     /**
      * Paginated user list with optional server-side filtering.
      *
-     * Query params:
-     *   page   (default 0)      — zero-based page number
-     *   size   (default 25)     — page size, capped at 100
-     *   role   (optional)       — CUSTOMER | VENDOR | ADMIN | SUPERADMIN
-     *   active (optional bool)  — true = active only, false = inactive only
-     *   q      (optional)       — search by first/last name (min 2 chars)
+     * <p>All filters compose — e.g. {@code ?role=VENDOR&active=true&createdAfter=...}
+     * narrows the result set to active vendors that joined after the given date.
+     * Filters are layered as JPA {@link Specification}s so the if/else ladder
+     * doesn't have to grow combinatorially as new filters are added.
      *
-     * Response includes pagination metadata so the frontend can drive the page controls.
+     * <p>Query params:
+     * <ul>
+     *   <li>{@code page}   — zero-based page number (default 0)</li>
+     *   <li>{@code size}   — page size, capped at 100 (default 25)</li>
+     *   <li>{@code role}   — CUSTOMER | VENDOR | ADMIN | SUPERADMIN (optional)</li>
+     *   <li>{@code active} — true = active only, false = inactive only (optional)</li>
+     *   <li>{@code q}      — substring match against firstName OR lastName, min 2 chars (optional)</li>
+     *   <li>{@code createdAfter}  — ISO-8601 date-time, inclusive (optional)</li>
+     *   <li>{@code createdBefore} — ISO-8601 date-time, inclusive (optional)</li>
+     * </ul>
      */
     @GetMapping
     @Operation(summary = "Get users (paginated)", description = "Paginated, filterable user list")
@@ -58,39 +69,25 @@ public class AdminUserManagementController {
             @RequestParam(defaultValue = "25")  int     size,
             @RequestParam(required = false)     Role    role,
             @RequestParam(required = false)     Boolean active,
-            @RequestParam(required = false)     String  q) {
+            @RequestParam(required = false)     String  q,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime createdAfter,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime createdBefore) {
 
         size = Math.min(size, 100); // hard cap — never return more than 100 at once
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
-        Page<User> userPage;
-        if (q != null && q.length() >= 2) {
-            // Search trumps other filters — return matching users across all roles/statuses
-            List<User> matched = userRepository
-                    .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(q, q);
-            // Wrap in a slice manually (search result sets are small in practice)
-            int start = (int) pageable.getOffset();
-            int end   = Math.min(start + size, matched.size());
-            List<UserSummaryDto> content = (start >= matched.size())
-                    ? List.of()
-                    : matched.subList(start, end).stream().map(this::toUserSummary).toList();
-            Map<String, Object> body = Map.of(
-                    "content",        content,
-                    "totalElements",  matched.size(),
-                    "totalPages",     (int) Math.ceil((double) matched.size() / size),
-                    "page",           page,
-                    "size",           size
-            );
-            return ResponseEntity.ok(ApiResponse.success(body));
-        } else if (role != null && active != null) {
-            userPage = userRepository.findByRoleAndIsActive(role, active, pageable);
-        } else if (role != null) {
-            userPage = userRepository.findAllByRole(role, pageable);
-        } else if (active != null) {
-            userPage = userRepository.findByIsActive(active, pageable);
-        } else {
-            userPage = userRepository.findAll(pageable);
-        }
+        // Compose every filter as a Specification — null specs are no-ops, so
+        // the chain works regardless of which params the caller actually sent.
+        Specification<User> spec = Specification
+                .where(UserSpecifications.hasRole(role))
+                .and(UserSpecifications.isActive(active))
+                .and(UserSpecifications.nameContains(q))
+                .and(UserSpecifications.createdAtAfter(createdAfter))
+                .and(UserSpecifications.createdAtBefore(createdBefore));
+
+        Page<User> userPage = userRepository.findAll(spec, pageable);
 
         List<UserSummaryDto> summaries = userPage.getContent().stream()
                 .map(this::toUserSummary)

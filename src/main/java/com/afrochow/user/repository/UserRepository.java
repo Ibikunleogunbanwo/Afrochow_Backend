@@ -2,6 +2,7 @@ package com.afrochow.user.repository;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.Role;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,7 +14,8 @@ import java.util.Optional;
 import java.util.List;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository
+        extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
 
     Optional<User> findByEmail(String email);
@@ -71,4 +73,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT COUNT(u) FROM User u WHERE u.role = :role AND u.emailVerified = true")
     Long countByRoleAndEmailVerifiedTrue(@Param("role") Role role);
 
+    // ========== DATE-RANGE COUNTS (used by admin dashboard) ==========
+
+    /**
+     * Counts users whose {@code createdAt} falls in the inclusive range
+     * [{@code start}, {@code end}]. Used by the admin dashboard so the
+     * "New Users" card reflects the whole table, not just the current page.
+     */
+    @Query("SELECT COUNT(u) FROM User u " +
+           "WHERE u.createdAt >= :start AND u.createdAt <= :end")
+    long countByCreatedAtBetween(@Param("start") LocalDateTime start,
+                                 @Param("end")   LocalDateTime end);
+
+    @Query("SELECT COUNT(u) FROM User u " +
+           "WHERE u.role = :role " +
+           "  AND u.createdAt >= :start AND u.createdAt <= :end")
+    long countByRoleAndCreatedAtBetween(@Param("role")  Role role,
+                                        @Param("start") LocalDateTime start,
+                                        @Param("end")   LocalDateTime end);
 }
