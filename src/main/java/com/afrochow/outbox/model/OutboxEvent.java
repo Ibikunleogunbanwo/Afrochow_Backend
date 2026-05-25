@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Persistent outbox record.
@@ -31,6 +32,19 @@ public class OutboxEvent {
     @Column(name = "event_type", nullable = false, length = 64)
     private OutboxEventType eventType;
 
+    @Column(name = "event_id", nullable = false, unique = true, updatable = false, length = 36)
+    @Builder.Default
+    private String eventId = UUID.randomUUID().toString();
+
+    @Column(nullable = false, length = 120)
+    private String topic;
+
+    @Column(name = "aggregate_type", nullable = false, length = 50)
+    private String aggregateType;
+
+    @Column(name = "aggregate_id", nullable = false, length = 100)
+    private String aggregateId;
+
     /**
      * JSON payload — contains only public IDs and primitive values.
      * Deserialized by OutboxPoller into a Map<String, String> for dispatch.
@@ -50,10 +64,16 @@ public class OutboxEvent {
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
+    @Column(name = "claimed_at")
+    private LocalDateTime claimedAt;
+
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
+
+    @Column(name = "published_at")
+    private LocalDateTime publishedAt;
 }

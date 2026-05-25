@@ -1,0 +1,32 @@
+# Keep Docker build context intentionally tiny. The Dockerfile only needs
+# Maven wrapper metadata, pom.xml, and src/.
+*
+
+!Dockerfile
+!.mvn
+!.mvn/**
+!mvnw
+!pom.xml
+!src
+!src/**
+
+.git
+.idea
+.continue
+.env
+.env.*
+target
+uploads
+backups
+logs
+*.log
+*.tmp
+*.zip
+*.docx
+*.md
+docker-compose*.yml
+deploy
+scripts
+test-api.sh
+mvnw.cmd
+**/.DS_Store

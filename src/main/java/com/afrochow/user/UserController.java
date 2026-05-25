@@ -3,7 +3,6 @@ package com.afrochow.user;
 import com.afrochow.auth.service.AuthenticationService;
 import com.afrochow.common.validation.PhoneUtils;
 import com.afrochow.common.ApiResponse;
-import com.afrochow.email.EmailService;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.dto.DeleteAccountRequestDto;
 import com.afrochow.user.dto.UserResponseDto;
@@ -36,7 +35,6 @@ public class UserController {
     private final UserService userService;
     private final AuthenticationService authenticationService;
     private final PasswordEncoder passwordEncoder;
-    private final EmailService emailService;
 
     /**
      * Load the authenticated user from the principal.
@@ -125,15 +123,7 @@ public class UserController {
                     user.getPublicUserId(), e.getMessage(), e);
         }
 
-        // Send confirmation email (non-blocking — failure is logged, not thrown)
-        emailService.sendNotificationEmail(
-                email,
-                firstName,
-                "Account Deletion Requested",
-                "Your account has been deactivated. You have 30 days to reactivate it by signing back in. " +
-                "After that, your profile, addresses, order history and reviews are permanently removed. " +
-                "If you did not request this, please contact our support team immediately."
-        );
+        userService.queueAccountDeletionEmail(user.getPublicUserId(), email, firstName);
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Account scheduled for deletion. Sign back in within 30 days to reactivate."));

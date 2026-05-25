@@ -43,7 +43,7 @@ public class AdminProductController {
             summary = "List / search all products",
             description = "Paginated list of all products for admin management. Pass `search` to filter by name, vendor, or category."
     )
-    public ResponseEntity<ApiResponse<Page<AdminProductSummary>>> getAllProducts(
+    public ResponseEntity<ApiResponse<ApiResponse.PageResponse<AdminProductSummary>>> getAllProducts(
             @RequestParam(required = false)    String search,
             @RequestParam(required = false)    Boolean featured,
             @RequestParam(required = false)    Boolean adminVisible,
@@ -70,7 +70,7 @@ public class AdminProductController {
             result = productRepository.findAllForAdmin(pageable).map(this::toAdminSummary);
         }
 
-        return ResponseEntity.ok(ApiResponse.success("Products retrieved", result));
+        return ResponseEntity.ok(ApiResponse.successPage("Products retrieved", result));
     }
 
     private AdminProductSummary toAdminSummary(com.afrochow.product.model.Product p) {

@@ -624,13 +624,11 @@ public class OrderService {
             locked.getStatus() != OrderStatus.READY_FOR_PICKUP) return; // already handled
         locked.updateStatus(OrderStatus.DELIVERED);
         orderRepository.save(locked);
-        // Payment was captured at acceptance (CONFIRMED).  Now that the order is
-        // delivered, pay out the vendor's share from the platform account.
-        paymentService.transferToVendor(locked);
         // Atomic counter update — avoids lost-update when two orders for the same
         // vendor are delivered concurrently (both would read the same stale counter).
         vendorProfileRepository.incrementCompletedOrderStats(
                 locked.getVendor().getId(), locked.getTotalAmount());
+        outboxEventService.paymentTransferRequested(locked.getPublicOrderId());
         outboxEventService.orderDelivered(locked.getPublicOrderId());
     }
 
@@ -647,8 +645,8 @@ public class OrderService {
      *
      *   Case B — payment COMPLETED but no Transfer ID (transfer failed after capture):
      *     The capture already succeeded but the Stripe Transfer to the vendor failed
-     *     (e.g. transient network error).  We skip straight to transferToVendor().
-     *     transferToVendor() is idempotent — it no-ops if a Transfer ID is already stored.
+     *     (e.g. transient network error).  We queue the transfer for the payment
+     *     transfer consumer, which is idempotent via the stored Transfer ID.
      */
     @Transactional
     public void retryCaptureForDeliveredOrder(Order order) {
@@ -662,7 +660,7 @@ public class OrderService {
         }
 
         // Case A falls through into Case B once captured; Case B enters here directly.
-        paymentService.transferToVendor(order);
+        outboxEventService.paymentTransferRequested(order.getPublicOrderId());
     }
 
     /**
@@ -813,13 +811,10 @@ public class OrderService {
         }
         order.updateStatus(OrderStatus.DELIVERED);
         Order updatedOrder = orderRepository.save(order);
-        // Payment was captured at acceptance (CONFIRMED).  Now that delivery is confirmed,
-        // move the vendor's share from the platform account to their Stripe connected account.
-        // Do NOT call captureStripePayment here — capture already happened at acceptance.
-        paymentService.transferToVendor(updatedOrder);
         // Atomic counter update — avoids lost-update when two orders for the same
         // vendor are delivered concurrently (both would read the same stale counter).
         vendorProfileRepository.incrementCompletedOrderStats(vendor.getId(), updatedOrder.getTotalAmount());
+        outboxEventService.paymentTransferRequested(updatedOrder.getPublicOrderId());
         outboxEventService.orderDelivered(updatedOrder.getPublicOrderId());
         return toResponseDto(updatedOrder);
     }

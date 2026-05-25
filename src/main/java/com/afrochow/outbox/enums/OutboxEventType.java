@@ -2,7 +2,8 @@ package com.afrochow.outbox.enums;
 
 /**
  * All domain events that flow through the transactional outbox.
- * Each value maps 1-to-1 to a NotificationService method.
+ * Most values map to notification work; command-style events are consumed by
+ * dedicated workers such as payment transfer and geocoding consumers.
  */
 public enum OutboxEventType {
 
@@ -19,6 +20,7 @@ public enum OutboxEventType {
     // ── Payment ──────────────────────────────────────────────────────────────
     PAYMENT_CAPTURED,           // → notifyPaymentSuccess
     PAYMENT_FAILED,             // → notifyPaymentFailed
+    PAYMENT_TRANSFER_REQUESTED,  // → PaymentTransferEventConsumer
 
     // ── Engagement ───────────────────────────────────────────────────────────
     VENDOR_REVIEWED,            // → notifyVendorNewReview
@@ -31,6 +33,10 @@ public enum OutboxEventType {
     PASSWORD_CHANGED,           // → notifyPasswordChanged  (security alert email + in-app)
     PASSWORD_RESET_REQUESTED,   // → notifyPasswordResetRequested (reset-link email + in-app)
     EMAIL_VERIFICATION_SENT,    // → notifyEmailVerificationSent (verification email only)
+    ACCOUNT_DELETION_REQUESTED, // → notifyAccountDeletionRequested
+
+    // ── Address lifecycle ───────────────────────────────────────────────────
+    ADDRESS_GEOCODING_REQUESTED, // → AddressGeocodingEventConsumer
 
     // ── Vendor admin lifecycle ───────────────────────────────────────────────
     VENDOR_PROVISIONAL,         // → notifyVendorProvisional  (live, cert upload required)

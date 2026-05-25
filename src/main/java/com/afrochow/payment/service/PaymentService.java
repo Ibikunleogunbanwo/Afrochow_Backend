@@ -417,6 +417,13 @@ public class PaymentService {
         }
     }
 
+    @Transactional
+    public void transferToVendor(String publicOrderId) {
+        Order order = orderRepository.findByPublicOrderId(publicOrderId)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found: " + publicOrderId));
+        transferToVendor(order);
+    }
+
     /**
      * Refund a completed Stripe charge, or cancel the hold if the payment was
      * only authorised and not yet captured.

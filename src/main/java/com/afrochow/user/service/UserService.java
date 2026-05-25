@@ -1,4 +1,5 @@
 package com.afrochow.user.service;
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.Role;
 import com.afrochow.user.repository.UserRepository;
@@ -14,10 +15,14 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OutboxEventService outboxEventService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository,
+                       PasswordEncoder passwordEncoder,
+                       OutboxEventService outboxEventService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.outboxEventService = outboxEventService;
     }
 
     // ========== CACHE EVICTION METHODS ==========
@@ -74,6 +79,11 @@ public class UserService {
         user.setIsActive(false);
         user.setScheduledForDeletionAt(LocalDateTime.now());
         userRepository.save(user);
+    }
+
+    @Transactional
+    public void queueAccountDeletionEmail(String publicUserId, String email, String firstName) {
+        outboxEventService.accountDeletionRequested(publicUserId, email, firstName);
     }
 
     @Transactional

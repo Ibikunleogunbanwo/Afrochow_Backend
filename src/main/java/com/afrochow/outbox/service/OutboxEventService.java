@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,21 +39,24 @@ public class OutboxEventService {
 
     private final OutboxEventRepository outboxEventRepository;
 
+    @Value("${app.kafka.topics.domain-events:afrochow.domain-events}")
+    private String domainEventsTopic;
+
     // ── Order lifecycle ──────────────────────────────────────────────────────
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderPlaced(String publicOrderId) {
-        save(OutboxEventType.ORDER_PLACED, Map.of("publicOrderId", publicOrderId));
+        saveOrderEvent(OutboxEventType.ORDER_PLACED, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void customerOrderReceived(String publicOrderId) {
-        save(OutboxEventType.CUSTOMER_ORDER_RECEIVED, Map.of("publicOrderId", publicOrderId));
+        saveOrderEvent(OutboxEventType.CUSTOMER_ORDER_RECEIVED, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderConfirmed(String publicOrderId) {
-        save(OutboxEventType.ORDER_CONFIRMED, Map.of("publicOrderId", publicOrderId));
+        saveOrderEvent(OutboxEventType.ORDER_CONFIRMED, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
     /**
@@ -61,7 +65,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderCancelled(String publicOrderId, String reason,
                                String previousStatus, String cancelledBy) {
-        save(OutboxEventType.ORDER_CANCELLED, Map.of(
+        saveOrderEvent(OutboxEventType.ORDER_CANCELLED, publicOrderId, Map.of(
                 "publicOrderId",  publicOrderId,
                 "reason",         reason != null ? reason : "",
                 "previousStatus", previousStatus,
@@ -71,22 +75,22 @@ public class OutboxEventService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderPreparing(String publicOrderId) {
-        save(OutboxEventType.ORDER_PREPARING, Map.of("publicOrderId", publicOrderId));
+        saveOrderEvent(OutboxEventType.ORDER_PREPARING, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderReady(String publicOrderId) {
-        save(OutboxEventType.ORDER_READY, Map.of("publicOrderId", publicOrderId));
+        saveOrderEvent(OutboxEventType.ORDER_READY, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderOutForDelivery(String publicOrderId) {
-        save(OutboxEventType.ORDER_OUT_FOR_DELIVERY, Map.of("publicOrderId", publicOrderId));
+        saveOrderEvent(OutboxEventType.ORDER_OUT_FOR_DELIVERY, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderDelivered(String publicOrderId) {
-        save(OutboxEventType.ORDER_DELIVERED, Map.of("publicOrderId", publicOrderId));
+        saveOrderEvent(OutboxEventType.ORDER_DELIVERED, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
     // ── Payment ──────────────────────────────────────────────────────────────
@@ -94,7 +98,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void paymentCaptured(String userPublicId, String paymentId,
                                 String publicOrderId, BigDecimal amount) {
-        save(OutboxEventType.PAYMENT_CAPTURED, Map.of(
+        savePaymentEvent(OutboxEventType.PAYMENT_CAPTURED, paymentId, Map.of(
                 "userPublicId",  userPublicId,
                 "paymentId",     paymentId,
                 "publicOrderId", publicOrderId,
@@ -104,10 +108,17 @@ public class OutboxEventService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void paymentFailed(String userPublicId, String publicOrderId, String reason) {
-        save(OutboxEventType.PAYMENT_FAILED, Map.of(
+        saveOrderEvent(OutboxEventType.PAYMENT_FAILED, publicOrderId, Map.of(
                 "userPublicId",  userPublicId,
                 "publicOrderId", publicOrderId,
                 "reason",        reason != null ? reason : "Unknown error"
+        ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void paymentTransferRequested(String publicOrderId) {
+        saveOrderEvent(OutboxEventType.PAYMENT_TRANSFER_REQUESTED, publicOrderId, Map.of(
+                "publicOrderId", publicOrderId
         ));
     }
 
@@ -116,7 +127,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorReviewed(String vendorPublicId, String reviewerName,
                                Integer rating, String reviewType) {
-        save(OutboxEventType.VENDOR_REVIEWED, Map.of(
+        saveVendorEvent(OutboxEventType.VENDOR_REVIEWED, vendorPublicId, Map.of(
                 "vendorPublicId", vendorPublicId,
                 "reviewerName",   reviewerName,
                 "rating",         String.valueOf(rating),
@@ -126,7 +137,7 @@ public class OutboxEventService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorFavourited(String vendorPublicId, String customerName) {
-        save(OutboxEventType.VENDOR_FAVOURITED, Map.of(
+        saveVendorEvent(OutboxEventType.VENDOR_FAVOURITED, vendorPublicId, Map.of(
                 "vendorPublicId", vendorPublicId,
                 "customerName",   customerName
         ));
@@ -138,7 +149,7 @@ public class OutboxEventService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorCustomerCancelled(String publicOrderId) {
-        save(OutboxEventType.VENDOR_CUSTOMER_CANCELLED, Map.of("publicOrderId", publicOrderId));
+        saveOrderEvent(OutboxEventType.VENDOR_CUSTOMER_CANCELLED, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
     /**
@@ -151,7 +162,7 @@ public class OutboxEventService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorUnableToFulfil(String publicOrderId, String reason) {
-        save(OutboxEventType.VENDOR_UNABLE_TO_FULFIL, Map.of(
+        saveOrderEvent(OutboxEventType.VENDOR_UNABLE_TO_FULFIL, publicOrderId, Map.of(
                 "publicOrderId", publicOrderId,
                 "reason",        reason != null ? reason : ""
         ));
@@ -161,7 +172,7 @@ public class OutboxEventService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void userRegistered(String publicUserId, String email, String firstName, String role) {
-        save(OutboxEventType.USER_REGISTERED, Map.of(
+        saveUserEvent(OutboxEventType.USER_REGISTERED, publicUserId, Map.of(
                 "publicUserId", publicUserId,
                 "email",        email,
                 "firstName",    firstName,
@@ -171,7 +182,7 @@ public class OutboxEventService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void passwordChanged(String publicUserId, String email, String firstName) {
-        save(OutboxEventType.PASSWORD_CHANGED, Map.of(
+        saveUserEvent(OutboxEventType.PASSWORD_CHANGED, publicUserId, Map.of(
                 "publicUserId", publicUserId,
                 "email",        email,
                 "firstName",    firstName
@@ -181,7 +192,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void passwordResetRequested(String publicUserId, String email,
                                        String firstName, String resetLink) {
-        save(OutboxEventType.PASSWORD_RESET_REQUESTED, Map.of(
+        saveUserEvent(OutboxEventType.PASSWORD_RESET_REQUESTED, publicUserId, Map.of(
                 "publicUserId", publicUserId,
                 "email",        email,
                 "firstName",    firstName,
@@ -192,11 +203,29 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void emailVerificationSent(String publicUserId, String email,
                                       String firstName, String verificationToken) {
-        save(OutboxEventType.EMAIL_VERIFICATION_SENT, Map.of(
+        saveUserEvent(OutboxEventType.EMAIL_VERIFICATION_SENT, publicUserId, Map.of(
                 "publicUserId",      publicUserId,
                 "email",             email,
                 "firstName",         firstName,
                 "verificationToken", verificationToken
+        ));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void accountDeletionRequested(String publicUserId, String email, String firstName) {
+        saveUserEvent(OutboxEventType.ACCOUNT_DELETION_REQUESTED, publicUserId, Map.of(
+                "publicUserId", publicUserId,
+                "email",        email,
+                "firstName",    firstName
+        ));
+    }
+
+    // ── Address lifecycle ───────────────────────────────────────────────────
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void addressGeocodingRequested(String publicAddressId) {
+        save(OutboxEventType.ADDRESS_GEOCODING_REQUESTED, "ADDRESS", publicAddressId, Map.of(
+                "publicAddressId", publicAddressId
         ));
     }
 
@@ -206,7 +235,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorProvisional(String publicUserId, String email,
                                   String firstName, String restaurantName) {
-        save(OutboxEventType.VENDOR_PROVISIONAL, Map.of(
+        saveUserEvent(OutboxEventType.VENDOR_PROVISIONAL, publicUserId, Map.of(
                 "publicUserId",   publicUserId,
                 "email",          email,
                 "firstName",      firstName,
@@ -218,7 +247,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorApproved(String publicUserId, String email,
                                String firstName, String restaurantName) {
-        save(OutboxEventType.VENDOR_APPROVED, Map.of(
+        saveUserEvent(OutboxEventType.VENDOR_APPROVED, publicUserId, Map.of(
                 "publicUserId",  publicUserId,
                 "email",         email,
                 "firstName",     firstName,
@@ -229,7 +258,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorRejected(String publicUserId, String email, String firstName,
                                String restaurantName, String reason) {
-        save(OutboxEventType.VENDOR_REJECTED, Map.of(
+        saveUserEvent(OutboxEventType.VENDOR_REJECTED, publicUserId, Map.of(
                 "publicUserId",   publicUserId,
                 "email",          email,
                 "firstName",      firstName,
@@ -241,7 +270,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorSuspended(String publicUserId, String email,
                                 String firstName, String restaurantName) {
-        save(OutboxEventType.VENDOR_SUSPENDED, Map.of(
+        saveUserEvent(OutboxEventType.VENDOR_SUSPENDED, publicUserId, Map.of(
                 "publicUserId",   publicUserId,
                 "email",          email,
                 "firstName",      firstName,
@@ -252,7 +281,7 @@ public class OutboxEventService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorReinstated(String publicUserId, String email,
                                  String firstName, String restaurantName) {
-        save(OutboxEventType.VENDOR_REINSTATED, Map.of(
+        saveUserEvent(OutboxEventType.VENDOR_REINSTATED, publicUserId, Map.of(
                 "publicUserId",   publicUserId,
                 "email",          email,
                 "firstName",      firstName,
@@ -262,14 +291,35 @@ public class OutboxEventService {
 
     // ── Internal ─────────────────────────────────────────────────────────────
 
-    private void save(OutboxEventType type, Map<String, String> payload) {
+    private void saveOrderEvent(OutboxEventType type, String publicOrderId, Map<String, String> payload) {
+        save(type, "ORDER", publicOrderId, payload);
+    }
+
+    private void savePaymentEvent(OutboxEventType type, String paymentId, Map<String, String> payload) {
+        save(type, "PAYMENT", paymentId, payload);
+    }
+
+    private void saveUserEvent(OutboxEventType type, String publicUserId, Map<String, String> payload) {
+        save(type, "USER", publicUserId, payload);
+    }
+
+    private void saveVendorEvent(OutboxEventType type, String publicVendorId, Map<String, String> payload) {
+        save(type, "VENDOR", publicVendorId, payload);
+    }
+
+    private void save(OutboxEventType type, String aggregateType,
+                      String aggregateId, Map<String, String> payload) {
         try {
             String json = MAPPER.writeValueAsString(payload);
             outboxEventRepository.save(OutboxEvent.builder()
                     .eventType(type)
+                    .topic(domainEventsTopic)
+                    .aggregateType(aggregateType)
+                    .aggregateId(aggregateId)
                     .payload(json)
                     .build());
-            log.debug("outbox.saved type={}", type);
+            log.debug("outbox.saved type={} aggregateType={} aggregateId={}",
+                    type, aggregateType, aggregateId);
         } catch (JsonProcessingException e) {
             // Should never happen for Map<String,String> — rethrow to roll back the parent tx
             throw new IllegalStateException("Failed to serialize outbox payload for " + type, e);
