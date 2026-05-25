@@ -73,3 +73,6 @@ dist/
 backups/
 deploy/nginx/certs/*
 !deploy/nginx/certs/.gitkeep
+
+# ===== LOCAL OPERATIONAL DOCS =====
+docs/
