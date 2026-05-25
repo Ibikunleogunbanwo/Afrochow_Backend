@@ -1,108 +1,105 @@
 # Afrochow Backend
 
-Afrochow Backend is a Spring Boot 4 / Java 21 API for the Afrochow marketplace. It serves the public API used by the Vercel frontend, handles authentication, vendors, customers, orders, payments, notifications, address geocoding, uploaded files, and event-driven background work.
+![Java](https://img.shields.io/badge/Java-21-1f2937?style=for-the-badge)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.x-6db33f?style=for-the-badge)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=for-the-badge)
+![Kafka](https://img.shields.io/badge/Apache%20Kafka-Events-111827?style=for-the-badge)
+![MySQL](https://img.shields.io/badge/MySQL-8.4-4479a1?style=for-the-badge)
 
-## Current Production Status
+Afrochow Backend is the Spring Boot API behind the Afrochow marketplace. It powers authentication, customer and vendor workflows, stores, menus, orders, payments, notifications, address geocoding, file uploads, and event-driven background processing.
 
-Production has been cut over to the new VPS.
+Production is containerized with Docker Compose and sits behind Cloudflare and Nginx, with MySQL, Kafka, Redis, and scheduled S3 database backups.
+
+## Table Of Contents
+
+- [Architecture](#architecture)
+- [Core Services](#core-services)
+- [Backend Capabilities](#backend-capabilities)
+- [Event Pipeline](#event-pipeline)
+- [Local Development](#local-development)
+- [Production Shape](#production-shape)
+- [Security Notes](#security-notes)
+
+## Architecture
+
+```mermaid
+flowchart LR
+    browser["Web / Mobile Clients"]
+    cf["Cloudflare"]
+    nginx["Nginx Origin Proxy"]
+    app["Spring Boot API"]
+    mysql["MySQL 8.4"]
+    kafka["Kafka Broker"]
+    redis["Redis"]
+    s3["S3 Backups"]
+    workers["Kafka Consumers"]
+
+    browser --> cf
+    cf --> nginx
+    nginx --> app
+    app --> mysql
+    app --> redis
+    app --> kafka
+    kafka --> workers
+    workers --> mysql
+    mysql --> s3
+```
+
+Only the HTTP(S) edge is public. Internal services such as MySQL, Kafka, Redis, backup workers, and Kafka UI are kept behind the Docker network, localhost bindings, or SSH tunnels.
+
+## Core Services
+
+| Service | Role |
+| --- | --- |
+| `app` | Spring Boot API |
+| `nginx` | Public reverse proxy and TLS origin |
+| `mysql` | Primary relational database |
+| `kafka` | Domain event broker |
+| `kafka-init` | Topic creation job |
+| `redis` | Cache and geospatial store support |
+| `db-backup` | Scheduled MySQL dump and S3 upload worker |
+| `kafka-ui` | Private Kafka inspection UI |
+
+## Backend Capabilities
+
+- JWT-based authentication and account flows
+- Customer, vendor, store, menu, product, and order APIs
+- Stripe-backed payment workflows
+- Notification creation and delivery workflows
+- Address geocoding and fulfillment support
+- Transactional outbox event publishing
+- Kafka consumers with idempotency checks
+- Redis-backed runtime support
+- Dockerized production deployment
+- Scheduled database backups
+
+## Event Pipeline
+
+Afrochow uses a transactional outbox pattern for background work. Application code writes domain events to the database, a poller publishes them to Kafka, and independent consumer groups process their own workloads.
+
+```mermaid
+sequenceDiagram
+    participant API as Spring Boot API
+    participant DB as MySQL
+    participant Outbox as Outbox Poller
+    participant Kafka as Kafka
+    participant Consumers as Consumer Groups
+    participant DLQ as Dead Letter Topic
+
+    API->>DB: Write business data and outbox event
+    Outbox->>DB: Read pending events
+    Outbox->>Kafka: Publish domain event
+    Kafka->>Consumers: Deliver event by consumer group
+    Consumers-->>DB: Persist side effects and idempotency record
+    Consumers-->>DLQ: Send failed record after retries
+```
+
+Current event stream conventions:
 
 ```text
-Production API: https://api.afrochow.ca
-Frontend app:   https://www.afrochow.ca
-New VPS:        65.21.111.29
-VPS app path:   /opt/afrochow
-Old Droplet:    159.203.41.218
-```
-
-The old Droplet application has been stopped after migration. Keep it only as a short rollback window or snapshot source. Destroying the old Droplet is required to stop Droplet billing; shutting it down alone does not stop charges.
-
-## Production Architecture
-
-Production runs with Docker Compose on the VPS under `/opt/afrochow`.
-
-```text
-Cloudflare
-  -> api.afrochow.ca
-  -> Nginx container
-  -> Spring Boot app container
-  -> MySQL / Kafka / Redis containers
-```
-
-Core services:
-
-```text
-afrochow-nginx       Public HTTP/HTTPS entrypoint
-afrochow-app         Spring Boot API on container port 8081
-afrochow-mysql       MySQL 8.4 database
-afrochow-kafka       Apache Kafka 4.1.2 single broker
-afrochow-kafka-init  Topic creation job
-afrochow-kafka-ui    Private Kafka UI, reachable only through SSH tunnel
-afrochow-redis       Redis 7.4 cache/geospatial store
-afrochow-db-backup   Scheduled MySQL backup worker to Amazon S3
-```
-
-Only Nginx is publicly exposed. MySQL, Kafka, Redis, and Kafka UI are bound to localhost or the private Docker network.
-
-## HTTPS And DNS
-
-Cloudflare is the public TLS proxy. Nginx is the origin proxy on the VPS.
-
-Expected Cloudflare settings:
-
-```text
-DNS:              api.afrochow.ca -> 65.21.111.29, proxied
-SSL/TLS mode:     Full (strict)
-Origin cert path: /opt/afrochow/deploy/nginx/certs/cloudflare-origin.pem
-Origin key path:  /opt/afrochow/deploy/nginx/certs/cloudflare-origin.key
-```
-
-The Cloudflare Origin Certificate is valid for the Afrochow API origin and should not be committed to git.
-
-See [deploy/nginx/README.md](deploy/nginx/README.md) for the certificate and Nginx runbook.
-
-## Frontend Integration
-
-The production Vercel frontend is expected to call:
-
-```text
-NEXT_PUBLIC_API_URL=https://api.afrochow.ca/api
-NEXT_PUBLIC_APP_URL=https://www.afrochow.ca
-```
-
-Backend CORS must include the exact frontend origins:
-
-```env
-APP_FRONTEND_URL=https://www.afrochow.ca
-CORS_ALLOWED_ORIGINS=https://afrochow.ca,https://www.afrochow.ca
-```
-
-Because the backend uses credentialed CORS, do not use `*` for allowed origins.
-
-Quick CORS check:
-
-```bash
-curl -i -X OPTIONS https://api.afrochow.ca/api/categories \
-  -H "Origin: https://www.afrochow.ca" \
-  -H "Access-Control-Request-Method: GET" \
-  -H "Access-Control-Request-Headers: authorization,content-type"
-```
-
-Expected header:
-
-```text
-access-control-allow-origin: https://www.afrochow.ca
-```
-
-## Kafka Event Pipeline
-
-Afrochow uses a transactional outbox pattern. Domain events are written by the app and then published to Kafka.
-
-Topics:
-
-```text
-afrochow.domain-events        Main event stream
-afrochow.domain-events.retry  Reserved retry topic
-afrochow.domain-events.dlq    Dead-letter topic for failed consumer records
+afrochow.domain-events
+afrochow.domain-events.retry
+afrochow.domain-events.dlq
 ```
 
 Current consumer groups:
@@ -113,157 +110,74 @@ afrochow-address-geocoding-service
 afrochow-payment-transfer-service
 ```
 
-One topic can safely serve multiple consumer groups. Each consumer group maintains its own offsets and receives its own logical copy of events.
-
-Error handling:
-
-```text
-Consumer failure -> retry 3 times -> publish original record to afrochow.domain-events.dlq
-Retry backoff: 1000 ms
-```
-
-Config keys:
-
-```env
-KAFKA_TOPIC_DOMAIN_EVENTS=afrochow.domain-events
-KAFKA_TOPIC_DOMAIN_EVENTS_RETRY=afrochow.domain-events.retry
-KAFKA_TOPIC_DOMAIN_EVENTS_DLQ=afrochow.domain-events.dlq
-KAFKA_CONSUMER_RETRY_BACKOFF_MS=1000
-KAFKA_CONSUMER_MAX_RETRY_ATTEMPTS=3
-```
-
-Kafka UI is intentionally private. Start an SSH tunnel from your Mac:
-
-```bash
-ssh -L 8088:127.0.0.1:8088 root@65.21.111.29
-```
-
-Then open:
-
-```text
-http://localhost:8088
-```
-
-## Database Backups
-
-MySQL backups are handled by the `afrochow-db-backup` container.
-
-Backup target:
-
-```text
-s3://afrochow-db-backups-prod-740204037801-ca-central-1-an/mysql/
-```
-
-Schedule:
-
-```text
-Daily at 2 AM America/Edmonton
-```
-
-Manual backup:
-
-```bash
-ssh root@65.21.111.29 "cd /opt/afrochow && docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm -e BACKUP_ONESHOT=true db-backup"
-```
-
-See [deploy/backup/README.md](deploy/backup/README.md) for the S3 bucket, IAM, lifecycle, and restore notes.
+One Kafka topic can serve multiple consumer groups safely. Each group tracks its own offsets and receives its own logical copy of each event.
 
 ## Local Development
 
-The local development shape can run app services on the laptop while Kafka/Redis run in Docker.
+Prerequisites:
 
-Typical local dependencies:
+- Java 21
+- Docker Desktop
+- MySQL 8 compatible database
+- Maven wrapper included in the repo
 
-```text
-Spring Boot app: local
-MySQL:           local laptop, port 3306
-Kafka:           Docker, localhost:9092
-Redis:           Docker, localhost:6379
-```
-
-Start Kafka and Redis locally:
+Start local infrastructure:
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d kafka kafka-init redis
 ```
 
-Check Kafka:
-
-```bash
-nc -vz localhost 9092
-```
-
-Check Redis:
-
-```bash
-docker exec -it afrochow-redis redis-cli -a "$REDIS_PASSWORD" ping
-```
-
-Build locally:
+Compile the backend:
 
 ```bash
 ./mvnw -q -DskipTests compile
 ```
 
-## Production Deploy Basics
-
-Most production commands should run from the VPS:
+Run the app with your local Spring profile and environment values:
 
 ```bash
-ssh root@65.21.111.29
-cd /opt/afrochow
+./mvnw spring-boot:run
 ```
 
-Use the env file explicitly:
+Local `.env` and production `.env.prod` files must stay private. Use `.env.prod.example` as the shape reference for required variables.
 
-```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml ps
-```
+## Production Shape
 
-Restart only the app after env or code changes:
+Production runs through Docker Compose with these major pieces:
 
-```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --no-deps --build --force-recreate app
-```
+- Cloudflare for public DNS, proxying, and edge TLS
+- Nginx as the origin reverse proxy
+- Spring Boot app container
+- MySQL, Kafka, Redis, backup, and worker containers
+- Private Kafka UI over SSH tunnel only
+- Scheduled MySQL backups to S3
 
-Restart Nginx after Nginx config or cert changes:
+Useful production files:
 
-```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d nginx
-docker exec afrochow-nginx nginx -t
-```
+| Path | Purpose |
+| --- | --- |
+| `docker-compose.prod.yml` | Production container topology |
+| `Dockerfile` | Spring Boot app image |
+| `deploy/nginx/` | Nginx origin proxy config |
+| `deploy/backup/` | Database backup image and scripts |
+| `.env.prod.example` | Example production environment contract |
 
-## Monitoring Runbook
-
-Operational monitoring commands live in [docs/VPS_MONITORING_GLOSSARY.md](docs/VPS_MONITORING_GLOSSARY.md).
-
-Start there for:
-
-```text
-API health checks
-Docker service status
-App logs
-Nginx logs and TLS checks
-MySQL health and backups
-Kafka topics, consumer groups, lag, DLQ, and Kafka UI
-Redis health
-Disk, memory, CPU, and port checks
-Old Droplet shutdown/destroy checklist
-```
+Deployment details, credentials, certificates, server IPs, and operational runbooks are intentionally kept outside the public README.
 
 ## Security Notes
 
-Do not commit:
+Never commit:
 
 ```text
 .env
 .env.prod
-Cloudflare origin certificate key
 AWS access keys
+Cloudflare origin private keys
 JWT secrets
 Stripe secrets
 Google OAuth secrets
-Database dumps
+database dumps
+uploaded user files
 ```
 
-Kafka UI is private through SSH tunnel only. Do not expose it publicly unless Cloudflare Access or another authentication layer is added first.
+The repository keeps deployable infrastructure code, but excludes private runtime artifacts such as real environment files, cert keys, uploaded files, and backup dumps.
