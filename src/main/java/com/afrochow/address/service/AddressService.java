@@ -5,6 +5,7 @@ import com.afrochow.address.dto.AddressResponseDto;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.customer.model.CustomerProfile;
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.security.Utils.GeocodingService;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
@@ -25,6 +26,7 @@ public class AddressService {
     private final AddressRepository  addressRepository;
     private final UserRepository     userRepository;
     private final GeocodingService geocodingService;
+    private final OutboxEventService outboxEventService;
 
     // ── Public methods ────────────────────────────────────────────────────────
 
@@ -59,9 +61,9 @@ public class AddressService {
                 .customerProfile(profile)
                 .build();
 
-        geocodeAndAttach(address);
         handleDefaultAddress(profile, address);
-        addressRepository.save(address);
+        address = addressRepository.save(address);
+        outboxEventService.addressGeocodingRequested(address.getPublicAddressId());
         return toResponseDto(address);
     }
 
@@ -87,16 +89,11 @@ public class AddressService {
 
         updateEntityFromDto(request, address);
 
-        // Re-geocode whenever any field that could move the lat/lng changes.
-        // Previously only addressLine/city were considered — editing just a
-        // postal code (or province) silently left stale coordinates, which
-        // breaks the "nearest vendor" radius query on the home page.
-        if (addressLineChanged || cityChanged || postalCodeChanged || provinceChanged) {
-            geocodeAndAttach(address);
-        }
-
         handleDefaultAddress(profile, address);
         address = addressRepository.save(address);
+        if (addressLineChanged || cityChanged || postalCodeChanged || provinceChanged) {
+            outboxEventService.addressGeocodingRequested(address.getPublicAddressId());
+        }
         return toResponseDto(address);
     }
 
@@ -162,6 +159,13 @@ public class AddressService {
         } catch (Exception e) {
             log.warn("Geocoding failed, address saved without coordinates", e);
         }
+    }
+
+    @Transactional
+    public void geocodeAddress(String publicAddressId) {
+        Address address = getAddressEntity(publicAddressId);
+        geocodeAndAttach(address);
+        addressRepository.save(address);
     }
 
     private User getCustomerUser(String publicUserId) {

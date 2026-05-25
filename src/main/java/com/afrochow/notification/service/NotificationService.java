@@ -37,9 +37,10 @@ import java.util.stream.Collectors;
  *  2. Email        — for important / critical events
  *  3. Push / SMS   — future
  *
- * All order lifecycle methods are @Async and accept a publicOrderId string
- * (not an Order entity) so they load a fresh entity on their own thread/
- * transaction, avoiding detached-proxy issues.
+ * Order lifecycle methods accept a publicOrderId string (not an Order entity)
+ * so they load a fresh entity in their own transaction, avoiding detached-proxy
+ * issues. These methods are synchronous for outbox dispatch so failures can be
+ * retried by the poller.
  */
 @Slf4j
 @Service
@@ -118,7 +119,6 @@ public class NotificationService {
      * Notify customer when order is confirmed (after payment).
      * Channels: In-App + Email
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderConfirmed(String publicOrderId) {
         try {
@@ -142,6 +142,7 @@ public class NotificationService {
             log.info("Order confirmed notifications sent for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to send order confirmed notifications for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -150,7 +151,6 @@ public class NotificationService {
      * Channels: In-App + Email
      * Fix 1: uses NEW_ORDER type instead of ORDER_UPDATE.
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyVendorNewOrder(String publicOrderId) {
         try {
@@ -173,6 +173,7 @@ public class NotificationService {
             log.info("New order notifications sent to vendor for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to send new order notifications to vendor for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -181,7 +182,6 @@ public class NotificationService {
      * Fires before the vendor has acted — reassures the customer the order was received.
      * Channels: In-App only (email confirmation comes later when vendor accepts)
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderReceived(String publicOrderId) {
         try {
@@ -206,6 +206,7 @@ public class NotificationService {
             log.info("Customer order received notifications sent for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to send customer order received notifications for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -213,7 +214,6 @@ public class NotificationService {
      * Notify customer when order is being prepared.
      * Channels: In-App + Email
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderPreparing(String publicOrderId) {
         try {
@@ -235,6 +235,7 @@ public class NotificationService {
             log.info("Order preparing notification sent for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to send order preparing notification for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -242,7 +243,6 @@ public class NotificationService {
      * Notify customer when order is ready for pickup / delivery.
      * Channels: In-App + Email
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderReady(String publicOrderId) {
         try {
@@ -267,6 +267,7 @@ public class NotificationService {
             log.info("Order ready notifications sent for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to send order ready notifications for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -274,7 +275,6 @@ public class NotificationService {
      * Notify customer when order is out for delivery.
      * Channels: In-App only
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderOutForDelivery(String publicOrderId) {
         try {
@@ -291,6 +291,7 @@ public class NotificationService {
             log.info("Out for delivery notification sent for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to send out for delivery notification for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -298,7 +299,6 @@ public class NotificationService {
      * Notify customer when order is delivered.
      * Channels: In-App + Email
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderDelivered(String publicOrderId) {
         try {
@@ -324,6 +324,7 @@ public class NotificationService {
             log.info("Order delivered notifications sent for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to send order delivered notifications for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -331,7 +332,6 @@ public class NotificationService {
      * Notify customer when order is cancelled.
      * Channels: In-App + Email
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerOrderCancelled(String publicOrderId, String reason,
                                               String previousStatus, String cancelledBy) {
@@ -386,12 +386,12 @@ public class NotificationService {
             log.info("Order cancelled notifications sent for order: {} cancelledBy={}", publicOrderId, cancelledBy);
         } catch (Exception e) {
             log.error("Failed to send order cancelled notifications for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
     // ========== PAYMENT NOTIFICATIONS ==========
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyPaymentSuccess(String userPublicId, String paymentPublicId,
                                      String orderPublicId, BigDecimal amount) {
@@ -411,10 +411,10 @@ public class NotificationService {
             log.info("Payment success notifications sent for payment: {}", paymentPublicId);
         } catch (Exception e) {
             log.error("Failed to send payment success notifications for payment: {}", paymentPublicId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyPaymentFailed(String userPublicId, String orderPublicId, String reason) {
         try {
@@ -432,12 +432,12 @@ public class NotificationService {
             log.info("Payment failed notifications sent for order: {}", orderPublicId);
         } catch (Exception e) {
             log.error("Failed to send payment failed notifications for order: {}", orderPublicId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
     // ========== REVIEW & FAVORITE NOTIFICATIONS ==========
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyVendorNewReview(String vendorPublicId, String reviewerName,
                                       Integer rating, String reviewType) {
@@ -453,10 +453,10 @@ public class NotificationService {
             log.info("New review notification sent to vendor: {}", vendorPublicId);
         } catch (Exception e) {
             log.error("Failed to send new review notification to vendor: {}", vendorPublicId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyVendorFavorited(String vendorPublicId, String customerName) {
         try {
@@ -470,6 +470,7 @@ public class NotificationService {
             log.info("Vendor favorited notification sent to vendor: {}", vendorPublicId);
         } catch (Exception e) {
             log.error("Failed to send vendor favorited notification to vendor: {}", vendorPublicId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -712,7 +713,6 @@ public class NotificationService {
      * Notify the vendor that a customer cancelled an order the vendor had already accepted.
      * Channels: In-App only (email not warranted for operational alerts like this).
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyVendorCustomerCancelled(String publicOrderId) {
         try {
@@ -734,6 +734,7 @@ public class NotificationService {
             log.info("Vendor notified of customer cancellation for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to notify vendor of customer cancellation for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
@@ -747,7 +748,6 @@ public class NotificationService {
      *
      * Channels: In-App + Email (because real money was taken and is being returned).
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyCustomerVendorUnableToFulfil(String publicOrderId, String reason) {
         try {
@@ -780,17 +780,18 @@ public class NotificationService {
             } catch (Exception emailEx) {
                 log.warn("notifyCustomerVendorUnableToFulfil — email failed for order {} ({}): {}",
                         publicOrderId, customer.getEmail(), emailEx.getMessage());
+                throw new IllegalStateException("Notification email dispatch failed", emailEx);
             }
 
             log.info("Customer notified of vendor unable-to-fulfil for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to notify customer of vendor unable-to-fulfil for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
     // ========== AUTH / ACCOUNT LIFECYCLE ==========
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyUserRegistered(String publicUserId, String email,
                                      String firstName, String role) {
@@ -798,6 +799,7 @@ public class NotificationService {
             emailService.sendWelcomeEmail(email, firstName, role);
         } catch (Exception e) {
             log.error("notifyUserRegistered — welcome email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
         String message = switch (role) {
             case "VENDOR" -> "Welcome to Afrochow! Your vendor account is now active. You can start adding your products and manage orders.";
@@ -808,13 +810,13 @@ public class NotificationService {
                 NotificationType.SYSTEM_ALERT, null, null);
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyPasswordChanged(String publicUserId, String email, String firstName) {
         try {
             emailService.sendPasswordChangedEmail(email, firstName);
         } catch (Exception e) {
             log.error("notifyPasswordChanged — email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
         createNotification(publicUserId,
                 "Password Changed Successfully",
@@ -822,7 +824,6 @@ public class NotificationService {
                 NotificationType.SYSTEM_ALERT, null, null);
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
     public void notifyPasswordResetRequested(String publicUserId, String email,
                                              String firstName, String resetLink) {
@@ -830,6 +831,7 @@ public class NotificationService {
             emailService.sendPasswordResetEmail(email, firstName, resetLink);
         } catch (Exception e) {
             log.error("notifyPasswordResetRequested — email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
         createNotification(publicUserId,
                 "Password Reset Requested",
@@ -837,61 +839,75 @@ public class NotificationService {
                 NotificationType.SYSTEM_ALERT, null, null);
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     public void notifyEmailVerificationSent(String publicUserId, String email,
                                             String firstName, String verificationToken) {
         try {
             emailService.sendEmailVerificationEmail(email, verificationToken, firstName);
         } catch (Exception e) {
             log.error("notifyEmailVerificationSent — email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
+        }
+    }
+
+    public void notifyAccountDeletionRequested(String publicUserId, String email, String firstName) {
+        String title = "Account Deletion Requested";
+        String message = "Your account has been deactivated. You have 30 days to reactivate it by signing back in. " +
+                "After that, your profile, addresses, order history and reviews are permanently removed. " +
+                "If you did not request this, please contact our support team immediately.";
+
+        try {
+            emailService.sendNotificationEmail(email, firstName, title, message);
+        } catch (Exception e) {
+            log.error("notifyAccountDeletionRequested — email failed for {} ({}): {}", email, publicUserId, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
     // ========== VENDOR ADMIN LIFECYCLE ==========
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     public void notifyVendorProvisional(String email, String firstName, String restaurantName) {
         try {
             emailService.sendVendorProvisionalApprovalEmail(email, firstName, restaurantName);
         } catch (Exception e) {
             log.error("notifyVendorProvisional — email failed for {}: {}", email, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     public void notifyVendorApproved(String email, String firstName, String restaurantName) {
         try {
             emailService.sendVendorApprovalEmail(email, firstName, restaurantName);
         } catch (Exception e) {
             log.error("notifyVendorApproved — email failed for {}: {}", email, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     public void notifyVendorRejected(String email, String firstName,
                                      String restaurantName, String reason) {
         try {
             emailService.sendVendorRejectionEmail(email, firstName, restaurantName, reason);
         } catch (Exception e) {
             log.error("notifyVendorRejected — email failed for {}: {}", email, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     public void notifyVendorSuspended(String email, String firstName, String restaurantName) {
         try {
             emailService.sendVendorSuspensionEmail(email, firstName, restaurantName);
         } catch (Exception e) {
             log.error("notifyVendorSuspended — email failed for {}: {}", email, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     public void notifyVendorReinstated(String email, String firstName, String restaurantName) {
         try {
             emailService.sendVendorReinstatementEmail(email, firstName, restaurantName);
         } catch (Exception e) {
             log.error("notifyVendorReinstated — email failed for {}: {}", email, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
         }
     }
 

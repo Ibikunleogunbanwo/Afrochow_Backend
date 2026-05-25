@@ -33,14 +33,14 @@ public class NotificationController {
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get all notifications", description = "Get paginated notifications for the authenticated user")
-    public ResponseEntity<ApiResponse<Page<NotificationDto>>> getMyNotifications(
+    public ResponseEntity<ApiResponse<ApiResponse.PageResponse<NotificationDto>>> getMyNotifications(
             Authentication authentication,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
         String userPublicId = authentication.getName();
         Page<NotificationDto> notifications = notificationService.getUserNotifications(
                 userPublicId, PageRequest.of(page, Math.min(size, 100)));
-        return ResponseEntity.ok(ApiResponse.success(notifications));
+        return ResponseEntity.ok(ApiResponse.successPage(notifications));
     }
 
     @GetMapping("/unread")
@@ -148,10 +148,10 @@ public class NotificationController {
     @GetMapping("/admin/broadcasts")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     @Operation(summary = "Broadcast history", description = "Paginated list of past broadcasts (admin only)")
-    public ResponseEntity<ApiResponse<Page<BroadcastLogDto>>> getBroadcastHistory(
+    public ResponseEntity<ApiResponse<ApiResponse.PageResponse<BroadcastLogDto>>> getBroadcastHistory(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<BroadcastLogDto> history = notificationService.getBroadcastHistory(PageRequest.of(page, size));
-        return ResponseEntity.ok(ApiResponse.success(history));
+        return ResponseEntity.ok(ApiResponse.successPage(history));
     }
 }

@@ -7,6 +7,7 @@
 .env.*
 *.env
 !.env.example
+!.env.prod.example
 
 # ===== MAVEN BUILD OUTPUT =====
 target/
@@ -25,6 +26,7 @@ target/
 
 # ===== OS FILES =====
 .DS_Store
+**/.DS_Store
 Thumbs.db
 desktop.ini
 
@@ -46,6 +48,7 @@ uploads/
 # ===== AI / CLAUDE =====
 .ai/**
 .claude/**
+.continue/
 
 # ===== LOCAL DOCS =====
 *.docx
@@ -65,3 +68,8 @@ dist/
 *.sql
 *.dump
 *.db
+
+# ===== DEPLOYMENT ARTIFACTS =====
+backups/
+deploy/nginx/certs/*
+!deploy/nginx/certs/.gitkeep
