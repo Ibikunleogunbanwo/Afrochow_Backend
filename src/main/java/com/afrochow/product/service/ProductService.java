@@ -9,6 +9,7 @@ import com.afrochow.product.dto.ProductSummaryResponseDto;
 import com.afrochow.category.model.Category;
 import com.afrochow.product.model.Product;
 import com.afrochow.image.ImageUploadService;
+import com.afrochow.image.service.ImageCleanupService;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
 import com.afrochow.vendor.model.VendorProfile;
@@ -37,6 +38,7 @@ public class ProductService {
     private final VendorProfileRepository vendorProfileRepository;
     private final CategoryRepository categoryRepository;
     private final ImageUploadService imageUploadService;
+    private final ImageCleanupService imageCleanupService;
     private final UserRepository userRepository;
 
     public ProductService(
@@ -44,12 +46,14 @@ public class ProductService {
             VendorProfileRepository vendorProfileRepository,
             CategoryRepository categoryRepository,
             ImageUploadService imageUploadService,
+            ImageCleanupService imageCleanupService,
             UserRepository userRepository
     ) {
         this.productRepository = productRepository;
         this.vendorProfileRepository = vendorProfileRepository;
         this.categoryRepository = categoryRepository;
         this.imageUploadService = imageUploadService;
+        this.imageCleanupService = imageCleanupService;
         this.userRepository = userRepository;
     }
 
@@ -348,17 +352,16 @@ public class ProductService {
             throw new IllegalStateException("You can only modify your own products");
         }
 
-        // Delete old image if exists
-        if (product.getImageUrl() != null && !product.getImageUrl().isEmpty()) {
-            imageUploadService.deleteImage(product.getImageUrl());
-        }
-
         // Upload new image
+        String oldImageUrl = product.getImageUrl();
         String imagePath = imageUploadService.uploadImageForRegistrationAndGetUrl(file, "products");
         product.setImageUrl(imagePath);
 
         // Save and return
         Product updatedProduct = productRepository.save(product);
+        if (oldImageUrl != null && !oldImageUrl.isBlank()) {
+            imageCleanupService.enqueue(oldImageUrl, "product-image-replaced");
+        }
         return toResponseDto(updatedProduct);
     }
 

@@ -41,7 +41,8 @@ public class ImageUploadService {
             "registrations", "licenses", "logos", "banners", "profiles",
             "vendors", "VendorLogo", "VendorBanner", "VendorProfileImage", "products", "customers",
             "documents", "CustomerProfileImage", "admins",
-            "AdminProfileImage", "VendorBusinessLicense", "vendors/banners", "vendors/logos"
+            "AdminProfileImage", "VendorBusinessLicense", "vendors/banners", "vendors/logos",
+            "vendors/certifications", "customer/profile_image"
     );
 
     private static final Set<String> ALLOWED_MIME = Set.of(
@@ -128,12 +129,28 @@ public class ImageUploadService {
      * Prod → delete from Cloudinary.  Dev → delete from local filesystem.
      */
     public void deleteImage(String imageUrl) {
+        deleteImageBestEffort(imageUrl);
+    }
+
+    public boolean deleteImageBestEffort(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) return true;
+
+        try {
+            deleteImageOrThrow(imageUrl);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to delete image: {}", imageUrl, e);
+            return false;
+        }
+    }
+
+    public void deleteImageOrThrow(String imageUrl) throws IOException {
         if (imageUrl == null || imageUrl.isBlank()) return;
 
         if (cloudinary != null) {
-            deleteFromCloudinary(imageUrl);
+            deleteFromCloudinaryOrThrow(imageUrl);
         } else {
-            deleteFromLocal(imageUrl);
+            deleteFromLocalOrThrow(imageUrl);
         }
     }
 
@@ -214,7 +231,7 @@ public class ImageUploadService {
         }
     }
 
-    private void deleteFromCloudinary(String imageUrl) {
+    private void deleteFromCloudinaryOrThrow(String imageUrl) throws IOException {
         String publicId = extractCloudinaryPublicId(imageUrl);
         if (publicId == null) {
             log.debug("Skipping Cloudinary delete — not a Cloudinary URL: {}", imageUrl);
@@ -224,7 +241,7 @@ public class ImageUploadService {
             cloudinary.uploader().destroy(publicId, ObjectUtils.asMap("invalidate", true));
             log.info("Deleted from Cloudinary: {}", publicId);
         } catch (Exception e) {
-            log.error("Failed to delete from Cloudinary: {}", publicId, e);
+            throw new IOException("Cloudinary delete failed for " + publicId, e);
         }
     }
 
@@ -249,37 +266,30 @@ public class ImageUploadService {
     // LOCAL FILESYSTEM OPERATIONS
     // ============================================================
 
-    private void deleteFromLocal(String imageUrl) {
-        try {
-            String prefix1 = appUrl + "/api/images/";
-            String prefix2 = appUrl + "/images/";
+    private void deleteFromLocalOrThrow(String imageUrl) throws IOException {
+        String prefix1 = appUrl + "/api/images/";
+        String prefix2 = appUrl + "/images/";
 
-            String relativePath;
-            if (imageUrl.startsWith(prefix1)) {
-                relativePath = imageUrl.substring(prefix1.length());
-            } else if (imageUrl.startsWith(prefix2)) {
-                relativePath = imageUrl.substring(prefix2.length());
-            } else {
-                log.debug("Skipping local delete — URL does not match server: {}", imageUrl);
-                return;
-            }
-
-            Path uploadDirPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            Path targetPath    = uploadDirPath.resolve(relativePath).normalize();
-
-            if (!targetPath.startsWith(uploadDirPath)) {
-                log.error("Path traversal attempt detected: {}", relativePath);
-                throw new SecurityException("Invalid path");
-            }
-
-            boolean deleted = Files.deleteIfExists(targetPath);
-            if (deleted) log.info("Deleted local image: {}", relativePath);
-
-        } catch (SecurityException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to delete local image: {}", imageUrl, e);
+        String relativePath;
+        if (imageUrl.startsWith(prefix1)) {
+            relativePath = imageUrl.substring(prefix1.length());
+        } else if (imageUrl.startsWith(prefix2)) {
+            relativePath = imageUrl.substring(prefix2.length());
+        } else {
+            log.debug("Skipping local delete — URL does not match server: {}", imageUrl);
+            return;
         }
+
+        Path uploadDirPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Path targetPath    = uploadDirPath.resolve(relativePath).normalize();
+
+        if (!targetPath.startsWith(uploadDirPath)) {
+            log.error("Path traversal attempt detected: {}", relativePath);
+            throw new SecurityException("Invalid path");
+        }
+
+        boolean deleted = Files.deleteIfExists(targetPath);
+        if (deleted) log.info("Deleted local image: {}", relativePath);
     }
 
     private Path prepareUploadPath(String category) throws IOException {

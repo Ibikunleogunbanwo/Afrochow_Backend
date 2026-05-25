@@ -11,6 +11,7 @@ import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
 import com.afrochow.common.validation.PhoneUtils;
 import com.afrochow.image.ImageUploadService;
+import com.afrochow.image.service.ImageCleanupService;
 import com.afrochow.security.Services.PasswordPolicyService;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.model.User;
@@ -39,6 +40,7 @@ public class CustomerProfileService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final ImageUploadService imageUploadService;
+    private final ImageCleanupService imageCleanupService;
     private final PasswordPolicyService passwordPolicyService;
 
 
@@ -222,24 +224,17 @@ public class CustomerProfileService {
             throw new EntityNotFoundException("Customer profile not found");
         }
 
-        /* delete previous image — but only if it looks like one WE uploaded.
+        /* Queue previous image cleanup only if it looks like one WE uploaded.
          * Google-registered users often have an https://lh3.googleusercontent.com
          * avatar; we must never try to delete those from our storage. */
         String oldImage = user.getProfileImageUrl();
-        if (isSelfHostedImage(oldImage)) {
-            try {
-                imageUploadService.deleteImage(oldImage);
-            } catch (Exception e) {
-                // Don't block the new upload just because cleanup failed — the
-                // old file becomes an orphan, not a hard error.
-                log.warn("Failed to delete previous profile image {}: {}", oldImage, e.getMessage());
-            }
-        }
-
-        /* store new one */
         String newPath = imageUploadService.uploadImageForRegistrationAndGetUrl(file, "customer/profile_image");
         user.setProfileImageUrl(newPath);
         userRepository.save(user);
+
+        if (isSelfHostedImage(oldImage)) {
+            imageCleanupService.enqueue(oldImage, "customer-profile-image-replaced");
+        }
 
         return toResponseDto(profile);
     }

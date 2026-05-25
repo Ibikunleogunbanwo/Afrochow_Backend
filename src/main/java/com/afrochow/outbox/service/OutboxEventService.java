@@ -243,6 +243,18 @@ public class OutboxEventService {
         ));
     }
 
+    /** Fires when a provisional vendor uploads/replaces the required certificate for admin review. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void vendorCertificateUploaded(String publicVendorId, String publicUserId,
+                                          String restaurantName, String certificateUrl) {
+        saveVendorEvent(OutboxEventType.VENDOR_CERTIFICATE_UPLOADED, publicVendorId, Map.of(
+                "publicVendorId", publicVendorId,
+                "publicUserId", publicUserId,
+                "restaurantName", restaurantName != null ? restaurantName : "",
+                "certificateUrl", certificateUrl != null ? certificateUrl : ""
+        ));
+    }
+
     /** Fires when a vendor is fully verified (cert confirmed → VERIFIED). */
     @Transactional(propagation = Propagation.MANDATORY)
     public void vendorApproved(String publicUserId, String email,

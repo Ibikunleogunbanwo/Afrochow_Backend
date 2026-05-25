@@ -3,6 +3,7 @@ public enum RelatedEntityType {
     PAYMENT,
     ORDER,
     USER,
+    VENDOR,
     REVIEW,
     PROMOTION
 }

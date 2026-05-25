@@ -11,6 +11,7 @@ import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.NotificationType;
 import com.afrochow.common.enums.RelatedEntityType;
+import com.afrochow.common.enums.Role;
 import com.afrochow.notification.repository.NotificationRepository;
 import com.afrochow.user.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -26,6 +27,7 @@ import com.afrochow.config.AsyncConfig;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -872,6 +874,32 @@ public class NotificationService {
             log.error("notifyVendorProvisional — email failed for {}: {}", email, e.getMessage());
             throw new IllegalStateException("Notification dispatch failed", e);
         }
+    }
+
+    @Transactional
+    public void notifyAdminsVendorCertificateUploaded(String publicVendorId,
+                                                      String publicUserId,
+                                                      String restaurantName,
+                                                      String certificateUrl) {
+        List<User> admins = new ArrayList<>(userRepository.findByRoleAndIsActive(Role.ADMIN, true));
+        admins.addAll(userRepository.findByRoleAndIsActive(Role.SUPERADMIN, true));
+
+        String safeRestaurantName = restaurantName != null && !restaurantName.isBlank()
+                ? restaurantName
+                : "A vendor";
+        String message = safeRestaurantName + " uploaded a food handling certificate for review.";
+
+        for (User admin : admins) {
+            createInAppNotification(admin,
+                    NotificationType.SYSTEM_ALERT,
+                    "Vendor Certificate Review Needed",
+                    message,
+                    RelatedEntityType.VENDOR,
+                    publicVendorId != null && !publicVendorId.isBlank() ? publicVendorId : publicUserId);
+        }
+
+        log.info("Admins notified for vendor certificate upload vendor={} adminCount={} certUrlPresent={}",
+                publicVendorId, admins.size(), certificateUrl != null && !certificateUrl.isBlank());
     }
 
     public void notifyVendorApproved(String email, String firstName, String restaurantName) {

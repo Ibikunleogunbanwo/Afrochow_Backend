@@ -40,6 +40,7 @@ public enum OutboxEventType {
 
     // ── Vendor admin lifecycle ───────────────────────────────────────────────
     VENDOR_PROVISIONAL,         // → notifyVendorProvisional  (live, cert upload required)
+    VENDOR_CERTIFICATE_UPLOADED,// → notifyAdminsVendorCertificateUploaded
     VENDOR_APPROVED,            // → notifyVendorApproved     (fully verified after cert check)
     VENDOR_REJECTED,            // → notifyVendorRejected
     VENDOR_SUSPENDED,           // → notifyVendorSuspended

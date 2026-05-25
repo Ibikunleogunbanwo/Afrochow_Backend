@@ -55,6 +55,7 @@ public class NotificationEventConsumer {
             OutboxEventType.EMAIL_VERIFICATION_SENT,
             OutboxEventType.ACCOUNT_DELETION_REQUESTED,
             OutboxEventType.VENDOR_PROVISIONAL,
+            OutboxEventType.VENDOR_CERTIFICATE_UPLOADED,
             OutboxEventType.VENDOR_APPROVED,
             OutboxEventType.VENDOR_REJECTED,
             OutboxEventType.VENDOR_SUSPENDED,
@@ -208,6 +209,13 @@ public class NotificationEventConsumer {
                             required(p, "email", type, eventId),
                             required(p, "firstName", type, eventId),
                             required(p, "restaurantName", type, eventId));
+
+            case VENDOR_CERTIFICATE_UPLOADED ->
+                    notificationService.notifyAdminsVendorCertificateUploaded(
+                            required(p, "publicVendorId", type, eventId),
+                            required(p, "publicUserId", type, eventId),
+                            p.get("restaurantName"),
+                            p.get("certificateUrl"));
 
             case VENDOR_APPROVED ->
                     notificationService.notifyVendorApproved(

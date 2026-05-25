@@ -6,6 +6,8 @@ import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.image.ImageUploadService;
+import com.afrochow.image.service.ImageCleanupService;
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
 import com.afrochow.vendor.dto.FoodHandlingCertUploadRequestDto;
@@ -47,6 +49,8 @@ public class VendorProfileService {
     private final UserRepository userRepository;
     private final AddressRepository addressRepository;
     private final ImageUploadService imageUploadService;
+    private final ImageCleanupService imageCleanupService;
+    private final OutboxEventService outboxEventService;
     private final VendorMapper vendorMapper;
 
     /** Statuses from which a vendor can still edit their own profile. */
@@ -160,17 +164,12 @@ public class VendorProfileService {
 
         VendorProfile vendorProfile = getVendorProfileByUserId(userEntity.getUserId());
 
-        String path = switch (type) {
-            case "logo" -> {
-                deleteImageIfExists(vendorProfile.getLogoUrl());
-                yield "vendors/logos";
-            }
-            case "banner" -> {
-                deleteImageIfExists(vendorProfile.getBannerUrl());
-                yield "vendors/banners";
-            }
+        String oldImageUrl = switch (type) {
+            case "logo" -> vendorProfile.getLogoUrl();
+            case "banner" -> vendorProfile.getBannerUrl();
             default -> throw new IllegalArgumentException("Invalid image type: " + type);
         };
+        String path = type.equals("logo") ? "vendors/logos" : "vendors/banners";
 
         String imageUrl = imageUploadService.uploadImageForRegistrationAndGetUrl(file, path);
 
@@ -181,6 +180,7 @@ public class VendorProfileService {
         }
 
         vendorProfile = vendorProfileRepository.save(vendorProfile);
+        enqueueImageCleanup(oldImageUrl, "vendor-" + type + "-replaced");
         return vendorMapper.toResponseDto(vendorProfile);
     }
 
@@ -206,8 +206,7 @@ public class VendorProfileService {
                     "Current status: " + vendorProfile.getVendorStatus());
         }
 
-        // Delete old cert if one exists
-        deleteImageIfExists(vendorProfile.getFoodHandlingCertUrl());
+        String oldCertUrl = vendorProfile.getFoodHandlingCertUrl();
 
         String certUrl = imageUploadService.uploadImageForRegistrationAndGetUrl(
                 certFile, "vendors/certifications");
@@ -222,6 +221,12 @@ public class VendorProfileService {
         vendorProfile.setCertVerifiedByAdminId(null);
 
         vendorProfileRepository.save(vendorProfile);
+        outboxEventService.vendorCertificateUploaded(
+                vendorProfile.getPublicVendorId(),
+                vendorProfile.getUser().getPublicUserId(),
+                vendorProfile.getRestaurantName(),
+                certUrl);
+        enqueueImageCleanup(oldCertUrl, "vendor-certification-replaced");
         return vendorMapper.toResponseDto(vendorProfile);
     }
 
@@ -302,9 +307,9 @@ public class VendorProfileService {
         }
     }
 
-    private void deleteImageIfExists(String imageUrl) {
-        if (imageUrl != null && !imageUrl.isEmpty()) {
-            imageUploadService.deleteImage(imageUrl);
+    private void enqueueImageCleanup(String imageUrl, String reason) {
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            imageCleanupService.enqueue(imageUrl, reason);
         }
     }
 
