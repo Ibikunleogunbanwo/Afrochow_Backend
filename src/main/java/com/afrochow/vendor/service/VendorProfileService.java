@@ -139,6 +139,15 @@ public class VendorProfileService {
             throw new EntityNotFoundException("Vendor address not found");
         }
 
+        boolean addressLineChanged = request.getAddressLine() != null
+                && !request.getAddressLine().equals(address.getAddressLine());
+        boolean cityChanged = request.getCity() != null
+                && !request.getCity().equals(address.getCity());
+        boolean postalCodeChanged = request.getPostalCode() != null
+                && !request.getPostalCode().equals(address.getPostalCode());
+        boolean provinceChanged = request.getProvince() != null
+                && !request.getProvince().equals(address.getProvince());
+
         updateIfNotNull(request.getAddressLine(), address::setAddressLine);
         updateIfNotNull(request.getCity(), address::setCity);
         updateIfNotNull(request.getProvince(), address::setProvince);
@@ -146,6 +155,9 @@ public class VendorProfileService {
         updateIfNotNull(request.getCountry(), address::setCountry);
 
         address = addressRepository.save(address);
+        if (addressLineChanged || cityChanged || postalCodeChanged || provinceChanged) {
+            outboxEventService.addressGeocodingRequested(address.getPublicAddressId());
+        }
         return vendorMapper.toAddressResponseDto(address);
     }
 

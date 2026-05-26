@@ -103,6 +103,21 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /** Public use — available AND platform-visible products. */
     List<Product> findByAvailableTrueAndAdminVisibleTrue();
 
+    @Query("""
+        SELECT p FROM Product p
+        JOIN FETCH p.vendor v
+        JOIN FETCH v.user u
+        LEFT JOIN FETCH v.address a
+        LEFT JOIN FETCH p.category c
+        WHERE p.available = true
+          AND p.adminVisible = true
+          AND v.isVerified = true
+          AND v.isActive = true
+          AND u.publicUserId IN :publicVendorIds
+        """)
+    List<Product> findAvailablePublicProductsByVendorPublicIds(
+            @Param("publicVendorIds") List<String> publicVendorIds);
+
     // ========== FIND BY PRICE RANGE ==========
 
     List<Product> findByPriceBetweenAndAvailable(BigDecimal minPrice, BigDecimal maxPrice, Boolean available);
