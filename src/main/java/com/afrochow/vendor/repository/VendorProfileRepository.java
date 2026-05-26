@@ -68,6 +68,28 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
     @Query("SELECT v FROM VendorProfile v WHERE v.isActive = true AND v.isVerified = true")
     List<VendorProfile> findActiveAndVerifiedVendors();
 
+    @Query("""
+            SELECT v FROM VendorProfile v
+            JOIN FETCH v.user u
+            JOIN FETCH v.address a
+            WHERE v.isActive = true
+              AND v.isVerified = true
+              AND a.latitude IS NOT NULL
+              AND a.longitude IS NOT NULL
+            """)
+    List<VendorProfile> findActiveVerifiedGeocodedVendors();
+
+    @Query("""
+            SELECT v FROM VendorProfile v
+            JOIN FETCH v.user u
+            LEFT JOIN FETCH v.address a
+            WHERE u.publicUserId IN :publicUserIds
+              AND v.isActive = true
+              AND v.isVerified = true
+            """)
+    List<VendorProfile> findActiveVerifiedVendorsByPublicUserIds(
+            @Param("publicUserIds") List<String> publicUserIds);
+
     // ========== JOIN FETCH (prevents N+1) ==========
 
     // Used by getPopularCuisines() — loads vendors + their products in one query.

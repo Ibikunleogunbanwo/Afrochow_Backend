@@ -18,6 +18,7 @@ Production is containerized with Docker Compose and sits behind Cloudflare and N
 - [Event Pipeline](#event-pipeline)
 - [Local Development](#local-development)
 - [Production Shape](#production-shape)
+- [CI/CD](#cicd)
 - [Security Notes](#security-notes)
 
 ## Architecture
@@ -163,6 +164,23 @@ Useful production files:
 | `.env.prod.example` | Example production environment contract |
 
 Deployment details, credentials, certificates, server IPs, and operational runbooks are intentionally kept outside the public README.
+
+## CI/CD
+
+Production deploys are handled by GitHub Actions through `.github/workflows/deploy-production.yml`.
+
+The workflow runs when `main` is pushed, and can also be started manually from the GitHub Actions tab. It compiles the application, connects to the VPS over SSH, pulls `origin/main` into `/opt/afrochow`, rebuilds the Docker Compose stack, and verifies the API health endpoint.
+
+Required repository secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `VPS_HOST` | Production VPS hostname or IP |
+| `VPS_SSH_KEY` | Private SSH key allowed to deploy on the VPS |
+| `VPS_USER` | SSH user, usually `root` |
+| `VPS_PORT` | SSH port, optional when using `22` |
+
+The VPS keeps private runtime files outside Git, including `.env.prod` and Cloudflare origin certificates.
 
 ## Security Notes
 

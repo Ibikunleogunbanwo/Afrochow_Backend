@@ -39,6 +39,7 @@ public class SearchService {
         private final ProductRepository productRepository;
         private final CategoryRepository categoryRepository;
         private final VendorMapper vendorMapper;
+        private final VendorGeoIndexService vendorGeoIndexService;
 
         // ========== UNIVERSAL SEARCH ==========
 
@@ -682,6 +683,29 @@ public class SearchService {
          */
         @Transactional(readOnly = true)
         public List<ProductResponseDto> getProductsNearCoordinates(double lat, double lng, double radiusKm) {
+                List<VendorProfile> redisVendors = vendorGeoIndexService.findNearbyVendors(lat, lng, radiusKm, 25);
+                if (!redisVendors.isEmpty()) {
+                        Map<String, Integer> vendorRank = new HashMap<>();
+                        for (int i = 0; i < redisVendors.size(); i++) {
+                                vendorRank.put(redisVendors.get(i).getPublicVendorId(), i);
+                        }
+
+                        List<String> publicVendorIds = redisVendors.stream()
+                                .map(VendorProfile::getPublicVendorId)
+                                .toList();
+
+                        return productRepository.findAvailablePublicProductsByVendorPublicIds(publicVendorIds).stream()
+                                .sorted(Comparator
+                                        .comparingInt((Product product) -> vendorRank.getOrDefault(
+                                                product.getVendor().getPublicVendorId(),
+                                                Integer.MAX_VALUE))
+                                        .thenComparing(Product::getIsFeatured, Comparator.nullsLast(Comparator.reverseOrder()))
+                                        .thenComparing(Product::getTotalOrders, Comparator.reverseOrder()))
+                                .limit(12)
+                                .map(this::toProductResponseDto)
+                                .toList();
+                }
+
                 return productRepository.findProductsNearCoordinates(lat, lng, radiusKm).stream()
                                 .limit(12)
                                 .map(this::toProductResponseDto)
@@ -695,6 +719,13 @@ public class SearchService {
          */
         @Transactional(readOnly = true)
         public List<VendorProfileResponseDto> getVendorsNearCoordinates(double lat, double lng, double radiusKm) {
+                List<VendorProfile> redisVendors = vendorGeoIndexService.findNearbyVendors(lat, lng, radiusKm, 12);
+                if (!redisVendors.isEmpty()) {
+                        return redisVendors.stream()
+                                .map(vendorMapper::toResponseDto)
+                                .toList();
+                }
+
                 return vendorProfileRepository.findVendorsNearCoordinates(lat, lng, radiusKm).stream()
                                 .limit(12)
                                 .map(vendorMapper::toResponseDto)
