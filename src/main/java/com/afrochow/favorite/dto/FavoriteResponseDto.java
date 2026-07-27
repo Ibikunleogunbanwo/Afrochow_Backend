@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class FavoriteResponseDto {
 
-    private Long favoriteId;
+    private String publicFavoriteId;
     private FavoriteType favoriteType;
     private LocalDateTime createdAt;
 

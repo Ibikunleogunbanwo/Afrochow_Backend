@@ -93,6 +93,17 @@ public class OutboxEventService {
         saveOrderEvent(OutboxEventType.ORDER_DELIVERED, publicOrderId, Map.of("publicOrderId", publicOrderId));
     }
 
+    /**
+     * Fired by {@link com.afrochow.order.service.OrderFulfillmentOverdueScheduler}
+     * the first time a CONFIRMED/PREPARING order is found past its fulfillmentDeadline.
+     * Notifies the vendor (to update status or explain) and admins (to keep an eye
+     * on it) — it does NOT cancel or refund anything on its own.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void orderFulfillmentOverdue(String publicOrderId) {
+        saveOrderEvent(OutboxEventType.ORDER_FULFILLMENT_OVERDUE, publicOrderId, Map.of("publicOrderId", publicOrderId));
+    }
+
     // ── Payment ──────────────────────────────────────────────────────────────
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -298,6 +309,35 @@ public class OutboxEventService {
                 "email",          email,
                 "firstName",      firstName,
                 "restaurantName", restaurantName
+        ));
+    }
+
+    // ── Admin broadcast ──────────────────────────────────────────────────────
+
+    /**
+     * Queues an admin broadcast for async fan-out via {@code NotificationEventConsumer}
+     * instead of doing the fan-out inline. Broadcasts previously ran as a plain
+     * {@code @Async} method with no retry and no failure visibility — a DB error
+     * partway through the fan-out was silently swallowed while the admin's HTTP
+     * request had already returned "sent successfully." Routing through the
+     * outbox gives broadcasts the same retry (3 attempts) and inspectable
+     * FAILED status every other notification-triggering event in the app
+     * already has, instead of being the one exception to the pattern.
+     *
+     * <p>There's no natural entity to key this event on (unlike ORDER_PLACED etc.,
+     * which key off publicOrderId), so aggregateId is a generated UUID purely for
+     * outbox bookkeeping/tracing.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void broadcastSent(String title, String message, String notificationType,
+                              String targetAudience, String sentBy) {
+        String broadcastId = java.util.UUID.randomUUID().toString();
+        save(OutboxEventType.BROADCAST_SENT, "BROADCAST", broadcastId, Map.of(
+                "title",          title,
+                "message",        message,
+                "type",           notificationType,
+                "targetAudience", targetAudience,
+                "sentBy",         sentBy
         ));
     }
 

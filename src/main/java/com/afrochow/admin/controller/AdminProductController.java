@@ -1,6 +1,7 @@
 package com.afrochow.admin.controller;
 
 import com.afrochow.common.ApiResponse;
+import com.afrochow.favorite.repository.FavoriteRepository;
 import com.afrochow.product.model.Product;
 import com.afrochow.product.repository.ProductRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,11 +25,14 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/products")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+// PRODUCTS area = OPERATIONS department (or SUPERADMIN). The delete endpoint
+// below overrides this with a stricter hasRole('SUPERADMIN') — untouched.
+@PreAuthorize("@deptAccess.can('PRODUCTS')")
 @Tag(name = "Admin Product Management", description = "Admin APIs for managing products and featured curation")
 public class AdminProductController {
 
     private final ProductRepository productRepository;
+    private final FavoriteRepository favoriteRepository;
 
     // ========== ALL PRODUCTS LIST ==========
 
@@ -209,6 +213,12 @@ public class AdminProductController {
 
         Product product = productRepository.findByPublicProductId(publicProductId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found: " + publicProductId));
+
+        // Favorite.product has no cascade/orphanRemoval configured, so any
+        // customer favorite pointing at this product must be cleared first —
+        // otherwise the DB's foreign-key constraint rejects the delete below
+        // with a DataIntegrityViolationException (surfaces as a confusing 500).
+        favoriteRepository.deleteAllByProduct(product);
 
         productRepository.delete(product);
         return ResponseEntity.ok(ApiResponse.success("Product permanently deleted"));

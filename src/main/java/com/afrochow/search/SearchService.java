@@ -1,14 +1,11 @@
 package com.afrochow.search;
 
-import com.afrochow.category.dto.CategoryResponseDto;
 import com.afrochow.category.model.Category;
-import com.afrochow.category.repository.CategoryRepository;
 import com.afrochow.common.ApiResponse;
 import com.afrochow.common.enums.ScheduleType;
 import com.afrochow.product.dto.ProductResponseDto;
 import com.afrochow.product.model.Product;
 import com.afrochow.product.repository.ProductRepository;
-import com.afrochow.search.dto.PopularCategoryDto;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import com.afrochow.vendor.VendorMapper;
 import com.afrochow.vendor.model.VendorProfile;
@@ -25,7 +22,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,23 +33,8 @@ public class SearchService {
 
         private final VendorProfileRepository vendorProfileRepository;
         private final ProductRepository productRepository;
-        private final CategoryRepository categoryRepository;
         private final VendorMapper vendorMapper;
         private final VendorGeoIndexService vendorGeoIndexService;
-
-        // ========== UNIVERSAL SEARCH ==========
-
-        /**
-         * Universal search across vendors, products, and categories.
-         */
-        @Transactional(readOnly = true)
-        public UniversalSearchResults searchAll(String query) {
-                return UniversalSearchResults.builder()
-                                .vendors(searchVendors(query))
-                                .products(searchProducts(query))
-                                .categories(searchCategories(query))
-                                .build();
-        }
 
         // ========== VENDOR SEARCH ==========
 
@@ -65,23 +46,6 @@ public class SearchService {
                 VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(publicUserId)
                                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found: " + publicUserId));
                 return vendorMapper.toResponseDto(vendor);
-        }
-
-        /**
-         * Search vendors by name or cuisine type.
-         * Only returns active and verified vendors.
-         */
-        @Transactional(readOnly = true)
-        public List<VendorProfileResponseDto> searchVendors(String query) {
-                List<VendorProfile> vendors = new ArrayList<>(
-                                vendorProfileRepository.findByRestaurantNameContainingIgnoreCase(query));
-                vendors.addAll(vendorProfileRepository.findByStoreCategoryContainingIgnoreCase(query));
-
-                return vendors.stream()
-                                .distinct()
-                                .filter(v -> v.getIsActive() && v.getIsVerified())
-                                .map(vendorMapper::toResponseDto)
-                                .toList();
         }
 
         /**
@@ -104,37 +68,12 @@ public class SearchService {
         }
 
         /**
-         * Get vendors by cuisine type.
-         * Only returns active and verified vendors.
-         */
-        @Transactional(readOnly = true)
-        public List<VendorProfileResponseDto> getVendorsByCategory(String storeCategory) {
-                return vendorProfileRepository.findByStoreCategoryIgnoreCase(storeCategory).stream()
-                                .filter(v -> v.getIsActive() && v.getIsVerified())
-                                .map(vendorMapper::toResponseDto)
-                                .toList();
-        }
-
-        /**
          * Get vendors by city.
          * Repository query already filters by isActive and isVerified.
          */
         @Transactional(readOnly = true)
         public List<VendorProfileResponseDto> getVendorsByCity(String city) {
                 return vendorProfileRepository.findByCity(city).stream()
-                                .map(vendorMapper::toResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get currently open vendors.
-         * isOpenNow() is @Transient so must be evaluated in-memory after DB fetch.
-         * Repository query already filters by isActive and isVerified.
-         */
-        @Transactional(readOnly = true)
-        public List<VendorProfileResponseDto> getOpenVendors() {
-                return vendorProfileRepository.findActiveAndVerifiedVendors().stream()
-                                .filter(VendorProfile::isOpenNow)
                                 .map(vendorMapper::toResponseDto)
                                 .toList();
         }
@@ -160,213 +99,7 @@ public class SearchService {
                                 .toList();
         }
 
-        /**
-         * Get popular cuisines with vendor count, total orders, average rating,
-         * and sample vendors/products for frontend display.
-         * Uses JOIN FETCH to load vendors + products in one query (avoids N+1).
-         */
-        @Transactional(readOnly = true)
-        public List<PopularCategoryDto> getPopularCategories() {
-                List<VendorProfile> allVendors = vendorProfileRepository.findByIsActiveWithProducts(true);
-
-                Map<String, List<VendorProfile>> cuisineGroups = allVendors.stream()
-                                .filter(v -> v.getStoreCategory() != null && !v.getStoreCategory().isBlank())
-                                .collect(Collectors.groupingBy(VendorProfile::getStoreCategory));
-
-                return cuisineGroups.entrySet().stream()
-                                .map(entry -> {
-                                        String storeCategory = entry.getKey();
-                                        List<VendorProfile> vendors = entry.getValue();
-
-                                        long totalOrders = vendors.stream()
-                                                        .mapToLong(VendorProfile::getTotalOrdersCompleted)
-                                                        .sum();
-
-                                        double averageRating = vendors.stream()
-                                                        .mapToDouble(VendorProfile::getAverageRating)
-                                                        .average()
-                                                        .orElse(0.0);
-
-                                        List<PopularCategoryDto.VendorSummary> sampleVendors = vendors.stream()
-                                                        .sorted(Comparator.comparingInt(
-                                                                        VendorProfile::getTotalOrdersCompleted)
-                                                                        .reversed())
-                                                        .limit(3)
-                                                        .map(v -> PopularCategoryDto.VendorSummary.builder()
-                                                                        .publicVendorId(v.getPublicVendorId())
-                                                                        .restaurantName(v.getRestaurantName())
-                                                                        .logoUrl(v.getLogoUrl())
-                                                                        .rating(v.getAverageRating())
-                                                                        .totalOrders(v.getTotalOrdersCompleted())
-                                                                        .isActive(v.getIsActive())
-                                                                        .build())
-                                                        .toList();
-
-                                        List<PopularCategoryDto.ProductSummary> sampleProducts = vendors.stream()
-                                                        .flatMap(v -> v.getProducts().stream())
-                                                        .filter(Product::getAvailable)
-                                                        .sorted(Comparator.comparingInt(Product::getTotalOrders)
-                                                                        .reversed())
-                                                        .limit(6)
-                                                        .map(p -> PopularCategoryDto.ProductSummary.builder()
-                                                                        .publicProductId(p.getPublicProductId())
-                                                                        .productName(p.getName())
-                                                                        .imageUrl(p.getImageUrl())
-                                                                        .price(p.getPrice().doubleValue())
-                                                                        .rating(p.getAverageRating())
-                                                                        .isAvailable(p.getAvailable())
-                                                                        .vendorName(p.getVendor().getRestaurantName())
-                                                                        .build())
-                                                        .toList();
-
-                                        String imageUrl = vendors.stream()
-                                                        .map(VendorProfile::getLogoUrl)
-                                                        .filter(url -> url != null && !url.isBlank())
-                                                        .findFirst()
-                                                        .orElseGet(() -> sampleProducts.stream()
-                                                                        .map(PopularCategoryDto.ProductSummary::getImageUrl)
-                                                                        .filter(url -> url != null && !url.isBlank())
-                                                                        .findFirst()
-                                                                        .orElse(null));
-
-                                        return PopularCategoryDto.builder()
-                                                        .storeCategory(storeCategory)
-                                                        .vendorCount((long) vendors.size())
-                                                        .totalOrders(totalOrders)
-                                                        .averageRating(Math.round(averageRating * 10.0) / 10.0)
-                                                        .sampleVendors(sampleVendors)
-                                                        .sampleProducts(sampleProducts)
-                                                        .imageUrl(imageUrl)
-                                                        .build();
-                                })
-                                .sorted(Comparator.comparingLong(PopularCategoryDto::getTotalOrders).reversed())
-                                .toList();
-        }
-
         // ========== PRODUCT SEARCH ==========
-
-        /**
-         * Search products by name or description.
-         * Only returns available products from active and verified vendors.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> searchProducts(String query) {
-                return productRepository
-                                .findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query).stream()
-                                .filter(Product::getAvailable)
-                                .filter(p -> p.getVendor() != null
-                                                && p.getVendor().getIsVerified()
-                                                && p.getVendor().getIsActive())
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Search available products by name only.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> searchProductsByName(String name) {
-                return productRepository.findByNameContainingIgnoreCaseAndAvailable(name, true).stream()
-                                .filter(p -> p.getVendor() != null
-                                                && p.getVendor().getIsVerified()
-                                                && p.getVendor().getIsActive())
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get available products by category.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getProductsByCategory(Long categoryId) {
-                Category category = categoryRepository.findById(categoryId)
-                                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
-
-                return productRepository.findByCategoryAndAvailable(category, true).stream()
-                                .filter(p -> p.getVendor() != null
-                                                && p.getVendor().getIsVerified()
-                                                && p.getVendor().getIsActive())
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get available products within a price range.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-                return productRepository.findByPriceBetweenAndAvailable(minPrice, maxPrice, true).stream()
-                                .filter(p -> p.getVendor() != null
-                                                && p.getVendor().getIsVerified()
-                                                && p.getVendor().getIsActive())
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get available vegetarian products.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getVegetarianProducts() {
-                return productRepository.findByIsVegetarianAndAvailable(true, true).stream()
-                                .filter(p -> p.getVendor() != null
-                                                && p.getVendor().getIsVerified()
-                                                && p.getVendor().getIsActive())
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get available vegan products.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getVeganProducts() {
-                return productRepository.findByIsVeganAndAvailable(true, true).stream()
-                                .filter(p -> p.getVendor() != null
-                                                && p.getVendor().getIsVerified()
-                                                && p.getVendor().getIsActive())
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get available gluten-free products.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getGlutenFreeProducts() {
-                return productRepository.findByIsGlutenFreeAndAvailable(true, true).stream()
-                                .filter(p -> p.getVendor() != null
-                                                && p.getVendor().getIsVerified()
-                                                && p.getVendor().getIsActive())
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get popular products (top 20).
-         * Repository query already filters by isActive and isVerified.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getPopularProducts() {
-                return productRepository.findPopularProducts().stream()
-                                .filter(Product::getAvailable)
-                                .limit(20)
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get Chef's Special products from African Kitchen or African Soups categories.
-         * Repository query already filters by isActive and isVerified.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getChefSpecials() {
-                return productRepository.findChefSpecials().stream()
-                                .sorted(Comparator.comparing(Product::getAverageRating).reversed())
-                                .limit(10)
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
 
         /**
          * Get Featured Products — admin-pinned first, then trending, spread across vendors.
@@ -382,7 +115,7 @@ public class SearchService {
          * 4. Apply vendor diversity: at most MAX_PER_VENDOR per vendor across all slots.
          */
         @Transactional(readOnly = true)
-        public List<ProductResponseDto> getFeaturedProducts(String city) {
+        public List<ProductResponseDto> getFeaturedProducts(String city, Double lat, Double lng) {
                 final int POOL_SIZE             = 50;
                 final int MAX_PER_VENDOR        = 2;
                 final int MAX_PER_CATEGORY      = 2;
@@ -417,20 +150,24 @@ public class SearchService {
                 }
 
                 // ── Step 2: Fill remaining slots algorithmically ──────────────────
+                // City filtering happens at the DB query level (not as a Java post-filter
+                // over a nationally-ranked pool) so smaller markets aren't starved by
+                // vendors from bigger cities crowding out the top-N ranking before the
+                // city filter ever gets applied.
                 if (result.size() < MAX_TOTAL) {
                         LocalDateTime cutoff = LocalDateTime.now().minusDays(90);
                         Pageable pool = PageRequest.of(0, POOL_SIZE);
 
                         List<Product> candidates = productRepository
-                                .findFeaturedProducts(pool, cutoff).getContent();
+                                .findFeaturedProducts(pool, cutoff, cityFilter).getContent();
 
                         if (candidates.size() < MIN_RECENCY_THRESHOLD) {
-                                candidates = productRepository.findFeaturedProductsBroad(pool).getContent();
+                                candidates = productRepository.findFeaturedProductsBroad(pool, cityFilter).getContent();
                         }
 
                         if (candidates.size() < MIN_RECENCY_THRESHOLD) {
                                 // Tier 3: sort by rating DESC then newest — better than pure date order
-                                candidates = productRepository.findAnyFeaturedProducts(pool).getContent()
+                                candidates = productRepository.findAnyFeaturedProducts(pool, cityFilter).getContent()
                                         .stream()
                                         .sorted(Comparator
                                                 .comparingDouble(Product::getAverageRating).reversed()
@@ -442,19 +179,32 @@ public class SearchService {
                         for (Product p : candidates) {
                                 if (p.getVendor() == null) continue;
                                 if (pinnedIds.contains(p.getProductId())) continue; // already in result
-                                // City filter — skip algorithmic candidates not in the requested city
-                                if (cityFilter != null) {
-                                        String vendorCity = p.getVendor().getAddress() != null
-                                                ? p.getVendor().getAddress().getCity() : null;
-                                        if (vendorCity == null || !vendorCity.equalsIgnoreCase(cityFilter)) continue;
-                                }
                                 applyDiversity(p, result, vendorCount, categoryCount, MAX_PER_VENDOR, MAX_PER_CATEGORY, MAX_TOTAL);
                                 if (result.size() >= MAX_TOTAL) break;
                         }
                 }
 
+                // Distance-from-user — resolved in one Redis round trip (GEORADIUS), keyed
+                // by vendor public ID, rather than pulling raw lat/lng out of Postgres and
+                // computing distance in application code. Redis is the single source of
+                // truth for vendor geo data (kept fresh by VendorGeoIndexService's index).
+                Map<String, Double> distancesByVendor = Map.of();
+                if (lat != null && lng != null) {
+                        List<String> vendorIds = result.stream()
+                                .map(Product::getVendor)
+                                .filter(java.util.Objects::nonNull)
+                                .map(VendorProfile::getPublicVendorId)
+                                .filter(java.util.Objects::nonNull)
+                                .distinct()
+                                .toList();
+                        distancesByVendor = vendorGeoIndexService.getDistancesKm(lat, lng, vendorIds);
+                }
+
+                final Map<String, Double> distances = distancesByVendor;
                 return result.stream()
-                        .map(this::toProductResponseDto)
+                        .map(p -> toProductResponseDto(p, p.getVendor() != null
+                                ? distances.get(p.getVendor().getPublicVendorId())
+                                : null))
                         .toList();
         }
 
@@ -487,42 +237,6 @@ public class SearchService {
         }
 
         /**
-         * Get products from the best restaurants in a given city.
-         * Repository query already filters by isActive and isVerified.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getProductsFromBestRestaurantsNearMe(String city) {
-                return productRepository.findProductsByBestRestaurantsInCity(city).stream()
-                                .limit(12)
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get most popular products in the last 3 months, optionally filtered by city.
-         * Repository query already filters by isActive and isVerified.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getMostPopularProductsThisMonth(String city) {
-                LocalDateTime threeMonthsAgo = LocalDateTime.now()
-                                .minusMonths(3)
-                                .withDayOfMonth(1)
-                                .withHour(0)
-                                .withMinute(0)
-                                .withSecond(0)
-                                .withNano(0);
-
-                List<Product> products = (city != null && !city.isBlank())
-                                ? productRepository.findMostPopularProductsThisMonthByCity(threeMonthsAgo, city)
-                                : productRepository.findMostPopularProductsThisMonth(threeMonthsAgo);
-
-                return products.stream()
-                                .limit(10)
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
          * Get top N popular product names (lightweight for frontend typeahead/suggestions).
          * Excludes African Groceries and Farm Produce categories.
          * Repository query already filters by isActive and isVerified.
@@ -542,40 +256,6 @@ public class SearchService {
                                 .map(Product::getName)
                                 .distinct()
                                 .limit(limit)
-                                .toList();
-        }
-
-        /**
-         * Get top-rated products (top 20).
-         * Repository query already filters by isActive and isVerified.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getTopRatedProducts() {
-                return productRepository.findTopRatedProducts().stream()
-                                .limit(20)
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        // ========== CATEGORY SEARCH ==========
-
-        /**
-         * Search active categories by name.
-         */
-        @Transactional(readOnly = true)
-        public List<CategoryResponseDto> searchCategories(String query) {
-                return categoryRepository.findByNameContainingIgnoreCaseAndIsActive(query, true).stream()
-                                .map(this::toCategoryResponseDto)
-                                .toList();
-        }
-
-        /**
-         * Get all active categories ordered by display order.
-         */
-        @Transactional(readOnly = true)
-        public List<CategoryResponseDto> getAllActiveCategories() {
-                return categoryRepository.findByIsActiveOrderByDisplayOrderAsc(true).stream()
-                                .map(this::toCategoryResponseDto)
                                 .toList();
         }
 
@@ -679,46 +359,15 @@ public class SearchService {
         }
 
         /**
-         * Get products near GPS coordinates within a radius.
-         */
-        @Transactional(readOnly = true)
-        public List<ProductResponseDto> getProductsNearCoordinates(double lat, double lng, double radiusKm) {
-                List<VendorProfile> redisVendors = vendorGeoIndexService.findNearbyVendors(lat, lng, radiusKm, 25);
-                if (!redisVendors.isEmpty()) {
-                        Map<String, Integer> vendorRank = new HashMap<>();
-                        for (int i = 0; i < redisVendors.size(); i++) {
-                                vendorRank.put(redisVendors.get(i).getPublicVendorId(), i);
-                        }
-
-                        List<String> publicVendorIds = redisVendors.stream()
-                                .map(VendorProfile::getPublicVendorId)
-                                .toList();
-
-                        return productRepository.findAvailablePublicProductsByVendorPublicIds(publicVendorIds).stream()
-                                .sorted(Comparator
-                                        .comparingInt((Product product) -> vendorRank.getOrDefault(
-                                                product.getVendor().getPublicVendorId(),
-                                                Integer.MAX_VALUE))
-                                        .thenComparing(Product::getIsFeatured, Comparator.nullsLast(Comparator.reverseOrder()))
-                                        .thenComparing(Product::getTotalOrders, Comparator.reverseOrder()))
-                                .limit(12)
-                                .map(this::toProductResponseDto)
-                                .toList();
-                }
-
-                return productRepository.findProductsNearCoordinates(lat, lng, radiusKm).stream()
-                                .limit(12)
-                                .map(this::toProductResponseDto)
-                                .toList();
-        }
-
-        /**
          * Get verified+active vendors near GPS coordinates ordered by distance
          * ascending.
          * Used by the "Popular Stores Near You" homepage section.
          */
         @Transactional(readOnly = true)
         public List<VendorProfileResponseDto> getVendorsNearCoordinates(double lat, double lng, double radiusKm) {
+                // Primary path — Redis geo index. Each vendor's own maxDeliveryDistanceKm
+                // (when delivery-enabled and set) overrides the flat radiusKm; see
+                // VendorGeoIndexService.findNearbyVendors.
                 List<VendorProfile> redisVendors = vendorGeoIndexService.findNearbyVendors(lat, lng, radiusKm, 12);
                 if (!redisVendors.isEmpty()) {
                         return redisVendors.stream()
@@ -726,25 +375,23 @@ public class SearchService {
                                 .toList();
                 }
 
+                // Fallback path — only used when Redis is unavailable/disabled or the index
+                // is empty. This JPQL query applies the flat radiusKm to every vendor; it
+                // does NOT honor per-vendor maxDeliveryDistanceKm the way the Redis path
+                // does. Acceptable as a degraded-mode fallback, not the common case.
                 return vendorProfileRepository.findVendorsNearCoordinates(lat, lng, radiusKm).stream()
                                 .limit(12)
                                 .map(vendorMapper::toResponseDto)
                                 .toList();
         }
 
-        // ========== INNER CLASSES ==========
-
-        @lombok.Data
-        @lombok.Builder
-        public static class UniversalSearchResults {
-                private List<VendorProfileResponseDto> vendors;
-                private List<ProductResponseDto> products;
-                private List<CategoryResponseDto> categories;
-        }
-
         // ========== MAPPING ==========
 
         private ProductResponseDto toProductResponseDto(Product product) {
+                return toProductResponseDto(product, null);
+        }
+
+        private ProductResponseDto toProductResponseDto(Product product, Double distanceKm) {
                 VendorProfile vendor   = product.getVendor();
                 Category category = product.getCategory();
 
@@ -778,6 +425,7 @@ public class SearchService {
                                 .vendorPostalCode(address != null ? address.getPostalCode() : null)
                                 .vendorCountry(address != null ? address.getCountry() : null)
                                 .vendorFormattedAddress(address != null ? address.getFormattedAddress() : null)
+                                .distanceKm(distanceKm)
                                 .averageRating(product.getAverageRating())
                                 .reviewCount(product.getReviewCount())
                                 .totalOrders(product.getTotalOrders())
@@ -786,18 +434,4 @@ public class SearchService {
                                 .build();
         }
 
-        private CategoryResponseDto toCategoryResponseDto(Category category) {
-                return CategoryResponseDto.builder()
-                                .categoryId(category.getCategoryId())
-                                .name(category.getName())
-                                .description(category.getDescription())
-                                .iconUrl(category.getIconUrl())
-                                .displayOrder(category.getDisplayOrder())
-                                .isActive(category.getIsActive())
-                                .productCount(category.getProductCount())
-                                .activeProductCount(category.getActiveProductCount())
-                                .createdAt(category.getCreatedAt())
-                                .updatedAt(category.getUpdatedAt())
-                                .build();
-        }
 }

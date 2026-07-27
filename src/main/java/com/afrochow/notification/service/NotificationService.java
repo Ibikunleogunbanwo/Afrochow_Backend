@@ -2,12 +2,14 @@ package com.afrochow.notification.service;
 
 import com.afrochow.email.EmailService;
 import com.afrochow.notification.dto.BroadcastLogDto;
+import com.afrochow.notification.dto.BroadcastNotificationRequestDto;
 import com.afrochow.notification.dto.NotificationDto;
 import com.afrochow.notification.model.BroadcastLog;
 import com.afrochow.notification.model.Notification;
 import com.afrochow.notification.repository.BroadcastLogRepository;
 import com.afrochow.order.model.Order;
 import com.afrochow.order.repository.OrderRepository;
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.user.model.User;
 import com.afrochow.common.enums.NotificationType;
 import com.afrochow.common.enums.RelatedEntityType;
@@ -20,10 +22,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.afrochow.config.AsyncConfig;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -54,6 +54,7 @@ public class NotificationService {
     private final UserRepository         userRepository;
     private final OrderRepository        orderRepository;
     private final EmailService           emailService;
+    private final OutboxEventService     outboxEventService;
 
     // ========== GENERIC CREATE ==========
 
@@ -356,6 +357,15 @@ public class NotificationService {
                             + "the restaurant did not respond in time. You have not been charged — "
                             + "any authorization hold on your card will be released within 5–7 business days.";
                 }
+                case "SYSTEM_OVERDUE" -> {
+                    // Distinct from plain "SYSTEM": this fires from OrderFulfillmentOverdueScheduler,
+                    // after the vendor had already accepted the order (payment was CAPTURED, not just
+                    // authorised), so this must say "refunded", not "hold released".
+                    title   = "Order Automatically Cancelled and Refunded";
+                    message = "Your order from " + vendorName + " was automatically cancelled because "
+                            + "the restaurant did not complete it in time. You have been refunded — "
+                            + "funds will appear back on your card within 5–10 business days.";
+                }
                 case "VENDOR" -> {
                     title   = "Order Declined by Restaurant";
                     message = "Unfortunately, " + vendorName + " has declined your order."
@@ -479,25 +489,54 @@ public class NotificationService {
     // ========== BROADCAST ==========
 
     /**
-     * Dispatched to the notification thread pool so large broadcasts don't
-     * block the HTTP request thread or hold a DB connection for the full duration.
+     * Producer side — called directly from the admin controller. Just writes a
+     * BROADCAST_SENT outbox event in the same transaction as the request and
+     * returns; the actual fan-out happens in {@link #processBroadcast} once
+     * OutboxPoller publishes the event to Kafka and NotificationEventConsumer
+     * picks it back up. This is the same producer/consumer split every other
+     * notification-triggering event in the app already uses — broadcasts used
+     * to be the one exception (a plain @Async method with no retry and no
+     * failure visibility), which is what let a broadcast silently fail while
+     * still reporting "sent successfully" to the admin.
      */
-    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @Transactional
-    public void broadcastNotification(com.afrochow.notification.dto.BroadcastNotificationRequestDto dto, String sentBy) {
+    public void enqueueBroadcast(BroadcastNotificationRequestDto dto, String sentBy) {
+        outboxEventService.broadcastSent(
+                dto.getTitle(),
+                dto.getMessage(),
+                dto.getType().name(),
+                dto.getTargetAudience().name(),
+                sentBy);
+    }
+
+    /**
+     * Consumer side — invoked by {@link NotificationEventConsumer} for a
+     * BROADCAST_SENT event. Fans the notification out to every user in the
+     * target audience, in batches, then records the BroadcastLog entry that
+     * powers the admin History tab. If this throws, the Kafka message is not
+     * acknowledged and the event is retried like any other outbox event
+     * (up to 3 attempts before OutboxPoller marks it FAILED) — unlike the old
+     * @Async version, a mid-batch failure here is neither silent nor terminal.
+     */
+    @Transactional
+    public void processBroadcast(String title, String message, String notificationType,
+                                 String targetAudience, String sentBy) {
+        NotificationType type = NotificationType.valueOf(notificationType);
+        BroadcastNotificationRequestDto.TargetAudience audience =
+                BroadcastNotificationRequestDto.TargetAudience.valueOf(targetAudience);
         final int batchSize = 500;
 
-        long recipientCount = switch (dto.getTargetAudience()) {
-            case CUSTOMERS -> userRepository.countByRole(com.afrochow.common.enums.Role.CUSTOMER);
-            case VENDORS   -> userRepository.countByRole(com.afrochow.common.enums.Role.VENDOR);
+        long recipientCount = switch (audience) {
+            case CUSTOMERS -> userRepository.countByRole(Role.CUSTOMER);
+            case VENDORS   -> userRepository.countByRole(Role.VENDOR);
             case ALL       -> userRepository.count();
         };
 
         Pageable pageable = PageRequest.of(0, batchSize);
         while (true) {
-            Page<User> page = switch (dto.getTargetAudience()) {
-                case CUSTOMERS -> userRepository.findAllByRole(com.afrochow.common.enums.Role.CUSTOMER, pageable);
-                case VENDORS   -> userRepository.findAllByRole(com.afrochow.common.enums.Role.VENDOR, pageable);
+            Page<User> page = switch (audience) {
+                case CUSTOMERS -> userRepository.findAllByRole(Role.CUSTOMER, pageable);
+                case VENDORS   -> userRepository.findAllByRole(Role.VENDOR, pageable);
                 case ALL       -> userRepository.findAll(pageable);
             };
 
@@ -505,12 +544,21 @@ public class NotificationService {
                 break;
             }
 
-            List<Notification> notifications = page.getContent().stream()
+            // Respect the same opt-out every other customer-facing notification in
+            // this class honors (areNotificationsEnabled only applies to customers —
+            // vendors/admins are always considered enabled). Filtered out before
+            // building either the in-app row or the email, so an opted-out customer
+            // gets neither, consistent with the rest of the app.
+            List<User> eligible = page.getContent().stream()
+                    .filter(this::areNotificationsEnabled)
+                    .toList();
+
+            List<Notification> notifications = eligible.stream()
                     .map(user -> Notification.builder()
                             .user(user)
-                            .title(dto.getTitle())
-                            .message(dto.getMessage())
-                            .type(dto.getType())
+                            .title(title)
+                            .message(message)
+                            .type(type)
                             .relatedEntityType(null)
                             .relatedEntityId(null)
                             .createdAt(LocalDateTime.now())
@@ -520,6 +568,21 @@ public class NotificationService {
 
             notificationRepository.saveAll(notifications);
 
+            // Email — best-effort per recipient. Unlike the single-recipient notify
+            // methods (where an email failure legitimately voids the whole thing and
+            // is allowed to throw/retry), a broadcast fans out to many people at
+            // once: one bad or bouncing address must not abort in-app delivery to
+            // everyone else, and must not repeatedly retry the entire batch just
+            // because of one address every other recipient already got.
+            for (User user : eligible) {
+                try {
+                    emailService.sendNotificationEmail(user.getEmail(), user.getFirstName(), title, message);
+                } catch (Exception e) {
+                    log.warn("broadcast.email_failed userPublicId={} email={}",
+                            user.getPublicUserId(), user.getEmail(), e);
+                }
+            }
+
             if (!page.hasNext()) {
                 break;
             }
@@ -527,17 +590,17 @@ public class NotificationService {
         }
 
         broadcastLogRepository.save(BroadcastLog.builder()
-                .title(dto.getTitle())
-                .message(dto.getMessage())
-                .type(dto.getType())
-                .targetAudience(dto.getTargetAudience().name())
+                .title(title)
+                .message(message)
+                .type(type)
+                .targetAudience(audience.name())
                 .recipientCount((int) recipientCount)
-                .sentAt(java.time.LocalDateTime.now())
+                .sentAt(LocalDateTime.now())
                 .sentBy(sentBy)
                 .build());
 
         log.info("Broadcast notification sent to {} recipient(s) [audience={}]: [{}] {}",
-                recipientCount, dto.getTargetAudience(), dto.getType(), dto.getTitle());
+                recipientCount, audience, type, title);
     }
 
     @Transactional(readOnly = true)
@@ -736,6 +799,54 @@ public class NotificationService {
             log.info("Vendor notified of customer cancellation for order: {}", publicOrderId);
         } catch (Exception e) {
             log.error("Failed to notify vendor of customer cancellation for order: {}", publicOrderId, e);
+            throw new IllegalStateException("Notification dispatch failed", e);
+        }
+    }
+
+    /**
+     * Notify the vendor and all admins that a CONFIRMED/PREPARING order has run past
+     * its fulfillmentDeadline without being moved forward (ready/out-for-delivery) or
+     * explicitly cancelled.
+     *
+     * This is a heads-up, not a cancellation — the vendor still has time to act (mark
+     * it ready, or call "unable to fulfil" if they genuinely can't complete it) before
+     * {@link com.afrochow.order.service.OrderFulfillmentOverdueScheduler}'s second pass
+     * auto-cancels and refunds it.
+     *
+     * Channels: In-App only (operational alert, not customer-facing).
+     */
+    @Transactional
+    public void notifyVendorAndAdminsOrderOverdue(String publicOrderId) {
+        try {
+            Order order = loadOrder(publicOrderId);
+            if (order == null) return;
+
+            String restaurantName = order.getVendor().getRestaurantName();
+
+            User vendorUser = order.getVendor().getUser();
+            if (vendorUser != null && areNotificationsEnabled(vendorUser)) {
+                createInAppNotification(vendorUser, NotificationType.ORDER_UPDATE,
+                        "Order Running Late",
+                        "Order #" + publicOrderId + " is past its expected ready time and still needs "
+                        + "action. Please update its status, or contact Afrochow support if you can't "
+                        + "fulfil it — otherwise it will be automatically cancelled and refunded.",
+                        RelatedEntityType.ORDER, publicOrderId);
+            }
+
+            List<User> admins = new ArrayList<>(userRepository.findByRoleAndIsActive(Role.ADMIN, true));
+            admins.addAll(userRepository.findByRoleAndIsActive(Role.SUPERADMIN, true));
+            for (User admin : admins) {
+                createInAppNotification(admin, NotificationType.SYSTEM_ALERT,
+                        "Order Overdue — Vendor Unresponsive",
+                        "Order #" + publicOrderId + " from " + restaurantName
+                        + " is past its expected ready time and still CONFIRMED/PREPARING. "
+                        + "It will be auto-cancelled and refunded if still unresolved.",
+                        RelatedEntityType.ORDER, publicOrderId);
+            }
+
+            log.info("Vendor and {} admin(s) notified of overdue order: {}", admins.size(), publicOrderId);
+        } catch (Exception e) {
+            log.error("Failed to notify vendor/admins of overdue order: {}", publicOrderId, e);
             throw new IllegalStateException("Notification dispatch failed", e);
         }
     }

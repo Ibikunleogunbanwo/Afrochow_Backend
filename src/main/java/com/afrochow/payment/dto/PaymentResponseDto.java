@@ -34,4 +34,18 @@ public class PaymentResponseDto {
     private LocalDateTime completedAt;
     private LocalDateTime failedAt;
     private LocalDateTime refundedAt;
+
+    /**
+     * True when Stripe needs the customer to complete a 3D Secure challenge before
+     * this payment can be authorized. Only ever set by the endpoints that actually run
+     * a Stripe charge attempt (order creation, retry, confirm) — null/false elsewhere.
+     */
+    private Boolean requiresAction;
+
+    /**
+     * The Stripe PaymentIntent client secret to pass to stripe.confirmCardPayment() on
+     * the frontend. Only populated when requiresAction is true. Never persisted to the
+     * database — this is ephemeral, sourced fresh from Stripe on each relevant call.
+     */
+    private String stripeClientSecret;
 }

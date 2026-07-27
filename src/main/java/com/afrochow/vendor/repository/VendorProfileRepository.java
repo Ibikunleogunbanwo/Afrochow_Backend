@@ -63,8 +63,9 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     // ========== ACTIVE + VERIFIED ==========
 
-    // Name reflects the query accurately — the actual open-now check is @Transient
-    // and must be evaluated in-memory in SearchService.getOpenVendors().
+    // Currently unused — was backing SearchService.getOpenVendors(), removed as
+    // dead code (GET /search/vendors/open had no frontend caller). Left here
+    // since it's a cheap, correct query that may be useful again.
     @Query("SELECT v FROM VendorProfile v WHERE v.isActive = true AND v.isVerified = true")
     List<VendorProfile> findActiveAndVerifiedVendors();
 

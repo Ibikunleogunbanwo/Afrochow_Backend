@@ -9,13 +9,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * Controller for managing customer favorites (vendors and products)
@@ -62,11 +62,17 @@ public class FavoriteController {
      */
     @GetMapping
     @PreAuthorize("hasRole('CUSTOMER')")
-    @Operation(summary = "Get all favorites", description = "Get all favorites (vendors and products) for the customer")
-    public ResponseEntity<ApiResponse<List<FavoriteResponseDto>>> getAllFavorites(Authentication authentication) {
+    @Operation(summary = "Get all favorites", description = "Get paginated favorites (vendors and products) for the customer")
+    public ResponseEntity<ApiResponse<ApiResponse.PageResponse<FavoriteResponseDto>>> getAllFavorites(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         String username = authentication.getName();
-        List<FavoriteResponseDto> favorites = favoriteService.getAllFavorites(username);
-        return ResponseEntity.ok(ApiResponse.success("Favorites retrieved successfully", favorites));
+        Page<FavoriteResponseDto> favorites = favoriteService.getAllFavorites(
+                username,
+                PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))
+        );
+        return ResponseEntity.ok(ApiResponse.successPage("Favorites retrieved successfully", favorites));
     }
 
     /**
@@ -74,13 +80,19 @@ public class FavoriteController {
      */
     @GetMapping("/type/{favoriteType}")
     @PreAuthorize("hasRole('CUSTOMER')")
-    @Operation(summary = "Get favorites by type", description = "Get all vendor favorites or all product favorites")
-    public ResponseEntity<ApiResponse<List<FavoriteResponseDto>>> getFavoritesByType(
+    @Operation(summary = "Get favorites by type", description = "Get paginated vendor favorites or product favorites")
+    public ResponseEntity<ApiResponse<ApiResponse.PageResponse<FavoriteResponseDto>>> getFavoritesByType(
             Authentication authentication,
-            @PathVariable FavoriteType favoriteType) {
+            @PathVariable FavoriteType favoriteType,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         String username = authentication.getName();
-        List<FavoriteResponseDto> favorites = favoriteService.getFavoritesByType(username, favoriteType);
-        return ResponseEntity.ok(ApiResponse.success("Favorites retrieved successfully", favorites));
+        Page<FavoriteResponseDto> favorites = favoriteService.getFavoritesByType(
+                username,
+                favoriteType,
+                PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))
+        );
+        return ResponseEntity.ok(ApiResponse.successPage("Favorites retrieved successfully", favorites));
     }
 
     /**

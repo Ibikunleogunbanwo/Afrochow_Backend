@@ -68,7 +68,14 @@ public class ReviewController {
     }
 
     @PatchMapping("/reviews/{reviewId}/helpful")
-    @Operation(summary = "Mark a review as helpful", description = "Anyone can mark a review as helpful")
+    // Explicitly documented, not an oversight: any authenticated user (customer,
+    // vendor, or admin) may mark a review helpful — there's no per-user dedup or
+    // ownership check today, so this is intentionally low-stakes. Previously this
+    // endpoint had no annotation at all and fell through to the SecurityConfig
+    // catch-all anyRequest().authenticated(), which happened to produce the same
+    // result but with no explicit signal that it was deliberate.
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Mark a review as helpful", description = "Any authenticated user can mark a review as helpful")
     public ResponseEntity<ApiResponse<ReviewResponseDto>> markReviewAsHelpful(@PathVariable Long reviewId) {
         ReviewResponseDto review = reviewService.markReviewAsHelpful(reviewId);
         return ResponseBuilder.ok("Review marked as helpful", review);
@@ -159,7 +166,7 @@ public class ReviewController {
     // ========== ADMIN ENDPOINTS ==========
 
     @GetMapping("/admin/reviews")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('REVIEWS')") // REVIEWS area = CUSTOMER_SUPPORT department (or SUPERADMIN)
     @Operation(summary = "Get all reviews", description = "Admin views all reviews in the system")
     public ResponseEntity<ApiResponse<List<ReviewResponseDto>>> getAllReviews() {
         List<ReviewResponseDto> reviews = reviewService.getAllReviews();
@@ -167,7 +174,7 @@ public class ReviewController {
     }
 
     @GetMapping("/admin/reviews/hidden")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('REVIEWS')") // REVIEWS area = CUSTOMER_SUPPORT department (or SUPERADMIN)
     @Operation(summary = "Get hidden reviews", description = "Admin views only hidden reviews for moderation")
     public ResponseEntity<ApiResponse<List<ReviewResponseDto>>> getHiddenReviews() {
         List<ReviewResponseDto> reviews = reviewService.getHiddenReviews();
@@ -175,7 +182,7 @@ public class ReviewController {
     }
 
     @PatchMapping("/admin/reviews/{reviewId}/hide")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('REVIEWS')") // REVIEWS area = CUSTOMER_SUPPORT department (or SUPERADMIN)
     @Operation(summary = "Hide a review", description = "Admin hides a review (moderation)")
     public ResponseEntity<ApiResponse<ReviewResponseDto>> hideReview(@PathVariable Long reviewId) {
         ReviewResponseDto review = reviewService.hideReview(reviewId);
@@ -183,7 +190,7 @@ public class ReviewController {
     }
 
     @PatchMapping("/admin/reviews/{reviewId}/show")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('REVIEWS')") // REVIEWS area = CUSTOMER_SUPPORT department (or SUPERADMIN)
     @Operation(summary = "Show a review", description = "Admin makes a hidden review visible again")
     public ResponseEntity<ApiResponse<ReviewResponseDto>> showReview(@PathVariable Long reviewId) {
         ReviewResponseDto review = reviewService.showReview(reviewId);
@@ -191,7 +198,7 @@ public class ReviewController {
     }
 
     @DeleteMapping("/admin/reviews/{reviewId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('REVIEWS')") // REVIEWS area = CUSTOMER_SUPPORT department (or SUPERADMIN)
     @Operation(summary = "Delete any review", description = "Admin permanently deletes a review")
     public ResponseEntity<ApiResponse<String>> adminDeleteReview(@PathVariable Long reviewId) {
         reviewService.adminDeleteReview(reviewId);
@@ -199,7 +206,7 @@ public class ReviewController {
     }
 
     @GetMapping("/admin/reviews/stats")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('REVIEWS')") // REVIEWS area = CUSTOMER_SUPPORT department (or SUPERADMIN)
     @Operation(summary = "Get review statistics", description = "Admin views system-wide review statistics")
     public ResponseEntity<ApiResponse<ReviewService.AdminReviewStats>> getAdminStats() {
         ReviewService.AdminReviewStats stats = reviewService.getAdminStats();

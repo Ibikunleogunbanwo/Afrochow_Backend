@@ -16,6 +16,7 @@ public enum OutboxEventType {
     ORDER_READY,                // → notifyCustomerOrderReady
     ORDER_OUT_FOR_DELIVERY,     // → notifyCustomerOrderOutForDelivery
     ORDER_DELIVERED,            // → notifyCustomerOrderDelivered
+    ORDER_FULFILLMENT_OVERDUE,  // → notifyVendorAndAdminsOrderOverdue (CONFIRMED/PREPARING past its fulfillmentDeadline)
 
     // ── Payment ──────────────────────────────────────────────────────────────
     PAYMENT_CAPTURED,           // → notifyPaymentSuccess
@@ -44,5 +45,8 @@ public enum OutboxEventType {
     VENDOR_APPROVED,            // → notifyVendorApproved     (fully verified after cert check)
     VENDOR_REJECTED,            // → notifyVendorRejected
     VENDOR_SUSPENDED,           // → notifyVendorSuspended
-    VENDOR_REINSTATED           // → notifyVendorReinstated
+    VENDOR_REINSTATED,          // → notifyVendorReinstated
+
+    // ── Admin broadcast ──────────────────────────────────────────────────────
+    BROADCAST_SENT               // → processBroadcast (fan-out to target audience)
 }
