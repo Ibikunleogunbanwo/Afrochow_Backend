@@ -31,9 +31,14 @@ SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_
 SET @sql := IF(@col_exists = 0, 'ALTER TABLE outbox_event ADD COLUMN published_at DATETIME(6) NULL', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- Backfill both NULL and empty-string event_id values. Some rows already have
+-- event_id = '' rather than NULL (MySQL's implicit '' default for a NOT-NULL
+-- VARCHAR column added without an explicit DEFAULT, outside strict mode), so
+-- an IS NULL-only check misses them and the unique index below then fails
+-- with a duplicate-key error on the shared '' value.
 UPDATE outbox_event
 SET event_id = UUID()
-WHERE event_id IS NULL;
+WHERE event_id IS NULL OR event_id = '';
 
 UPDATE outbox_event
 SET aggregate_type = CASE
