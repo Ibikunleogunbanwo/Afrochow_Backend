@@ -20,3 +20,9 @@ jobs:
             git pull origin main
             docker compose -f docker-compose.prod.yml up -d --build app
             docker image prune -f
+
+      - name: Wait for app to boot
+        run: sleep 10
+
+      - name: Verify deployment
+        run: curl -f http://65.21.111.29/actuator/health || exit 1
