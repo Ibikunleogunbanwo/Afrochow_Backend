@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,7 +24,8 @@ import java.util.List;
  * - GET /categories/{categoryId} - Get category details
  * - GET /categories/search - Search categories by name
  *
- * Admin endpoints (requires ADMIN role with canManageCategories):
+ * Admin endpoints (requires OPERATIONS or MARKETING department, or SUPERADMIN —
+ * see com.afrochow.admin.security.DeptAccess, CATEGORIES area):
  * - GET /admin/categories - Get all categories (including inactive)
  * - POST /admin/categories - Create new category
  * - PUT /admin/categories/{categoryId} - Update category
@@ -100,6 +102,7 @@ public class CategoryController {
      * Get all categories (including inactive)
      */
     @GetMapping("/admin/categories")
+    @PreAuthorize("@deptAccess.can('CATEGORIES')")
     @Operation(summary = "Get all categories", description = "Get all categories including inactive ones (admin only)")
     public ResponseEntity<ApiResponse<List<CategoryResponseDto>>> getAllCategoriesAdmin() {
         List<CategoryResponseDto> categories = categoryService.getAllCategories();
@@ -110,6 +113,7 @@ public class CategoryController {
      * Create new category
      */
     @PostMapping("/admin/categories")
+    @PreAuthorize("@deptAccess.can('CATEGORIES')")
     @Operation(summary = "Create category", description = "Create a new category (admin only)")
     public ResponseEntity<ApiResponse<CategoryResponseDto>> createCategory(@Valid @RequestBody CategoryRequestDto request) {
         CategoryResponseDto category = categoryService.createCategory(request);
@@ -120,6 +124,7 @@ public class CategoryController {
      * Update category
      */
     @PutMapping("/admin/categories/{categoryId}")
+    @PreAuthorize("@deptAccess.can('CATEGORIES')")
     @Operation(summary = "Update category", description = "Update an existing category (admin only)")
     public ResponseEntity<ApiResponse<CategoryResponseDto>> updateCategory(
             @PathVariable Long categoryId,
@@ -133,6 +138,7 @@ public class CategoryController {
      * Delete category
      */
     @DeleteMapping("/admin/categories/{categoryId}")
+    @PreAuthorize("@deptAccess.can('CATEGORIES')")
     @Operation(summary = "Delete category", description = "Delete a category (admin only, only if no products)")
     public ResponseEntity<ApiResponse<String>> deleteCategory(@PathVariable Long categoryId) {
         categoryService.deleteCategory(categoryId);
@@ -143,6 +149,7 @@ public class CategoryController {
      * Activate category
      */
     @PatchMapping("/admin/categories/{categoryId}/activate")
+    @PreAuthorize("@deptAccess.can('CATEGORIES')")
     @Operation(summary = "Activate category", description = "Activate a category (admin only)")
     public ResponseEntity<ApiResponse<CategoryResponseDto>> activateCategory(@PathVariable Long categoryId) {
         CategoryResponseDto category = categoryService.activateCategory(categoryId);
@@ -153,6 +160,7 @@ public class CategoryController {
      * Deactivate category
      */
     @PatchMapping("/admin/categories/{categoryId}/deactivate")
+    @PreAuthorize("@deptAccess.can('CATEGORIES')")
     @Operation(summary = "Deactivate category", description = "Deactivate a category (admin only)")
     public ResponseEntity<ApiResponse<CategoryResponseDto>> deactivateCategory(@PathVariable Long categoryId) {
         CategoryResponseDto category = categoryService.deactivateCategory(categoryId);
@@ -163,6 +171,7 @@ public class CategoryController {
      * Update display order
      */
     @PatchMapping("/admin/categories/{categoryId}/display-order")
+    @PreAuthorize("@deptAccess.can('CATEGORIES')")
     @Operation(summary = "Update display order", description = "Update category display order (admin only)")
     public ResponseEntity<ApiResponse<CategoryResponseDto>> updateDisplayOrder(
             @PathVariable Long categoryId,

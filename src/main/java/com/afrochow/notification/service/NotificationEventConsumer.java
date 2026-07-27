@@ -43,6 +43,7 @@ public class NotificationEventConsumer {
             OutboxEventType.ORDER_READY,
             OutboxEventType.ORDER_OUT_FOR_DELIVERY,
             OutboxEventType.ORDER_DELIVERED,
+            OutboxEventType.ORDER_FULFILLMENT_OVERDUE,
             OutboxEventType.PAYMENT_CAPTURED,
             OutboxEventType.PAYMENT_FAILED,
             OutboxEventType.VENDOR_REVIEWED,
@@ -59,7 +60,8 @@ public class NotificationEventConsumer {
             OutboxEventType.VENDOR_APPROVED,
             OutboxEventType.VENDOR_REJECTED,
             OutboxEventType.VENDOR_SUSPENDED,
-            OutboxEventType.VENDOR_REINSTATED
+            OutboxEventType.VENDOR_REINSTATED,
+            OutboxEventType.BROADCAST_SENT
     );
 
     private final NotificationService notificationService;
@@ -137,6 +139,9 @@ public class NotificationEventConsumer {
 
             case ORDER_DELIVERED ->
                     notificationService.notifyCustomerOrderDelivered(required(p, "publicOrderId", type, eventId));
+
+            case ORDER_FULFILLMENT_OVERDUE ->
+                    notificationService.notifyVendorAndAdminsOrderOverdue(required(p, "publicOrderId", type, eventId));
 
             case PAYMENT_CAPTURED ->
                     notificationService.notifyPaymentSuccess(
@@ -241,6 +246,14 @@ public class NotificationEventConsumer {
                             required(p, "email", type, eventId),
                             required(p, "firstName", type, eventId),
                             required(p, "restaurantName", type, eventId));
+
+            case BROADCAST_SENT ->
+                    notificationService.processBroadcast(
+                            required(p, "title", type, eventId),
+                            required(p, "message", type, eventId),
+                            required(p, "type", type, eventId),
+                            required(p, "targetAudience", type, eventId),
+                            required(p, "sentBy", type, eventId));
         }
     }
 

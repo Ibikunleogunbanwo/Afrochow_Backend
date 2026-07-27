@@ -135,18 +135,21 @@ public class NotificationController {
     // ========== ADMIN ENDPOINTS ==========
 
     @PostMapping("/admin/broadcast")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @Operation(summary = "Broadcast notification", description = "Send notification to all users (admin only)")
+    @PreAuthorize("@deptAccess.can('BROADCAST')") // BROADCAST area = MARKETING department (or SUPERADMIN)
+    @Operation(summary = "Broadcast notification",
+               description = "Queue a notification broadcast to all users (admin only). Delivered "
+                       + "asynchronously via the outbox/Kafka pipeline — this call only confirms the "
+                       + "broadcast was queued, not that recipients have been notified yet.")
     public ResponseEntity<ApiResponse<Void>> broadcastNotification(
             @Valid @RequestBody BroadcastNotificationRequestDto request,
             Authentication authentication) {
-        notificationService.broadcastNotification(request, authentication.getName());
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Notification broadcast successfully"));
+        notificationService.enqueueBroadcast(request, authentication.getName());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.success("Broadcast queued — recipients will be notified shortly"));
     }
 
     @GetMapping("/admin/broadcasts")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('BROADCAST')") // BROADCAST area = MARKETING department (or SUPERADMIN)
     @Operation(summary = "Broadcast history", description = "Paginated list of past broadcasts (admin only)")
     public ResponseEntity<ApiResponse<ApiResponse.PageResponse<BroadcastLogDto>>> getBroadcastHistory(
             @RequestParam(defaultValue = "0") int page,

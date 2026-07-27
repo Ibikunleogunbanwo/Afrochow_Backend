@@ -8,6 +8,7 @@ import com.afrochow.common.enums.PaymentMethod;
 import com.afrochow.common.enums.Role;
 import com.afrochow.common.enums.Province;
 import com.afrochow.common.enums.ScheduleType;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
 import com.afrochow.product.model.Product;
@@ -359,6 +360,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                         + config.name.toLowerCase().replace(" ", "-") + "-" + vendorIndex + ".pdf")
                 .taxId(TAX_IDS[vendorIndex % TAX_IDS.length])
                 .address(address)
+                .vendorStatus(VendorStatus.VERIFIED)
                 .isVerified(true)
                 .isActive(true)
                 .verifiedAt(LocalDateTime.now().minusDays(30))

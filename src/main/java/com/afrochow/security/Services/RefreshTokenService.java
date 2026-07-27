@@ -1,7 +1,6 @@
 package com.afrochow.security.Services;
 
 import com.afrochow.common.exceptions.TokenRefreshException;
-import com.afrochow.security.dto.ActiveSessionDto;
 import com.afrochow.security.model.RefreshToken;
 import com.afrochow.user.model.User;
 import com.afrochow.security.repository.RefreshTokenRepository;
@@ -24,7 +23,6 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Service for managing refresh tokens with enhanced security features:
@@ -513,66 +511,6 @@ public class RefreshTokenService {
         }
 
         return userAgent != null ? userAgent : UNKNOWN;
-    }
-
-    // ==================== SESSION MANAGEMENT METHODS ====================
-
-    /**
-     * Get all active sessions for a user
-     *
-     * @param username Username of the user
-     * @return List of active session DTOs
-     */
-    @Transactional(readOnly = true)
-    public List<ActiveSessionDto> getActiveSessions(String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
-
-        List<RefreshToken> activeTokens = refreshTokenRepository.findValidTokensByUser(user, Instant.now());
-
-        return activeTokens.stream()
-                .map(this::convertToActiveSessionDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Revoke a specific session for a user
-     *
-     * @param username Username of the user
-     * @param tokenId ID of the token to revoke
-     */
-    @Transactional
-    public void revokeSession(String username, Long tokenId) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
-
-        RefreshToken token = refreshTokenRepository.findById(tokenId)
-                .orElseThrow(() -> new TokenRefreshException("Session not found"));
-
-        // Verify that the token belongs to the user
-        if (!token.getUser().getUserId().equals(user.getUserId())) {
-            throw new TokenRefreshException("Session does not belong to the user");
-        }
-
-        // Revoke the token
-        token.revoke();
-        refreshTokenRepository.save(token);
-
-        logger.info("Session {} revoked for user: {}", tokenId, username);
-    }
-
-    /**
-     * Convert RefreshToken to ActiveSessionDto
-     */
-    private ActiveSessionDto convertToActiveSessionDto(RefreshToken token) {
-        return ActiveSessionDto.builder()
-                .tokenId(token.getId())
-                .deviceInfo(token.getUserAgent() != null ? token.getUserAgent() : "Unknown Device")
-                .ipAddress(token.getIpAddress())
-                .lastUsedAt(token.getCreatedAt())
-                .createdAt(token.getCreatedAt())
-                .isCurrentSession(false) // Will be set by controller if needed
-                .build();
     }
 
     public long getRefreshTokenExpirationSeconds() {

@@ -43,6 +43,16 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Long countByStatus(PaymentStatus status);
 
+    /**
+     * One grouped query returning a count per {@link PaymentStatus} value present in
+     * the table, instead of issuing a separate {@link #countByStatus} call per status
+     * (which is what the admin dashboard previously had to fake client-side by fetching
+     * every payment row and bucketing them in JS — see AdminPaymentsPage). Statuses with
+     * zero payments simply won't appear in the result; callers should default to 0.
+     */
+    @Query("SELECT p.status, COUNT(p) FROM Payment p GROUP BY p.status")
+    List<Object[]> countGroupedByStatus();
+
     // Date-range payment count (used by AdminAnalytics date filter)
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.status = :status AND p.paymentTime >= :startDate AND p.paymentTime <= :endDate")
     Long countByStatusAndPaymentTimeBetween(@Param("status") PaymentStatus status,

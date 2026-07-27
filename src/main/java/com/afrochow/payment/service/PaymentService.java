@@ -8,6 +8,7 @@ import com.afrochow.order.model.Order;
 import com.afrochow.order.repository.OrderRepository;
 import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.payment.dto.PaymentResponseDto;
+import com.afrochow.payment.dto.PaymentStatsDto;
 import com.afrochow.payment.model.Payment;
 import com.afrochow.payment.repository.PaymentRepository;
 import com.stripe.exception.StripeException;
@@ -21,13 +22,18 @@ import com.stripe.param.TransferReversalCollectionCreateParams;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -51,6 +57,15 @@ public class PaymentService {
     @Value("${stripe.connect.required:true}")
     private boolean connectRequired;
 
+    /**
+     * Self-reference via Spring proxy — allows calling @Transactional(REQUIRES_NEW)
+     * methods on this bean from within the same class. @Lazy prevents a circular
+     * dependency at construction time (Spring injects a CGLIB proxy on first use).
+     */
+    @Autowired
+    @Lazy
+    private PaymentService self;
+
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderRepository orderRepository,
@@ -66,20 +81,40 @@ public class PaymentService {
     // ========== STRIPE METHODS ==========
 
     /**
+     * Outcome of a single authorization attempt (initial charge or a retry).
+     * {@code status} is one of AUTHORIZED, PENDING (== 3D Secure action required —
+     * reuses the existing PaymentStatus value, no schema change needed), or FAILED.
+     * {@code clientSecret} is only populated when status == PENDING — the frontend
+     * needs it to run stripe.confirmCardPayment(). {@code failureMessage} is only
+     * populated when status == FAILED.
+     */
+    public record ChargeOutcome(PaymentStatus status, String clientSecret, String failureMessage) {
+        public boolean isAuthorized()   { return status == PaymentStatus.AUTHORIZED; }
+        public boolean requiresAction() { return status == PaymentStatus.PENDING; }
+        public boolean isFailed()       { return status == PaymentStatus.FAILED; }
+    }
+
+    /**
      * Authorise (but do NOT capture) the customer's card via Stripe.
      * Uses capture_method=manual so money is only held, not moved.
      * The actual capture happens in captureStripePayment() when the vendor accepts the order.
      * If the vendor rejects or the customer cancels while still PENDING, the hold is released
      * by cancelling the PaymentIntent — no refund needed.
      *
-     * On success : updates Payment record to AUTHORIZED.
-     * On failure : updates Payment record to FAILED and throws RuntimeException.
+     * On success       : updates Payment record to AUTHORIZED, returns ChargeOutcome.
+     * On 3DS required   : updates Payment record to PENDING (with the intent id), returns
+     *                     ChargeOutcome carrying the client secret. Does NOT throw — the
+     *                     caller (OrderService.createOrder) must NOT roll back the order in
+     *                     this case, since the customer still needs to complete the 3D Secure
+     *                     challenge to finish paying for an order that legitimately exists.
+     * On real failure  : updates Payment record to FAILED and throws RuntimeException —
+     *                     callers should let this roll back the surrounding order creation.
      *
      * @param order           saved Order with totalAmount already calculated
      * @param paymentMethodId Stripe payment method token from frontend
      */
     @Transactional
-    public void chargeOrder(Order order, String paymentMethodId) {
+    public ChargeOutcome chargeOrder(Order order, String paymentMethodId) {
         Payment payment = paymentRepository.findByOrder(order)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Payment record not found for order: " + order.getPublicOrderId()));
@@ -90,21 +125,91 @@ public class PaymentService {
 
         if (payment.getTransactionId() != null && !payment.getTransactionId().isBlank()) {
             // Defensive guard against creating multiple PaymentIntents for the same order.
-            // chargeOrder is expected to be called once per order; if it is retried, Stripe idempotency is also used below.
+            // chargeOrder is expected to be called once per order.
             log.warn("payment.charge.skipped_existing_intent publicOrderId={} paymentId={} transactionId={}",
                     order.getPublicOrderId(),
                     payment.getPaymentId(),
                     payment.getTransactionId());
-            return;
+            return new ChargeOutcome(payment.getStatus(), null, null);
         }
 
+        ChargeOutcome outcome = attemptAuthorization(order, payment, paymentMethodId, "authorize");
+        if (outcome.isFailed()) {
+            // A genuine decline/error — the order this payment belongs to has no reason
+            // to exist without a successful (or pending-3DS) charge, so we throw here and
+            // let @Transactional roll back the whole order+payment insert in OrderService.
+            throw new RuntimeException("Payment failed: " + outcome.failureMessage());
+        }
+        return outcome;
+    }
+
+    /**
+     * Re-checks a PaymentIntent that previously came back "requires_action" (3D Secure),
+     * after the frontend has run stripe.confirmCardPayment() against the client secret.
+     * Called by the customer-facing confirm endpoint.
+     *
+     * On success        : same bookkeeping as chargeOrder's happy path — Payment becomes
+     *                      AUTHORIZED. Caller is expected to fire the order-placed
+     *                      notifications now, since this is the first point the order is
+     *                      genuinely paid for.
+     * Still needs action: intent is still requires_action (customer closed the 3DS modal
+     *                      without finishing it) — returns the same client secret so the
+     *                      frontend can re-prompt.
+     * Failed            : intent was cancelled or otherwise dead — Payment becomes FAILED.
+     */
+    @Transactional
+    public ChargeOutcome confirmAfter3ds(Order order, Payment payment) {
+        if (payment.getStatus() == PaymentStatus.AUTHORIZED || payment.getStatus() == PaymentStatus.COMPLETED) {
+            // Already confirmed — likely a duplicate confirm call. No-op, report current state.
+            return new ChargeOutcome(payment.getStatus(), null, null);
+        }
+        if (payment.getStatus() != PaymentStatus.PENDING || payment.getTransactionId() == null) {
+            throw new IllegalStateException("No pending 3D Secure authentication to confirm for this order");
+        }
+
+        try {
+            PaymentIntent intent = PaymentIntent.retrieve(payment.getTransactionId());
+
+            if ("requires_capture".equals(intent.getStatus())) {
+                recordSuccessfulAuthorization(order, payment, intent);
+                // This is the first point the order is genuinely paid for — the initial
+                // chargeOrder() call deliberately skipped these when 3DS was required, so
+                // the vendor is only ever notified of orders that actually have funds held.
+                outboxEventService.orderPlaced(order.getPublicOrderId());
+                outboxEventService.customerOrderReceived(order.getPublicOrderId());
+                return new ChargeOutcome(PaymentStatus.AUTHORIZED, null, null);
+            } else if ("requires_action".equals(intent.getStatus())) {
+                log.info("payment.still_requires_action publicOrderId={} paymentId={} transactionId={}",
+                        order.getPublicOrderId(), payment.getPaymentId(), payment.getTransactionId());
+                return new ChargeOutcome(PaymentStatus.PENDING, intent.getClientSecret(), null);
+            } else {
+                return failAndRecord(order, payment,
+                        "3D Secure authentication was not completed (status: " + intent.getStatus() + ")");
+            }
+        } catch (StripeException e) {
+            return failAndRecord(order, payment, cleanStripeMessage(e));
+        }
+    }
+
+    /**
+     * Shared authorization attempt used by both the initial charge (chargeOrder) and a
+     * customer-initiated retry with a new card (retryPayment). Always leaves the Payment
+     * row in a DB-consistent state matching the returned outcome — callers decide whether
+     * a FAILED outcome should roll back a surrounding transaction (chargeOrder does;
+     * retryPayment does not, since "the retry also failed" is a normal response to show
+     * the customer, not a 500).
+     *
+     * @param attemptTag distinguishes the Stripe idempotency key between the initial
+     *                    charge and any retries, so a retry with a different card is never
+     *                    mistaken by Stripe for a duplicate of the original attempt.
+     */
+    private ChargeOutcome attemptAuthorization(Order order, Payment payment, String paymentMethodId, String attemptTag) {
         String vendorStripeAccountId = order.getVendor().getStripeAccountId();
         boolean useConnect = connectRequired &&
                 vendorStripeAccountId != null &&
                 !vendorStripeAccountId.isBlank();
         if (connectRequired && !useConnect) {
-            throw new IllegalStateException(
-                    "Vendor does not have a Stripe account configured for payouts");
+            return failAndRecord(order, payment, "Vendor does not have a Stripe account configured for payouts");
         }
 
         try {
@@ -112,16 +217,6 @@ public class PaymentService {
             long amountInCents = order.getTotalAmount()
                     .multiply(BigDecimal.valueOf(100))
                     .setScale(0, RoundingMode.HALF_UP)
-                    .longValueExact();
-
-            // Platform fee: e.g. 10% of subtotal (excluding tax) → kept by Afrochow; remainder goes to vendor
-            long subtotalInCents = order.getSubtotal()
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(0, RoundingMode.HALF_UP)
-                    .longValueExact();
-            long feeInCents = BigDecimal.valueOf(subtotalInCents)
-                    .multiply(BigDecimal.valueOf(platformFeePercent))
-                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
                     .longValueExact();
 
             PaymentIntentCreateParams.Builder paramsBuilder = PaymentIntentCreateParams.builder()
@@ -149,40 +244,13 @@ public class PaymentService {
             }
 
             RequestOptions requestOptions = RequestOptions.builder()
-                    .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":authorize")
+                    .setIdempotencyKey("afrochow:order:" + order.getPublicOrderId() + ":" + attemptTag)
                     .build();
             PaymentIntent intent = PaymentIntent.create(paramsBuilder.build(), requestOptions);
 
             if ("requires_capture".equals(intent.getStatus())) {
-                // Authorization succeeded — card hold placed, money not yet moved.
-                // Capture will happen in captureStripePayment() when vendor accepts.
-                String last4 = null;
-                String brand = null;
-                try {
-                    com.stripe.model.PaymentMethod stripeMethod =
-                            com.stripe.model.PaymentMethod.retrieve(paymentMethodId);
-                    if (stripeMethod.getCard() != null) {
-                        last4 = stripeMethod.getCard().getLast4();
-                        brand = stripeMethod.getCard().getBrand();
-                    }
-                } catch (StripeException ignored) {
-                    // Don't fail the order over cosmetic card details
-                }
-
-                payment.authorizePayment(last4, brand);
-                payment.setTransactionId(intent.getId());
-                payment.setPlatformFeeAmount(
-                        BigDecimal.valueOf(feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
-                payment.setVendorPayout(
-                        BigDecimal.valueOf(subtotalInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
-                paymentRepository.save(payment);
-                log.info("payment.authorized publicOrderId={} paymentId={} transactionId={} amount={} fee={} vendorPayout={}",
-                        order.getPublicOrderId(),
-                        payment.getPaymentId(),
-                        payment.getTransactionId(),
-                        payment.getAmount(),
-                        payment.getPlatformFeeAmount(),
-                        payment.getVendorPayout());
+                recordSuccessfulAuthorization(order, payment, intent);
+                return new ChargeOutcome(PaymentStatus.AUTHORIZED, null, null);
 
             } else if ("requires_action".equals(intent.getStatus())) {
                 // 3D Secure required — client secret is surfaced to the frontend
@@ -194,30 +262,124 @@ public class PaymentService {
                         order.getPublicOrderId(),
                         payment.getPaymentId(),
                         payment.getTransactionId());
-                throw new RuntimeException("3DS_REQUIRED:" + intent.getClientSecret());
+                return new ChargeOutcome(PaymentStatus.PENDING, intent.getClientSecret(), null);
 
             } else {
-                throw new RuntimeException(
-                        "Stripe payment failed with status: " + intent.getStatus());
+                return failAndRecord(order, payment, "Stripe payment failed with status: " + intent.getStatus());
             }
 
         } catch (StripeException e) {
-            payment.failPayment();
-            payment.setNotes("Stripe error: " + e.getMessage());
-            paymentRepository.save(payment);
-            log.warn("payment.failed publicOrderId={} paymentId={} message={}",
-                    order.getPublicOrderId(),
-                    payment.getPaymentId(),
-                    e.getMessage());
-
-            outboxEventService.paymentFailed(
-                    order.getCustomer().getUser().getPublicUserId(),
-                    order.getPublicOrderId(),
-                    e.getMessage()
-            );
-
-            throw new RuntimeException("Payment failed: " + e.getMessage());
+            return failAndRecord(order, payment, cleanStripeMessage(e));
         }
+    }
+
+    /**
+     * Bookkeeping for a successful authorization (requires_capture): computes and stores
+     * the platform fee / vendor payout split, pulls card display details, marks the Payment
+     * AUTHORIZED. Shared by the initial charge, a retry, and the post-3DS confirm path —
+     * all three end up here whenever Stripe reports the intent is authorized and ready
+     * for a later capture.
+     */
+    private void recordSuccessfulAuthorization(Order order, Payment payment, PaymentIntent intent) {
+        String last4 = null;
+        String brand = null;
+        try {
+            com.stripe.model.PaymentMethod stripeMethod =
+                    com.stripe.model.PaymentMethod.retrieve(intent.getPaymentMethod());
+            if (stripeMethod.getCard() != null) {
+                last4 = stripeMethod.getCard().getLast4();
+                brand = stripeMethod.getCard().getBrand();
+            }
+        } catch (StripeException ignored) {
+            // Don't fail the order over cosmetic card details
+        }
+
+        // Platform fee: e.g. 10% of subtotal (excluding tax) → kept by Afrochow; remainder goes to vendor
+        long subtotalInCents = order.getSubtotal()
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
+        long feeInCents = BigDecimal.valueOf(subtotalInCents)
+                .multiply(BigDecimal.valueOf(platformFeePercent))
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
+                .longValueExact();
+
+        payment.authorizePayment(last4, brand);
+        payment.setTransactionId(intent.getId());
+        payment.setPlatformFeeAmount(
+                BigDecimal.valueOf(feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+        payment.setVendorPayout(
+                BigDecimal.valueOf(subtotalInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+        paymentRepository.save(payment);
+        log.info("payment.authorized publicOrderId={} paymentId={} transactionId={} amount={} fee={} vendorPayout={}",
+                order.getPublicOrderId(),
+                payment.getPaymentId(),
+                payment.getTransactionId(),
+                payment.getAmount(),
+                payment.getPlatformFeeAmount(),
+                payment.getVendorPayout());
+    }
+
+    /**
+     * Extracts a clean, customer-safe message from a StripeException.
+     *
+     * StripeException#getMessage() appends internal diagnostics meant for logs, not
+     * customers — e.g. "Your card has insufficient funds.; code: card_declined;
+     * request-id: req_...". The underlying StripeError, when present, carries just
+     * the human-readable reason ("Your card has insufficient funds."). Use this for
+     * any message that might end up shown directly to a customer (decline reasons at
+     * checkout); use e.getMessage() directly for internal logging where the extra
+     * diagnostics are useful.
+     */
+    private String cleanStripeMessage(StripeException e) {
+        if (e.getStripeError() != null && e.getStripeError().getMessage() != null) {
+            return e.getStripeError().getMessage();
+        }
+        return e.getMessage();
+    }
+
+    /**
+     * Marks the payment FAILED, persists the reason, and fires the customer-facing
+     * paymentFailed outbox notification. Centralised here so every failure path (create,
+     * retry, confirm) records the same shape of failure consistently.
+     *
+     * The notification write goes through {@link #self} on a REQUIRES_NEW transaction
+     * rather than joining the caller's — this matters specifically for the very first
+     * charge attempt at checkout: chargeOrder() throws on a genuine decline, which makes
+     * OrderService.createOrder() roll back the *entire* order-creation transaction (the
+     * order was never really created). Without REQUIRES_NEW, this outbox write would be
+     * rolled back right along with it and the customer would never be told their payment
+     * failed outside of the live checkout error toast — which is exactly what was
+     * happening before this fix. retryPayment/confirmAfter3ds don't roll back on failure
+     * anyway, so REQUIRES_NEW is a no-op there, just consistently applied.
+     */
+    private ChargeOutcome failAndRecord(Order order, Payment payment, String message) {
+        payment.failPayment();
+        payment.setNotes(message != null ? ("Stripe error: " + message) : "Payment failed");
+        paymentRepository.save(payment);
+        log.warn("payment.failed publicOrderId={} paymentId={} message={}",
+                order.getPublicOrderId(),
+                payment.getPaymentId(),
+                message);
+
+        self.recordPaymentFailedNotification(
+                order.getCustomer().getUser().getPublicUserId(),
+                order.getPublicOrderId(),
+                message
+        );
+
+        return new ChargeOutcome(PaymentStatus.FAILED, null, message);
+    }
+
+    /**
+     * Writes the paymentFailed outbox event in its own transaction — see failAndRecord's
+     * javadoc for why this needs to survive a surrounding rollback. Must be called via
+     * {@link #self} (the Spring proxy), not directly — a same-class call would bypass the
+     * proxy and just join whatever transaction is already active, defeating the point.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordPaymentFailedNotification(String userPublicId, String publicOrderId, String message) {
+        outboxEventService.paymentFailed(userPublicId, publicOrderId, message);
     }
 
     /**
@@ -527,20 +689,30 @@ public class PaymentService {
      * Joins the caller's transaction (REQUIRED propagation).
      * Called from {@link com.afrochow.order.service.OrderService#commitOrderExpiry}
      * during SLA auto-expiry, where the Stripe API call happens AFTER this DB commit.
+     *
+     * <p>Handles both AUTHORIZED (normal case — a capturable hold that never got
+     * captured within the SLA window) and PENDING (a Stripe PaymentIntent stuck
+     * in requires_action — e.g. the customer abandoned a 3D Secure challenge —
+     * that never resolved to AUTHORIZED before the order expired). Previously
+     * this only handled AUTHORIZED, so an abandoned-3DS payment would silently
+     * stay PENDING forever even after its order was auto-cancelled, desyncing
+     * Order.status (CANCELLED) from Payment.status (still PENDING) with no
+     * error raised — invisible to admin dashboards and reconciliation alike.
      */
     @Transactional
     public void markPaymentCancelled(Order order) {
         Payment payment = paymentRepository.findByOrderWithLock(order)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Payment record not found for order: " + order.getPublicOrderId()));
-        if (payment.getStatus() != PaymentStatus.AUTHORIZED) {
-            // Already cancelled/refunded — nothing to do
+        PaymentStatus previousStatus = payment.getStatus();
+        if (previousStatus != PaymentStatus.AUTHORIZED && previousStatus != PaymentStatus.PENDING) {
+            // Already cancelled/refunded/completed — nothing to do
             return;
         }
         payment.cancelAuthorization();
         paymentRepository.save(payment);
-        log.info("payment.record.marked_cancelled publicOrderId={} paymentId={}",
-                order.getPublicOrderId(), payment.getPaymentId());
+        log.info("payment.record.marked_cancelled publicOrderId={} paymentId={} previousStatus={}",
+                order.getPublicOrderId(), payment.getPaymentId(), previousStatus);
     }
 
     /**
@@ -610,68 +782,47 @@ public class PaymentService {
     }
 
     /**
-     * Process payment — legacy simulated method kept for backward compatibility.
-     * New code should use chargeOrder() instead.
+     * Confirm a payment after the customer completed a 3D Secure challenge on the
+     * frontend (stripe.confirmCardPayment against the client secret returned from
+     * order creation or a prior retry). Re-checks the PaymentIntent with Stripe and
+     * finalizes the Payment record accordingly.
      */
     @Transactional
-    public PaymentResponseDto processPayment(Long customerUserId, String publicOrderId,
-                                             String cardLast4, String cardBrand) {
+    public PaymentResponseDto confirmPayment(Long customerUserId, String publicOrderId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
         if (!order.getCustomer().getUser().getUserId().equals(customerUserId)) {
             throw new IllegalStateException(
-                    "You can only process payments for your own orders");
+                    "You can only confirm payments for your own orders");
         }
 
         Payment payment = paymentRepository.findByOrder(order)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Payment not found for this order"));
 
-        if (payment.getStatus() != PaymentStatus.PENDING) {
-            throw new IllegalStateException("Payment is not in pending status");
-        }
-
-        try {
-            payment.completePayment(cardLast4, cardBrand);
-            payment.setTransactionId("TXN-" + System.currentTimeMillis());
-
-            Payment savedPayment = paymentRepository.save(payment);
-
-            outboxEventService.paymentCaptured(
-                    order.getCustomer().getUser().getPublicUserId(),
-                    savedPayment.getTransactionId(),
-                    order.getPublicOrderId(),
-                    savedPayment.getAmount()
-            );
-
-            return toResponseDto(savedPayment);
-
-        } catch (Exception e) {
-            payment.failPayment();
-            paymentRepository.save(payment);
-
-            outboxEventService.paymentFailed(
-                    order.getCustomer().getUser().getPublicUserId(),
-                    order.getPublicOrderId(),
-                    e.getMessage()
-            );
-
-            throw new RuntimeException("Payment processing failed: " + e.getMessage());
-        }
+        ChargeOutcome outcome = confirmAfter3ds(order, payment);
+        return toResponseDtoWithOutcome(paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new EntityNotFoundException("Payment not found for this order")), outcome);
     }
 
     /**
-     * Retry failed payment (customer)
+     * Retry a failed payment with a new card. Unlike chargeOrder(), a FAILED outcome
+     * here is returned to the caller rather than thrown — the order already exists and
+     * "that card didn't work either" is a normal response the customer should see and
+     * act on, not a 500.
      */
     @Transactional
-    public PaymentResponseDto retryPayment(Long customerUserId, String publicOrderId) {
+    public PaymentResponseDto retryPayment(Long customerUserId, String publicOrderId, String paymentMethodId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
 
         if (!order.getCustomer().getUser().getUserId().equals(customerUserId)) {
             throw new IllegalStateException(
                     "You can only retry payments for your own orders");
+        }
+        if (paymentMethodId == null || paymentMethodId.isBlank()) {
+            throw new IllegalArgumentException("A new payment method is required to retry payment");
         }
 
         Payment payment = paymentRepository.findByOrder(order)
@@ -682,10 +833,26 @@ public class PaymentService {
             throw new IllegalStateException("Can only retry failed payments");
         }
 
-        payment.setStatus(PaymentStatus.PENDING);
-        Payment savedPayment = paymentRepository.save(payment);
+        // Clear the dead intent from the previous failed attempt before trying again.
+        payment.setTransactionId(null);
+        payment.setNotes(null);
+        paymentRepository.save(payment);
 
-        return toResponseDto(savedPayment);
+        ChargeOutcome outcome = attemptAuthorization(order, payment, paymentMethodId,
+                "retry-" + System.currentTimeMillis());
+
+        if (outcome.isAuthorized()) {
+            // A FAILED payment on an existing order means the vendor was never notified
+            // of it (chargeOrder() only notifies on immediate success; confirmAfter3ds()
+            // notifies on 3DS success — a payment only reaches FAILED via one of those
+            // two paths declining). This retry succeeding is therefore the first genuine
+            // confirmation for this order, so fire the same notifications here too.
+            outboxEventService.orderPlaced(order.getPublicOrderId());
+            outboxEventService.customerOrderReceived(order.getPublicOrderId());
+        }
+
+        return toResponseDtoWithOutcome(paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new EntityNotFoundException("Payment not found for this order")), outcome);
     }
 
     // ========== ADMIN METHODS ==========
@@ -742,11 +909,30 @@ public class PaymentService {
 
     /**
      * Refund payment via admin — calls real Stripe refund.
+     *
+     * <p>{@link #refundStripeCharge} is a shared helper also used by order-cancellation
+     * flows, where it's deliberately a silent no-op for PENDING/FAILED/CANCELLED/REFUNDED
+     * payments (nothing to reverse). That's correct there, but wrong for this admin
+     * action: an admin clicking "Refund" expects either money to actually move or a
+     * clear error — not a false "refunded successfully" response and a "your payment
+     * has been refunded" email sent to a customer whose payment was never charged.
+     * So we check the payment is in a refundable state up front and fail loudly if not.
      */
     @Transactional
     public PaymentResponseDto refundPayment(String publicOrderId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found"));
+
+        Payment paymentBefore = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Payment not found for this order"));
+
+        if (paymentBefore.getStatus() != PaymentStatus.COMPLETED
+                && paymentBefore.getStatus() != PaymentStatus.AUTHORIZED) {
+            throw new IllegalStateException(
+                    "Cannot refund — payment is " + paymentBefore.getStatus()
+                            + ", not COMPLETED or AUTHORIZED. There is no charge to reverse.");
+        }
 
         refundStripeCharge(order);
 
@@ -775,6 +961,36 @@ public class PaymentService {
         return paymentRepository.countByStatus(status);
     }
 
+    /**
+     * Powers the admin Payment Management dashboard's stat cards in one grouped
+     * query instead of the frontend fetching every payment and bucketing them
+     * client-side (the previous approach, which is how a CANCELLED payment could
+     * inflate Total without appearing in any card).
+     */
+    public PaymentStatsDto getPaymentStats() {
+        Map<PaymentStatus, Long> byStatus = new EnumMap<>(PaymentStatus.class);
+        for (Object[] row : paymentRepository.countGroupedByStatus()) {
+            byStatus.put((PaymentStatus) row[0], (Long) row[1]);
+        }
+        long pending    = byStatus.getOrDefault(PaymentStatus.PENDING, 0L);
+        long authorized = byStatus.getOrDefault(PaymentStatus.AUTHORIZED, 0L);
+        long completed  = byStatus.getOrDefault(PaymentStatus.COMPLETED, 0L);
+        long failed     = byStatus.getOrDefault(PaymentStatus.FAILED, 0L);
+        long refunded   = byStatus.getOrDefault(PaymentStatus.REFUNDED, 0L);
+        long cancelled  = byStatus.getOrDefault(PaymentStatus.CANCELLED, 0L);
+        long total      = pending + authorized + completed + failed + refunded + cancelled;
+
+        return PaymentStatsDto.builder()
+                .total(total)
+                .pending(pending)
+                .authorized(authorized)
+                .completed(completed)
+                .failed(failed)
+                .refunded(refunded)
+                .cancelled(cancelled)
+                .build();
+    }
+
     // ========== MAPPING ==========
 
     private PaymentResponseDto toResponseDto(Payment payment) {
@@ -797,5 +1013,17 @@ public class PaymentService {
                 .failedAt(payment.getFailedAt())
                 .refundedAt(payment.getRefundedAt())
                 .build();
+    }
+
+    /**
+     * Same as toResponseDto(), plus the requiresAction/stripeClientSecret pair carried
+     * on a fresh ChargeOutcome — used by retryPayment() and confirmPayment(), the only
+     * two customer-facing calls that can produce a live "still needs 3DS" signal.
+     */
+    private PaymentResponseDto toResponseDtoWithOutcome(Payment payment, ChargeOutcome outcome) {
+        PaymentResponseDto dto = toResponseDto(payment);
+        dto.setRequiresAction(outcome.requiresAction());
+        dto.setStripeClientSecret(outcome.requiresAction() ? outcome.clientSecret() : null);
+        return dto;
     }
 }

@@ -78,4 +78,16 @@ public class OrderResponseDto {
     private Long slaRemainingSeconds;
 
     private LocalDateTime updatedAt;
+
+    /**
+     * True when the customer must complete a 3D Secure challenge before this order's
+     * payment is authorized. Only ever set by createOrder()'s response — every other
+     * path that returns an OrderResponseDto (list, detail, status updates) leaves this
+     * null, since the client secret isn't persisted and re-deriving it would mean an
+     * extra live Stripe call on every order read.
+     */
+    private Boolean requiresAction;
+
+    /** The Stripe PaymentIntent client secret to pass to stripe.confirmCardPayment(). Only populated when requiresAction is true. */
+    private String stripeClientSecret;
 }

@@ -5,6 +5,9 @@ import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.favorite.model.Favorite;
 import com.afrochow.product.model.Product;
 import com.afrochow.vendor.model.VendorProfile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -20,13 +23,15 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
     /**
      * Get all favorites for a customer
      */
-    List<Favorite> findByCustomerOrderByCreatedAtDesc(CustomerProfile customer);
+    @EntityGraph(attributePaths = {"vendor", "product", "product.vendor"})
+    Page<Favorite> findByCustomerOrderByCreatedAtDesc(CustomerProfile customer, Pageable pageable);
 
     /**
      * Get all favorites of a specific type for a customer
      */
-    List<Favorite> findByCustomerAndFavoriteTypeOrderByCreatedAtDesc(
-            CustomerProfile customer, FavoriteType favoriteType);
+    @EntityGraph(attributePaths = {"vendor", "product", "product.vendor"})
+    Page<Favorite> findByCustomerAndFavoriteTypeOrderByCreatedAtDesc(
+            CustomerProfile customer, FavoriteType favoriteType, Pageable pageable);
 
     // ========== CHECK IF FAVORITED ==========
 
@@ -91,4 +96,20 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
      * Delete favorite by customer and product
      */
     void deleteByCustomerAndProduct(CustomerProfile customer, Product product);
+
+    /**
+     * Delete every favorite pointing at a product. Must be called before a
+     * hard delete of the product itself — Favorite.product has no cascade
+     * configured, so deleting a favorited product without this first hits
+     * the DB's foreign-key constraint and fails with a DataIntegrityViolationException.
+     */
+    void deleteAllByProduct(Product product);
+
+    /**
+     * Delete every favorite pointing at a vendor. Same rationale as
+     * {@link #deleteAllByProduct(Product)} — kept in reserve for any future
+     * hard-delete path on VendorProfile (none exists today; vendor removal
+     * is currently a soft state change everywhere).
+     */
+    void deleteAllByVendor(VendorProfile vendor);
 }

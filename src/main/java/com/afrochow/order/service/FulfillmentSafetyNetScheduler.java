@@ -18,10 +18,14 @@ import java.util.List;
  *
  * Pass 1 — Auto-Deliver:
  *   Orders still in OUT_FOR_DELIVERY or READY_FOR_PICKUP state whose
- *   requestedFulfillmentTime is older than 2 hours (the grace period).
- *   The system marks them as DELIVERED and captures payment automatically.
- *   This prevents Stripe's 7-day authorization hold from expiring on food
- *   that was actually delivered but never marked as such.
+ *   fulfillmentDeadline (set for every order at accept time — see
+ *   OrderService#computeFulfillmentDeadline, covers SAME_DAY and ADVANCE_ORDER
+ *   items alike) is older than 2 hours (the grace period). The system marks
+ *   them as DELIVERED and queues the vendor payout — payment was already
+ *   captured at accept time (see OrderService#acceptOrder), so this pass isn't
+ *   a new charge, just closing out a record that was likely just never marked
+ *   delivered. This also prevents Stripe's 7-day authorization window from
+ *   becoming relevant on food that was actually delivered but never marked as such.
  *
  * Pass 2 — Retry Capture:
  *   Orders already in DELIVERED status whose payment is still AUTHORIZED

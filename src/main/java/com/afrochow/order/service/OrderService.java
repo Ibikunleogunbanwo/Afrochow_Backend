@@ -3,6 +3,8 @@ package com.afrochow.order.service;
 import com.afrochow.address.dto.AddressResponseDto;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
+import com.afrochow.common.exceptions.DeliveryOutOfRangeException;
+import com.afrochow.common.util.GeoDistanceUtil;
 import com.afrochow.common.enums.OrderStatus;
 import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.common.enums.PaymentMethod;
@@ -170,6 +172,29 @@ public class OrderService {
                 throw new IllegalStateException("Address does not belong to this customer");
             }
 
+            // ── Delivery-range check ────────────────────────────────────────
+            // Only enforced when the vendor actually offers delivery AND has set
+            // their own maxDeliveryDistanceKm, AND both addresses are geocoded.
+            // Missing any of those pieces (pickup-only vendor, vendor hasn't
+            // configured a range yet, address geocoding still pending) means we
+            // don't block the order — MVP intentionally favors letting orders
+            // through over hiding/rejecting on incomplete data.
+            if (Boolean.TRUE.equals(vendor.getOffersDelivery()) && vendor.getMaxDeliveryDistanceKm() != null) {
+                Address vendorAddress = vendor.getAddress();
+                Double distanceKm = (vendorAddress != null)
+                        ? GeoDistanceUtil.distanceKm(
+                                vendorAddress.getLatitude(), vendorAddress.getLongitude(),
+                                deliveryAddress.getLatitude(), deliveryAddress.getLongitude())
+                        : null;
+
+                if (distanceKm != null && distanceKm > vendor.getMaxDeliveryDistanceKm().doubleValue()) {
+                    throw new DeliveryOutOfRangeException(String.format(
+                            "This address is %.1f km from %s, which is outside their %.1f km delivery range.",
+                            distanceKm, vendor.getRestaurantName(),
+                            vendor.getMaxDeliveryDistanceKm().doubleValue()));
+                }
+            }
+
             // FIX 2: Address.getProvince() returns a Province enum — call .name() to get the code
             taxProvinceCode = deliveryAddress.getProvince().name();
 
@@ -310,18 +335,26 @@ public class OrderService {
 
         // ── Charge via Stripe ─────────────────────────────────────────────────
 
+        PaymentService.ChargeOutcome chargeOutcome;
         try {
-            paymentService.chargeOrder(savedOrder, request.getPaymentMethodId());
+            chargeOutcome = paymentService.chargeOrder(savedOrder, request.getPaymentMethodId());
         } catch (RuntimeException e) {
+            // A genuine decline/error — chargeOrder() has already marked the Payment
+            // FAILED and fired the customer notification. Rethrowing here rolls back
+            // this whole @Transactional method, so the order itself never persists —
+            // there's no reason to keep an order around whose payment definitively failed.
             log.warn("payment.charge.failed publicOrderId={} message={}",
                     savedOrder.getPublicOrderId(),
                     e.getMessage());
-            throw new IllegalStateException("Payment failed: " + e.getMessage());
+            // e.getMessage() already reads "Payment failed: <clean reason>" — PaymentService's
+            // chargeOrder() adds that prefix once. Re-wrapping here previously produced
+            // "Payment failed: Payment failed: ..." shown straight to the customer.
+            throw new IllegalStateException(e.getMessage());
         }
 
-        // ── Payment succeeded — order stays PENDING until vendor manually accepts ──────
-
-        // Record promo usage now that payment is confirmed
+        // Record promo usage — the discount was actually applied to a charge attempt
+        // that at minimum reached Stripe (success or pending-3DS), so it's fair to
+        // count towards the customer's usage limit even if 3DS ends up failing later.
         if (request.getPromoCode() != null && !request.getPromoCode().isBlank()
                 && promoDiscount.compareTo(BigDecimal.ZERO) > 0) {
             promotionService.recordUsage(
@@ -331,6 +364,21 @@ public class OrderService {
                     promoDiscount
             );
         }
+
+        if (chargeOutcome.requiresAction()) {
+            // 3D Secure required — the order and PENDING payment both persist (this is
+            // NOT a failure), but the vendor must NOT be notified of a new order yet,
+            // since the customer hasn't actually finished paying. That notification
+            // fires from PaymentService.confirmAfter3ds() once the challenge succeeds.
+            log.info("order.requires_3ds publicOrderId={} customerUserId={}",
+                    savedOrder.getPublicOrderId(), customerUserId);
+            OrderResponseDto responseDto = toResponseDto(savedOrder);
+            responseDto.setRequiresAction(true);
+            responseDto.setStripeClientSecret(chargeOutcome.clientSecret());
+            return responseDto;
+        }
+
+        // ── Payment succeeded — order stays PENDING until vendor manually accepts ──────
 
         outboxEventService.orderPlaced(savedOrder.getPublicOrderId());
         outboxEventService.customerOrderReceived(savedOrder.getPublicOrderId());
@@ -459,7 +507,8 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderSummaryResponseDto> getVendorTodayOrders(String username) {
         VendorProfile vendor = getVendorByUsername(username);
-        return orderRepository.findTodayOrdersByVendor(vendor).stream()
+        LocalDateTime startOfDay = LocalDateTime.now().toLocalDate().atStartOfDay();
+        return orderRepository.findTodayOrdersByVendor(vendor, startOfDay, startOfDay.plusDays(1)).stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
     }
@@ -499,12 +548,14 @@ public class OrderService {
         }
 
         order.updateStatus(OrderStatus.CONFIRMED);
+        order.setFulfillmentDeadline(computeFulfillmentDeadline(order));
         Order updatedOrder = orderRepository.save(order);
-        log.info("order.accepted publicOrderId={} actor=vendor username={} fromStatus={} toStatus={}",
+        log.info("order.accepted publicOrderId={} actor=vendor username={} fromStatus={} toStatus={} fulfillmentDeadline={}",
                 updatedOrder.getPublicOrderId(),
                 username,
                 OrderStatus.PENDING,
-                updatedOrder.getStatus());
+                updatedOrder.getStatus(),
+                updatedOrder.getFulfillmentDeadline());
 
         // Write the outbox event BEFORE calling Stripe so that all DB work happens
         // first. If the outbox insert fails the transaction rolls back (order stays
@@ -519,6 +570,43 @@ public class OrderService {
         paymentService.captureStripePayment(updatedOrder, null);
 
         return toResponseDto(updatedOrder);
+    }
+
+    /**
+     * Computes when this order is expected to be ready/out for delivery, at the
+     * moment the vendor accepts it. Feeds {@link Order#fulfillmentDeadline}, which
+     * {@link OrderFulfillmentOverdueScheduler} uses to catch orders the vendor
+     * never moves forward on.
+     *
+     * ADVANCE_ORDER items already carry an explicit customer-chosen time
+     * (requestedFulfillmentTime, validated against the product's advanceNoticeHours
+     * at checkout) — use it directly.
+     *
+     * SAME_DAY items have no explicit deadline, so one is derived from
+     * confirmedAt + the longest preparationTimeMinutes across the order's line
+     * items (the vendor's own estimate of how long the slowest item takes).
+     *
+     * If a cart mixes SAME_DAY and ADVANCE_ORDER items, checkout already requires a
+     * single requestedFulfillmentTime for the whole order (validated against the
+     * ADVANCE_ORDER item's advanceNoticeHours), so the same-day item just inherits
+     * that later deadline — checking requestedFulfillmentTime first is sufficient
+     * and never produces an earlier-than-safe deadline.
+     */
+    private LocalDateTime computeFulfillmentDeadline(Order order) {
+        if (order.getRequestedFulfillmentTime() != null) {
+            return order.getRequestedFulfillmentTime();
+        }
+
+        int maxPrepMinutes = order.getOrderLines().stream()
+                .map(OrderLine::getProduct)
+                .filter(java.util.Objects::nonNull)
+                .map(Product::getPreparationTimeMinutes)
+                .filter(java.util.Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(20); // matches Product.preparationTimeMinutes default
+
+        LocalDateTime anchor = order.getConfirmedAt() != null ? order.getConfirmedAt() : LocalDateTime.now();
+        return anchor.plusMinutes(maxPrepMinutes);
     }
 
     @Transactional
@@ -661,6 +749,65 @@ public class OrderService {
 
         // Case A falls through into Case B once captured; Case B enters here directly.
         outboxEventService.paymentTransferRequested(order.getPublicOrderId());
+    }
+
+    /**
+     * Called by {@link OrderFulfillmentOverdueScheduler}'s first pass, when a
+     * CONFIRMED/PREPARING order is found past its fulfillmentDeadline for the first
+     * time. Does NOT cancel or refund anything — just marks the order as flagged and
+     * notifies the vendor + admins, giving the vendor a chance to act before the
+     * scheduler's second pass auto-cancels it.
+     */
+    @Transactional
+    public void flagOrderOverdue(Order order) {
+        Order locked = orderRepository.findByOrderIdWithLock(order.getOrderId())
+                .orElseThrow(() -> new EntityNotFoundException("Order not found for overdue flag: " + order.getPublicOrderId()));
+
+        // Re-check under lock: a concurrent vendor action (markOrderReady, vendorUnableToFulfil)
+        // may have already resolved this order, or another cycle may have already flagged it.
+        if ((locked.getStatus() != OrderStatus.CONFIRMED && locked.getStatus() != OrderStatus.PREPARING)
+                || locked.getOverdueFlaggedAt() != null) {
+            return;
+        }
+
+        locked.setOverdueFlaggedAt(LocalDateTime.now());
+        orderRepository.save(locked);
+        outboxEventService.orderFulfillmentOverdue(locked.getPublicOrderId());
+    }
+
+    /**
+     * Called by {@link OrderFulfillmentOverdueScheduler}'s second pass, when an order
+     * flagged overdue is still unresolved (still CONFIRMED/PREPARING) a further grace
+     * period after being flagged. Issues a real refund (payment was already captured
+     * at accept time) and cancels the order, same as a vendor calling
+     * {@link #vendorUnableToFulfil}, except the system is the actor since the vendor
+     * never responded.
+     */
+    @Transactional
+    public void autoCancelOverdueOrder(Order order) {
+        // Pessimistic lock — same race protection as vendorUnableToFulfil: prevents a
+        // concurrent vendor action from also trying to resolve this order.
+        Order locked = orderRepository.findByOrderIdWithLock(order.getOrderId())
+                .orElseThrow(() -> new EntityNotFoundException("Order not found for overdue auto-cancel: " + order.getPublicOrderId()));
+
+        if (locked.getStatus() != OrderStatus.CONFIRMED && locked.getStatus() != OrderStatus.PREPARING) {
+            return; // already resolved by the vendor/admin — nothing to do
+        }
+
+        String previousStatus = locked.getStatus().toString();
+        String reason = "Vendor did not fulfil this order in time — automatically cancelled and refunded.";
+
+        // Refund before updating status, same ordering as vendorUnableToFulfil/adminCancelOrder:
+        // if Stripe fails, the transaction rolls back and the order stays in its current state
+        // rather than being marked CANCELLED without an actual refund.
+        paymentService.refundStripeCharge(locked);
+
+        locked.updateStatus(OrderStatus.CANCELLED);
+        locked.setCancelledBy("SYSTEM_OVERDUE");
+        locked.setCancellationReason(reason);
+        orderRepository.save(locked);
+
+        outboxEventService.orderCancelled(locked.getPublicOrderId(), reason, previousStatus, "SYSTEM_OVERDUE");
     }
 
     /**
@@ -828,6 +975,19 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Paginated variant of {@link #getAllOrders()} — the orders table grows
+     * without bound in production (every order placed, forever), unlike
+     * vendors/categories/promotions which are small and admin-curated, so
+     * this is the admin list view where fetching everything client-side is
+     * a real scale risk rather than a theoretical one.
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<OrderSummaryResponseDto> getAllOrders(
+            org.springframework.data.domain.Pageable pageable) {
+        return orderRepository.findAll(pageable).map(this::toSummaryResponseDto);
+    }
+
     @Transactional(readOnly = true)
     public OrderResponseDto getOrderById(String publicOrderId) {
         Order order = orderRepository.findByPublicOrderId(publicOrderId)
@@ -849,6 +1009,45 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    /** Paginated variant of {@link #getOrdersByStatus(OrderStatus)} — see {@link #getAllOrders(org.springframework.data.domain.Pageable)}. */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<OrderSummaryResponseDto> getOrdersByStatus(
+            OrderStatus status, org.springframework.data.domain.Pageable pageable) {
+        return orderRepository.findByStatusOrderByOrderTimeDesc(status, pageable).map(this::toSummaryResponseDto);
+    }
+
+    /** Powers the admin Orders dashboard's stat cards — see {@link com.afrochow.order.dto.OrderStatsDto}. */
+    @Transactional(readOnly = true)
+    public com.afrochow.order.dto.OrderStatsDto getOrderStats() {
+        java.util.Map<OrderStatus, Long> byStatus = new java.util.EnumMap<>(OrderStatus.class);
+        for (Object[] row : orderRepository.countGroupedByStatus()) {
+            byStatus.put((OrderStatus) row[0], (Long) row[1]);
+        }
+        long pending          = byStatus.getOrDefault(OrderStatus.PENDING, 0L);
+        long confirmed        = byStatus.getOrDefault(OrderStatus.CONFIRMED, 0L);
+        long preparing        = byStatus.getOrDefault(OrderStatus.PREPARING, 0L);
+        long readyForPickup   = byStatus.getOrDefault(OrderStatus.READY_FOR_PICKUP, 0L);
+        long outForDelivery   = byStatus.getOrDefault(OrderStatus.OUT_FOR_DELIVERY, 0L);
+        long delivered        = byStatus.getOrDefault(OrderStatus.DELIVERED, 0L);
+        long cancelled        = byStatus.getOrDefault(OrderStatus.CANCELLED, 0L);
+        long refunded         = byStatus.getOrDefault(OrderStatus.REFUNDED, 0L);
+        long active           = pending + confirmed + preparing + readyForPickup + outForDelivery;
+        long total            = active + delivered + cancelled + refunded;
+
+        return com.afrochow.order.dto.OrderStatsDto.builder()
+                .total(total)
+                .pending(pending)
+                .confirmed(confirmed)
+                .preparing(preparing)
+                .readyForPickup(readyForPickup)
+                .outForDelivery(outForDelivery)
+                .delivered(delivered)
+                .cancelled(cancelled)
+                .refunded(refunded)
+                .active(active)
+                .build();
+    }
+
     // ========== STATISTICS ==========
 
     public Long countCustomerOrders(Long customerUserId) {
@@ -867,7 +1066,9 @@ public class OrderService {
     }
 
     public BigDecimal getVendorTodayRevenue(String username) {
-        BigDecimal revenue = orderRepository.calculateVendorTodayRevenue(getVendorByUsername(username));
+        LocalDateTime startOfDay = LocalDateTime.now().toLocalDate().atStartOfDay();
+        BigDecimal revenue = orderRepository.calculateVendorTodayRevenue(
+                getVendorByUsername(username), startOfDay, startOfDay.plusDays(1));
         return revenue != null ? revenue : BigDecimal.ZERO;
     }
 

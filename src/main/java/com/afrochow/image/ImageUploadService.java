@@ -64,7 +64,6 @@ public class ImageUploadService {
     private static final int  MAX_WIDTH        = 10000;
     private static final int  MAX_HEIGHT       = 10000;
     private static final long MAX_PIXELS       = 50_000_000L;
-    private static final int  MAX_USERID_LENGTH = 100;
 
     private final Object dirLock = new Object();
 
@@ -95,33 +94,6 @@ public class ImageUploadService {
 
     public String uploadImageForRegistrationAndGetUrl(MultipartFile file, String category) throws IOException {
         return uploadImageForRegistration(file, category);
-    }
-
-    /**
-     * Upload image using publicUserId as filename (overwrites existing).
-     * Prod → Cloudinary.  Dev → local filesystem.
-     */
-    public String uploadImage(MultipartFile file, String category, String publicUserId) throws IOException {
-        validateCategory(category);
-        validateUserId(publicUserId);
-        byte[] fileBytes     = validateFileAndGetBytes(file);
-        String sanitizedId   = sanitizeUserId(publicUserId);
-
-        if (cloudinary != null) {
-            return uploadToCloudinary(fileBytes, category, sanitizedId, true);
-        }
-
-        Path   uploadPath = prepareUploadPath(category);
-        String extension  = getValidatedExtension(file.getOriginalFilename());
-        String filename   = sanitizedId + extension;
-        deleteOldUserImages(uploadPath, sanitizedId, extension);
-        saveFile(uploadPath, filename, fileBytes);
-        log.info("Local user image saved: {}/{}", category, filename);
-        return getImageUrl(category + "/" + filename);
-    }
-
-    public String uploadImageAndGetUrl(MultipartFile file, String category, String publicUserId) throws IOException {
-        return uploadImage(file, category, publicUserId);
     }
 
     /**
@@ -326,18 +298,6 @@ public class ImageUploadService {
         }
     }
 
-    private void deleteOldUserImages(Path uploadPath, String userId, String currentExtension) {
-        for (String ext : ALLOWED_EXTENSIONS) {
-            if (!ext.equals(currentExtension)) {
-                try {
-                    Files.deleteIfExists(uploadPath.resolve(userId + ext));
-                } catch (Exception e) {
-                    log.debug("Could not delete old image: {}{}", userId, ext);
-                }
-            }
-        }
-    }
-
     // ============================================================
     // VALIDATION
     // ============================================================
@@ -408,12 +368,6 @@ public class ImageUploadService {
         if (!ALLOWED_CATEGORIES.contains(category)) throw new ImageValidationException("Invalid category: " + category);
     }
 
-    private void validateUserId(String userId) {
-        if (userId == null || userId.isBlank()) throw new ImageValidationException("User ID is required");
-        if (userId.length() > MAX_USERID_LENGTH) throw new ImageValidationException("User ID too long");
-        if (!userId.matches("^[a-zA-Z0-9_-]+$")) throw new ImageValidationException("User ID contains invalid characters");
-    }
-
     // ============================================================
     // HELPERS
     // ============================================================
@@ -438,7 +392,4 @@ public class ImageUploadService {
         return ext;
     }
 
-    private String sanitizeUserId(String userId) {
-        return userId.replaceAll("[^a-zA-Z0-9_-]", "");
-    }
 }

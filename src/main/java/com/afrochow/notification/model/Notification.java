@@ -20,6 +20,20 @@ public class Notification {
     private Long notificationId;
 
     private String title;
+
+    /**
+     * Explicit TEXT column — plain "private String message" with no @Column would
+     * let Hibernate default it to VARCHAR(255). That's what actually happened in
+     * this dev DB (the notification table predates/bypasses Flyway management),
+     * and it silently truncated/crashed on broadcast messages up to the frontend's
+     * allowed 500 chars: broadcastNotification() is @Async, so the admin's HTTP
+     * request already returned "sent successfully" before the background batch
+     * insert threw DataIntegrityViolationException — a broadcast could report
+     * success while notifying zero users. See V33 migration, which widens the
+     * actual column to match (required in prod, where ddl-auto=validate means
+     * Hibernate won't just auto-fix the drift the way dev's ddl-auto=update does).
+     */
+    @Column(columnDefinition = "TEXT")
     private String message;
 
     @Enumerated(EnumType.STRING)

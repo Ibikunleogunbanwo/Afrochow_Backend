@@ -110,6 +110,24 @@ public class Order {
      */
     private LocalDateTime requestedFulfillmentTime;
 
+    /**
+     * When this order is expected to be ready/out for delivery — computed once,
+     * when the vendor accepts (see OrderService.acceptOrder):
+     *   - ADVANCE_ORDER items: copied straight from requestedFulfillmentTime.
+     *   - SAME_DAY items: confirmedAt + the longest preparationTimeMinutes
+     *     across the order's line items.
+     * Null until the order is accepted. Drives {@link com.afrochow.order.service.OrderFulfillmentOverdueScheduler}.
+     */
+    private LocalDateTime fulfillmentDeadline;
+
+    /**
+     * When the fulfillment safety net first found this order past its
+     * fulfillmentDeadline while still CONFIRMED/PREPARING. Null until flagged.
+     * A vendor/admin notification fires at this point; if the order is still
+     * unresolved a further grace period later, it is auto-cancelled and refunded.
+     */
+    private LocalDateTime overdueFlaggedAt;
+
     // ========== ORDER STATUS ==========
 
     @Enumerated(EnumType.STRING)

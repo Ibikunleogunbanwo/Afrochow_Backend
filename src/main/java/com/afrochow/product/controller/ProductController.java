@@ -20,22 +20,19 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.util.List;
 
 /**
  * Controller for product management
  *
  * Public endpoints (GET):
- * - GET /products - Browse all available products
  * - GET /products/{publicProductId} - Get product details
  * - GET /products/vendor/{publicVendorId} - Get vendor's products
  * - GET /products/category/{categoryId} - Get products by category
- * - GET /products/search - Search products
- * - GET /products/filter/price - Filter by price range
- * - GET /products/filter/vegetarian - Get vegetarian products
- * - GET /products/filter/vegan - Get vegan products
- * - GET /products/filter/gluten-free - Get gluten-free products
+ *
+ * (Plain listing, search, and price/dietary filtering used to live here too,
+ * but had no frontend callers — /search/products/advanced covers all of that
+ * with pagination and combined filters. Removed as dead code.)
  *
  * Vendor endpoints (requires VENDOR role):
  * - POST /vendor/products - Create new product
@@ -57,16 +54,6 @@ public class ProductController {
     }
 
     // ========== PUBLIC ENDPOINTS (no authentication required) ==========
-
-    /**
-     * Get all available products
-     */
-    @GetMapping("/products")
-    @Operation(summary = "Get all products", description = "Get all available products")
-    public ResponseEntity<ApiResponse<List<ProductSummaryResponseDto>>> getAllProducts() {
-        List<ProductSummaryResponseDto> products = productService.getAllAvailableProducts();
-        return ResponseBuilder.ok("Products retrieved successfully", products);
-    }
 
     /**
      * Get product by public ID
@@ -102,61 +89,6 @@ public class ProductController {
     ) {
         List<ProductSummaryResponseDto> products = productService.getProductsByCategory(categoryId, availableOnly);
         return ResponseBuilder.ok("Products retrieved successfully", products);
-    }
-
-    /**
-     * Search products
-     */
-    @GetMapping("/products/search")
-    @Operation(summary = "Search products", description = "Search products by name or description")
-    public ResponseEntity<ApiResponse<List<ProductSummaryResponseDto>>> searchProducts(
-            @RequestParam String query
-    ) {
-        List<ProductSummaryResponseDto> products = productService.searchProducts(query);
-        return ResponseBuilder.ok("Search completed successfully", products);
-    }
-
-    /**
-     * Filter products by price range
-     */
-    @GetMapping("/products/filter/price")
-    @Operation(summary = "Filter by price", description = "Get products within a price range")
-    public ResponseEntity<ApiResponse<List<ProductSummaryResponseDto>>> getProductsByPriceRange(
-            @RequestParam BigDecimal minPrice,
-            @RequestParam BigDecimal maxPrice
-    ) {
-        List<ProductSummaryResponseDto> products = productService.getProductsByPriceRange(minPrice, maxPrice);
-        return ResponseBuilder.ok("Products filtered successfully", products);
-    }
-
-    /**
-     * Get vegetarian products
-     */
-    @GetMapping("/products/filter/vegetarian")
-    @Operation(summary = "Get vegetarian products", description = "Get all available vegetarian products")
-    public ResponseEntity<ApiResponse<List<ProductSummaryResponseDto>>> getVegetarianProducts() {
-        List<ProductSummaryResponseDto> products = productService.getVegetarianProducts();
-        return ResponseBuilder.ok("Vegetarian products retrieved successfully", products);
-    }
-
-    /**
-     * Get vegan products
-     */
-    @GetMapping("/products/filter/vegan")
-    @Operation(summary = "Get vegan products", description = "Get all available vegan products")
-    public ResponseEntity<ApiResponse<List<ProductSummaryResponseDto>>> getVeganProducts() {
-        List<ProductSummaryResponseDto> products = productService.getVeganProducts();
-        return ResponseBuilder.ok("Vegan products retrieved successfully", products);
-    }
-
-    /**
-     * Get gluten-free products
-     */
-    @GetMapping("/products/filter/gluten-free")
-    @Operation(summary = "Get gluten-free products", description = "Get all available gluten-free products")
-    public ResponseEntity<ApiResponse<List<ProductSummaryResponseDto>>> getGlutenFreeProducts() {
-        List<ProductSummaryResponseDto> products = productService.getGlutenFreeProducts();
-        return ResponseBuilder.ok("Gluten-free products retrieved successfully", products);
     }
 
     // ========== VENDOR ENDPOINTS (requires VENDOR role) ==========

@@ -84,7 +84,7 @@ public class AnalyticsController {
     // ================= ADMIN =================
 
     @GetMapping("/admin/platform")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('REPORTS')") // REPORTS area = FINANCE, MARKETING, or MANAGEMENT department (or SUPERADMIN)
     @Operation(
             summary = "Get platform analytics",
             description = "Get platform-wide analytics (admin only). " +
@@ -106,7 +106,7 @@ public class AnalyticsController {
     }
 
     @GetMapping("/admin/trends")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('REPORTS')") // REPORTS area = FINANCE, MARKETING, or MANAGEMENT department (or SUPERADMIN)
     @Operation(
             summary = "Get platform trends",
             description = "Get platform sales trends (admin only). " +

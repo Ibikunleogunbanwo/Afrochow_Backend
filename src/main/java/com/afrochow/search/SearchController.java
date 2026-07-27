@@ -1,10 +1,7 @@
 package com.afrochow.search;
 
-import com.afrochow.category.dto.CategoryResponseDto;
 import com.afrochow.common.ApiResponse;
-import com.afrochow.common.enums.StoreCategory;
 import com.afrochow.product.dto.ProductResponseDto;
-import com.afrochow.search.dto.PopularCategoryDto;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,15 +20,6 @@ public class SearchController {
 
     private final SearchService searchService;
 
-    // ========== UNIVERSAL SEARCH ==========
-
-    @GetMapping
-    @Operation(summary = "Universal search", description = "Search across vendors, products, and categories")
-    public ResponseEntity<ApiResponse<SearchService.UniversalSearchResults>> searchAll(@RequestParam String query) {
-        SearchService.UniversalSearchResults results = searchService.searchAll(query);
-        return ResponseEntity.ok(ApiResponse.success(results));
-    }
-
     // ========== VENDOR SEARCH ==========
 
     @GetMapping("/vendors/{publicUserId}")
@@ -39,20 +27,6 @@ public class SearchController {
     public ResponseEntity<ApiResponse<VendorProfileResponseDto>> getVendorByPublicId(@PathVariable String publicUserId) {
         VendorProfileResponseDto vendor = searchService.getVendorByPublicId(publicUserId);
         return ResponseEntity.ok(ApiResponse.success("Vendor details retrieved successfully", vendor));
-    }
-
-    @GetMapping("/vendors")
-    @Operation(summary = "Search vendors", description = "Search for vendors by name or category type")
-    public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> searchVendors(@RequestParam String query) {
-        List<VendorProfileResponseDto> vendors = searchService.searchVendors(query);
-        return ResponseEntity.ok(ApiResponse.success(vendors));
-    }
-
-    @GetMapping("/vendors/category/{storeCategory}")
-    @Operation(summary = "Get vendors by category", description = "Get all vendors offering a specific store category")
-    public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getVendorsByCategory(@PathVariable String storeCategory) {
-        List<VendorProfileResponseDto> vendors = searchService.getVendorsByCategory(storeCategory);
-        return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 
     @GetMapping("/vendors/by-product")
@@ -71,13 +45,6 @@ public class SearchController {
         return ResponseEntity.ok(ApiResponse.success(vendors));
     }
 
-    @GetMapping("/vendors/open")
-    @Operation(summary = "Get open vendors", description = "Get all currently open vendors")
-    public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getOpenVendors() {
-        List<VendorProfileResponseDto> vendors = searchService.getOpenVendors();
-        return ResponseEntity.ok(ApiResponse.success(vendors));
-    }
-
     @GetMapping("/vendors/top-rated")
     @Operation(summary = "Get top-rated vendors", description = "Get vendors with the most reviews")
     public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getTopRatedVendors() {
@@ -90,21 +57,6 @@ public class SearchController {
     public ResponseEntity<ApiResponse<List<VendorProfileResponseDto>>> getVerifiedVendors() {
         List<VendorProfileResponseDto> vendors = searchService.getVerifiedVendors();
         return ResponseEntity.ok(ApiResponse.success(vendors));
-    }
-
-    @GetMapping("/vendors/store-categories")
-    @Operation(summary = "Get allowed category/product types",
-            description = "Returns the ordered list of valid category type labels for the vendor profile dropdown")
-    public ResponseEntity<ApiResponse<List<String>>> getStoreCategories() {
-        return ResponseEntity.ok(ApiResponse.success("store categories retrieved", StoreCategory.labels()));
-    }
-
-    @GetMapping("/store-categories/popular")
-    @Operation(summary = "Get popular store categories",
-               description = "Get list of store categories with vendor count, total orders, and average rating, sorted by popularity")
-    public ResponseEntity<ApiResponse<List<PopularCategoryDto>>> getPopularCategories() {
-        List<PopularCategoryDto> categories = searchService.getPopularCategories();
-        return ResponseEntity.ok(ApiResponse.success("Popular store categories retrieved successfully", categories));
     }
 
     @GetMapping("/vendors/advanced")
@@ -122,99 +74,17 @@ public class SearchController {
 
     // ========== PRODUCT SEARCH ==========
 
-    @GetMapping("/products")
-    @Operation(summary = "Search products", description = "Search for products by name or description")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> searchProducts(@RequestParam String query) {
-        List<ProductResponseDto> products = searchService.searchProducts(query);
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/products/name")
-    @Operation(summary = "Search products by name", description = "Search for available products by name only")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> searchProductsByName(@RequestParam String name) {
-        List<ProductResponseDto> products = searchService.searchProductsByName(name);
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/products/category/{categoryId}")
-    @Operation(summary = "Get products by category", description = "Get all available products in a category")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getProductsByCategory(@PathVariable Long categoryId) {
-        List<ProductResponseDto> products = searchService.getProductsByCategory(categoryId);
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/products/price-range")
-    @Operation(summary = "Get products by price range", description = "Get products within a specific price range")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getProductsByPriceRange(
-            @RequestParam BigDecimal minPrice,
-            @RequestParam BigDecimal maxPrice) {
-        List<ProductResponseDto> products = searchService.getProductsByPriceRange(minPrice, maxPrice);
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/products/vegetarian")
-    @Operation(summary = "Get vegetarian products", description = "Get all available vegetarian products")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getVegetarianProducts() {
-        List<ProductResponseDto> products = searchService.getVegetarianProducts();
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/products/vegan")
-    @Operation(summary = "Get vegan products", description = "Get all available vegan products")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getVeganProducts() {
-        List<ProductResponseDto> products = searchService.getVeganProducts();
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/products/gluten-free")
-    @Operation(summary = "Get gluten-free products", description = "Get all available gluten-free products")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getGlutenFreeProducts() {
-        List<ProductResponseDto> products = searchService.getGlutenFreeProducts();
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/products/popular")
-    @Operation(summary = "Get popular products", description = "Get top 20 popular products by order count")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getPopularProducts() {
-        List<ProductResponseDto> products = searchService.getPopularProducts();
-        return ResponseEntity.ok(ApiResponse.success(products));
-    }
-
-    @GetMapping("/products/chef-specials")
-    @Operation(summary = "Get chef's specials",
-               description = "Get top 10 chef's special products from African Kitchen or African Soups categories, sorted by popularity and rating")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getChefSpecials() {
-        List<ProductResponseDto> products = searchService.getChefSpecials();
-        return ResponseEntity.ok(ApiResponse.success("Chef's specials retrieved successfully", products));
-    }
-
     @GetMapping("/products/featured")
     @Operation(summary = "Get featured products",
-               description = "Admin-pinned products always included. Pass ?city= to filter algorithmic fill by vendor city.")
+               description = "Admin-pinned products always included. Pass ?city= to filter algorithmic fill by vendor city. " +
+                            "Pass ?lat=&lng= (optional) to have each product's distanceKm from that point computed via the " +
+                            "Redis vendor geo index.")
     public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getFeaturedProducts(
-            @RequestParam(required = false) String city) {
-        List<ProductResponseDto> products = searchService.getFeaturedProducts(city);
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng) {
+        List<ProductResponseDto> products = searchService.getFeaturedProducts(city, lat, lng);
         return ResponseEntity.ok(ApiResponse.success("Featured products retrieved successfully", products));
-    }
-
-    @GetMapping("/products/near-me")
-    @Operation(summary = "Get products from best restaurants near me",
-               description = "Get top 12 products from best-rated restaurants in the specified city, sorted by restaurant rating and popularity")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getProductsFromBestRestaurantsNearMe(
-            @RequestParam String city) {
-        List<ProductResponseDto> products = searchService.getProductsFromBestRestaurantsNearMe(city);
-        return ResponseEntity.ok(ApiResponse.success("Products from best restaurants near you retrieved successfully", products));
-    }
-
-    @GetMapping("/products/monthly-popular")
-    @Operation(summary = "Get most popular products (last 3 months)",
-               description = "Get top 10 products with the most orders in the last 3 months, sorted by order count. " +
-                            "Covers 3-month period to ensure enough data for MVP. " +
-                            "Optionally filter by city using the 'city' query parameter.")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getMostPopularProductsThisMonth(
-            @RequestParam(required = false) String city) {
-        List<ProductResponseDto> products = searchService.getMostPopularProductsThisMonth(city);
-        return ResponseEntity.ok(ApiResponse.success("Most popular products retrieved successfully", products));
     }
 
     @GetMapping("/products/popular/names")
@@ -223,13 +93,6 @@ public class SearchController {
             @RequestParam(defaultValue = "5") int limit) {
         List<String> productNames = searchService.getPopularProductNames(limit);
         return ResponseEntity.ok(ApiResponse.success("Popular product names retrieved successfully", productNames));
-    }
-
-    @GetMapping("/products/top-rated")
-    @Operation(summary = "Get top-rated products", description = "Get top 20 products with most reviews")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getTopRatedProducts() {
-        List<ProductResponseDto> products = searchService.getTopRatedProducts();
-        return ResponseEntity.ok(ApiResponse.success(products));
     }
 
     @GetMapping("/products/advanced")
@@ -268,30 +131,4 @@ public class SearchController {
         return ResponseEntity.ok(ApiResponse.success("Vendors near coordinates retrieved", vendors));
     }
 
-    @GetMapping("/products/near-coordinates")
-    @Operation(summary = "Get products near coordinates",
-            description = "Find products from vendors within radiusKm of the given lat/lng")
-    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getProductsNearCoordinates(
-            @RequestParam double lat,
-            @RequestParam double lng,
-            @RequestParam(defaultValue = "25") double radiusKm) {
-        List<ProductResponseDto> products = searchService.getProductsNearCoordinates(lat, lng, radiusKm);
-        return ResponseEntity.ok(ApiResponse.success("Products near coordinates retrieved", products));
-    }
-
-    // ========== CATEGORY SEARCH ==========
-
-    @GetMapping("/categories")
-    @Operation(summary = "Search categories", description = "Search for categories by name")
-    public ResponseEntity<ApiResponse<List<CategoryResponseDto>>> searchCategories(@RequestParam String query) {
-        List<CategoryResponseDto> categories = searchService.searchCategories(query);
-        return ResponseEntity.ok(ApiResponse.success(categories));
-    }
-
-    @GetMapping("/categories/all")
-    @Operation(summary = "Get all active categories", description = "Get all active categories ordered by display order")
-    public ResponseEntity<ApiResponse<List<CategoryResponseDto>>> getAllActiveCategories() {
-        List<CategoryResponseDto> categories = searchService.getAllActiveCategories();
-        return ResponseEntity.ok(ApiResponse.success(categories));
-    }
 }

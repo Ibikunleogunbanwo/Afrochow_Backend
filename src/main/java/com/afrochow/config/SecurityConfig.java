@@ -135,6 +135,25 @@ public class SecurityConfig {
                         // ── PLATFORM STATS ────────────────────────────────
                         .requestMatchers("/stats/**").permitAll()
 
+                        // ── MVP WAITLIST ──────────────────────────────────
+                        .requestMatchers(HttpMethod.POST,
+                                "/waitlist",
+                                "/api/waitlist"
+                        ).permitAll()
+
+                        // ── FAVORITES — PUBLIC COUNTS ─────────────────────
+                        // These two are intentionally unauthenticated in FavoriteController
+                        // (no @PreAuthorize) so anonymous visitors can see favorite counts
+                        // on vendor/product listing pages. Everything else under /favorites/**
+                        // requires CUSTOMER auth and falls through to anyRequest().authenticated()
+                        // plus the controller's own @PreAuthorize("hasRole('CUSTOMER')").
+                        .requestMatchers(HttpMethod.GET,
+                                "/favorites/vendor/*/count",
+                                "/favorites/product/*/count",
+                                "/api/favorites/vendor/*/count",
+                                "/api/favorites/product/*/count"
+                        ).permitAll()
+
                         // ── STRIPE WEBHOOK (Stripe calls this directly, no JWT) ───
                         .requestMatchers(HttpMethod.POST, "/stripe/webhook", "/api/stripe/webhook").permitAll()
 

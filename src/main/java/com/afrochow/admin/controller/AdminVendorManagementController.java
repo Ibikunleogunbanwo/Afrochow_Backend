@@ -28,7 +28,9 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/vendors")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+// VENDORS area = OPERATIONS department (or SUPERADMIN). linkStripeAccount()
+// below overrides this with a stricter hasRole('SUPERADMIN') — untouched.
+@PreAuthorize("@deptAccess.can('VENDORS')")
 @Tag(name = "Admin Vendor Management", description = "Admin APIs for managing vendor profiles")
 public class AdminVendorManagementController {
 
@@ -332,28 +334,6 @@ public class AdminVendorManagementController {
         return ResponseEntity.ok(ApiResponse.success("Vendor application rejected", toSummary(vendor)));
     }
 
-    // ========== DEPRECATED (kept for compatibility) ==========
-
-    /** @deprecated Use /approve-provisional or /verify instead */
-    @Deprecated
-    @Transactional
-    @PatchMapping("/{publicVendorId}/activate")
-    @Operation(summary = "[Deprecated] Activate vendor", description = "Deprecated — use /reinstate for suspended vendors")
-    public ResponseEntity<ApiResponse<VendorSummaryDto>> activateVendor(
-            @PathVariable String publicVendorId) {
-        return reinstateVendor(publicVendorId);
-    }
-
-    /** @deprecated Use /suspend instead */
-    @Deprecated
-    @Transactional
-    @PatchMapping("/{publicVendorId}/deactivate")
-    @Operation(summary = "[Deprecated] Deactivate vendor", description = "Deprecated — use /suspend instead")
-    public ResponseEntity<ApiResponse<VendorSummaryDto>> deactivateVendor(
-            @PathVariable String publicVendorId) {
-        return suspendVendor(publicVendorId);
-    }
-
     // ========== STRIPE ACCOUNT LINKING ==========
 
     @lombok.Data
@@ -363,7 +343,12 @@ public class AdminVendorManagementController {
 
     @Transactional
     @PatchMapping("/{publicVendorId}/stripe-account")
-    @Operation(summary = "Link Stripe account", description = "Link or replace a vendor's Stripe Connect account ID")
+    // Overrides the class-level hasAnyRole(ADMIN, SUPERADMIN) — this endpoint
+    // redirects where a vendor's payouts go, so it's held to the same
+    // SUPERADMIN-only bar as user role changes, user deletion, and product
+    // deletion elsewhere in the admin API.
+    @PreAuthorize("hasRole('SUPERADMIN')")
+    @Operation(summary = "Link Stripe account", description = "Link or replace a vendor's Stripe Connect account ID — SUPERADMIN only")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> linkStripeAccount(
             @PathVariable String publicVendorId,
             @RequestBody LinkStripeAccountDto body) {

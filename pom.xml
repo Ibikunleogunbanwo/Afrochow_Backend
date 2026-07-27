@@ -71,7 +71,7 @@
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 
-		<!-- Email — Resend HTTP API (replaces JavaMailSender/SMTP to avoid Railway port 587 blocking) -->
+		<!-- Email — Resend HTTP API (replaces JavaMailSender/SMTP to avoid cloud-host SMTP port blocking) -->
 		<dependency>
 			<groupId>com.resend</groupId>
 			<artifactId>resend-java</artifactId>

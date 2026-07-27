@@ -5,6 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * NOTE: accessLevel/employeeId/permission flags are intentionally NOT applied by
+ * {@link com.afrochow.admin.service.AdminProfileService#updateProfile}, even
+ * though they're still accepted here for backward request-shape compatibility.
+ * This DTO backs a self-service "update my own profile" endpoint with no
+ * additional privilege check, so allowing it to set permission fields would let
+ * any admin grant themselves elevated access. Only department is honored.
+ */
 @Data
 @Builder
 @NoArgsConstructor

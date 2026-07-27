@@ -14,6 +14,7 @@ import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.category.repository.CategoryRepository;
+import com.afrochow.favorite.repository.FavoriteRepository;
 import com.afrochow.product.repository.ProductRepository;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -23,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,6 +40,7 @@ public class ProductService {
     private final ImageUploadService imageUploadService;
     private final ImageCleanupService imageCleanupService;
     private final UserRepository userRepository;
+    private final FavoriteRepository favoriteRepository;
 
     public ProductService(
             ProductRepository productRepository,
@@ -47,7 +48,8 @@ public class ProductService {
             CategoryRepository categoryRepository,
             ImageUploadService imageUploadService,
             ImageCleanupService imageCleanupService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            FavoriteRepository favoriteRepository
     ) {
         this.productRepository = productRepository;
         this.vendorProfileRepository = vendorProfileRepository;
@@ -55,23 +57,10 @@ public class ProductService {
         this.imageUploadService = imageUploadService;
         this.imageCleanupService = imageCleanupService;
         this.userRepository = userRepository;
+        this.favoriteRepository = favoriteRepository;
     }
 
     // ========== PUBLIC METHODS (no authentication required) ==========
-
-    /**
-     * Get all available products.
-     * Only returns products that are both available (vendor-controlled) AND
-     * platform-visible (adminVisible=true), so admin-suspended products are
-     * never shown to customers.
-     */
-    @Transactional(readOnly = true)
-    public List<ProductSummaryResponseDto> getAllAvailableProducts() {
-        List<Product> products = productRepository.findByAvailableTrueAndAdminVisibleTrue();
-        return products.stream()
-                .map(this::toSummaryResponseDto)
-                .collect(Collectors.toList());
-    }
 
     /**
      * Get product by public ID
@@ -115,66 +104,6 @@ public class ProductService {
                 ? productRepository.findByCategoryAndAvailableTrueAndAdminVisibleTrue(category)
                 : productRepository.findByCategoryAndAdminVisibleTrue(category);
 
-        return products.stream()
-                .map(this::toSummaryResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Search products by name or description (public endpoint).
-     * Only returns platform-visible products so suspended items never appear in search results.
-     */
-    @Transactional(readOnly = true)
-    public List<ProductSummaryResponseDto> searchProducts(String query) {
-        List<Product> products = productRepository.searchPublic(query);
-        return products.stream()
-                .map(this::toSummaryResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Filter products by price range (public endpoint).
-     * Only returns platform-visible products.
-     */
-    @Transactional(readOnly = true)
-    public List<ProductSummaryResponseDto> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-        List<Product> products = productRepository.findByPriceBetweenAndAvailableTrueAndAdminVisibleTrue(minPrice, maxPrice);
-        return products.stream()
-                .map(this::toSummaryResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Get vegetarian products (public endpoint).
-     * Only returns platform-visible products.
-     */
-    @Transactional(readOnly = true)
-    public List<ProductSummaryResponseDto> getVegetarianProducts() {
-        List<Product> products = productRepository.findByIsVegetarianTrueAndAvailableTrueAndAdminVisibleTrue();
-        return products.stream()
-                .map(this::toSummaryResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Get vegan products (public endpoint).
-     * Only returns platform-visible products.
-     */
-    @Transactional(readOnly = true)
-    public List<ProductSummaryResponseDto> getVeganProducts() {
-        List<Product> products = productRepository.findByIsVeganTrueAndAvailableTrueAndAdminVisibleTrue();
-        return products.stream()
-                .map(this::toSummaryResponseDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Get gluten-free products (public endpoint).
-     * Only returns platform-visible products.
-     */
-    @Transactional(readOnly = true)
-    public List<ProductSummaryResponseDto> getGlutenFreeProducts() {
-        List<Product> products = productRepository.findByIsGlutenFreeTrueAndAvailableTrueAndAdminVisibleTrue();
         return products.stream()
                 .map(this::toSummaryResponseDto)
                 .collect(Collectors.toList());
@@ -298,6 +227,12 @@ public class ProductService {
                 !username.equals(product.getVendor().getUser().getUsername())) {
             throw new IllegalArgumentException("You do not own this product");
         }
+
+        // Favorite.product has no cascade/orphanRemoval configured, so any
+        // customer favorite pointing at this product must be cleared first —
+        // otherwise the DB's foreign-key constraint rejects the delete below
+        // with a DataIntegrityViolationException (surfaces as a confusing 500).
+        favoriteRepository.deleteAllByProduct(product);
 
         productRepository.delete(product);
     }
