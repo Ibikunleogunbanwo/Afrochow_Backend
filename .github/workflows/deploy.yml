@@ -25,4 +25,4 @@ jobs:
         run: sleep 10
 
       - name: Verify deployment
-        run: curl -f http://65.21.111.29/actuator/health || exit 1
+        run: curl -f https://api.afrochow.ca/api/actuator/health || exit 1
