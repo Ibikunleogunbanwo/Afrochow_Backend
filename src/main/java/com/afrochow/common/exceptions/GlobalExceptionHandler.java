@@ -360,6 +360,13 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
 
+    @ExceptionHandler(DeliveryOutOfRangeException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDeliveryOutOfRange(
+            DeliveryOutOfRangeException ex, WebRequest request) {
+        logger.warn("Order rejected — delivery out of range: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(InvalidOrderStatusException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidOrderStatus(
             InvalidOrderStatusException ex, WebRequest request) {

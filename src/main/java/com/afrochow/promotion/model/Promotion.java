@@ -52,8 +52,11 @@ public class Promotion {
     @Column(nullable = false, length = 20)
     private PromotionType type;
 
-    /** Percentage (0-100) for PERCENTAGE type, or dollar amount for FIXED_AMOUNT. */
-    @Column(nullable = false, precision = 10, scale = 2)
+    /** Percentage (0-100) for PERCENTAGE type, or dollar amount for FIXED_AMOUNT.
+     *  Column explicitly named away from "value" — that's a reserved word in H2
+     *  (used by the test profile), so the bare field name breaks schema
+     *  generation there with a DDL syntax error, even though it's fine on MySQL. */
+    @Column(name = "discount_value", nullable = false, precision = 10, scale = 2)
     private BigDecimal value;
 
     /** Maximum discount cap for PERCENTAGE promotions (nullable = no cap). */

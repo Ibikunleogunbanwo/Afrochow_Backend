@@ -88,16 +88,33 @@ public class AdminProfile {
 
     // ========== HELPER METHODS ==========
 
+    /**
+     * Whether this admin is a real SUPERADMIN.
+     *
+     * <p>Deliberately derived from {@code User.role} — the field that is actually
+     * enforced by every {@code @PreAuthorize}/SecurityConfig check in the app —
+     * rather than from {@link #accessLevel}. {@code accessLevel} is a legacy,
+     * unenforced categorization (see {@link AdminAccessLevel}) that used to drift
+     * out of sync with the real role: an account could show "Super Admin" here
+     * while having none of the actual SUPERADMIN privileges (or vice versa after
+     * a promote/demote). Promotion to real SUPERADMIN only happens via
+     * {@code SuperAdminController.promoteToSuperAdmin}, which sets {@code User.role}
+     * directly.
+     */
     @Transient
     public boolean isSuperAdmin() {
-        return accessLevel == AdminAccessLevel.SUPER_ADMIN;
+        return user != null && user.getRole() == com.afrochow.common.enums.Role.SUPERADMIN;
     }
 
+    /**
+     * Alias for {@link #isSuperAdmin()} — today "full access" and "SUPERADMIN"
+     * are the same thing. The six {@code can*} flags below are legacy/decorative:
+     * they're recorded at admin-creation time for record-keeping but are not read
+     * by any authorization check, so they deliberately don't factor in here.
+     */
     @Transient
     public boolean hasFullAccess() {
-        return canVerifyVendors && canManageUsers &&
-                canViewReports && canManagePayments &&
-                canManageCategories && canResolveDisputes;
+        return isSuperAdmin();
     }
 
     // Record that admin performed an action

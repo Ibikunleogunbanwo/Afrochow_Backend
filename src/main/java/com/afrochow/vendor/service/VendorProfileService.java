@@ -53,8 +53,12 @@ public class VendorProfileService {
     private final OutboxEventService outboxEventService;
     private final VendorMapper vendorMapper;
 
-    /** Statuses from which a vendor can still edit their own profile. */
-    private static final Set<VendorStatus> EDITABLE_STATUSES = EnumSet.of(
+    /**
+     * Statuses from which a vendor can edit every field, including identity/compliance
+     * ones (restaurant name, category, tax ID, business license) — i.e. anything short
+     * of being fully verified or suspended.
+     */
+    private static final Set<VendorStatus> FULLY_EDITABLE_STATUSES = EnumSet.of(
             VendorStatus.PENDING_PROFILE,
             VendorStatus.PENDING_REVIEW,
             VendorStatus.PROVISIONAL,
@@ -74,50 +78,61 @@ public class VendorProfileService {
     /**
      * Update vendor profile. If the vendor is in PENDING_PROFILE and the updated
      * profile is now sufficiently complete, auto-advance to PENDING_REVIEW.
+     *
+     * <p>Once a vendor is VERIFIED, identity/compliance fields (restaurant name, store
+     * category, business license, tax ID) are locked — changing your legal business
+     * identity after approval should go through support, not a self-serve save. But
+     * day-to-day operational fields (hours, delivery settings, description, logo,
+     * banner) stay editable indefinitely; a live vendor still needs to update their
+     * hours for a holiday or change their delivery fee without losing the ability to
+     * manage their own store. SUSPENDED vendors can't edit anything.
      */
     @Transactional
     public VendorProfileResponseDto updateProfile(Long userId, VendorProfileUpdateRequestDto request) {
         VendorProfile vendorProfile = getVendorProfileByUserId(userId);
+        VendorStatus status = vendorProfile.getVendorStatus();
 
-        if (!EDITABLE_STATUSES.contains(vendorProfile.getVendorStatus())) {
+        boolean fullyEditable   = FULLY_EDITABLE_STATUSES.contains(status);
+        boolean operationalOnly = status == VendorStatus.VERIFIED;
+
+        if (!fullyEditable && !operationalOnly) {
             throw new IllegalStateException(
-                    "Profile cannot be edited in status: " + vendorProfile.getVendorStatus());
+                    "Profile cannot be edited in status: " + status);
         }
 
         validateUpdateRequest(request);
 
-        // Update basic information
-        updateIfNotNull(request.getRestaurantName(), vendorProfile::setRestaurantName);
+        // Identity / compliance fields — locked once verified, editable before that.
+        if (fullyEditable) {
+            updateIfNotNull(request.getRestaurantName(), vendorProfile::setRestaurantName);
+            updateIfNotNull(request.getStoreCategory(), vendorProfile::setStoreCategory);
+            updateIfNotNull(request.getBusinessLicenseUrl(), vendorProfile::setBusinessLicenseUrl);
+            updateIfNotNull(request.getTaxId(), vendorProfile::setTaxId);
+        }
+
+        // Operational fields — always editable while the vendor can edit at all
+        // (both fullyEditable and operationalOnly/VERIFIED).
         updateIfNotNull(request.getDescription(), vendorProfile::setDescription);
-        updateIfNotNull(request.getStoreCategory(), vendorProfile::setStoreCategory);
         updateIfNotNull(request.getLogoUrl(), vendorProfile::setLogoUrl);
         updateIfNotNull(request.getBannerUrl(), vendorProfile::setBannerUrl);
 
-        // Update business information
-        updateIfNotNull(request.getBusinessLicenseUrl(), vendorProfile::setBusinessLicenseUrl);
-        updateIfNotNull(request.getTaxId(), vendorProfile::setTaxId);
-
-        // Update operating hours
         if (request.getOperatingHours() != null) {
             Map<String, VendorProfile.DayHours> entityHours =
                     vendorMapper.convertToEntityOperatingHours(request.getOperatingHours());
             vendorProfile.setOperatingHours(entityHours);
         }
 
-        // Update service options
         updateIfNotNull(request.getOffersDelivery(), vendorProfile::setOffersDelivery);
         updateIfNotNull(request.getOffersPickup(), vendorProfile::setOffersPickup);
         updateIfNotNull(request.getPreparationTime(), vendorProfile::setPreparationTime);
 
-        // Update delivery settings
         updateIfNotNull(request.getDeliveryFee(), vendorProfile::setDeliveryFee);
         updateIfNotNull(request.getMinimumOrderAmount(), vendorProfile::setMinimumOrderAmount);
         updateIfNotNull(request.getEstimatedDeliveryMinutes(), vendorProfile::setEstimatedDeliveryMinutes);
         updateIfNotNull(request.getMaxDeliveryDistanceKm(), vendorProfile::setMaxDeliveryDistanceKm);
 
         // Auto-advance: PENDING_PROFILE → PENDING_REVIEW when profile is complete
-        if (vendorProfile.getVendorStatus() == VendorStatus.PENDING_PROFILE
-                && isProfileComplete(vendorProfile)) {
+        if (status == VendorStatus.PENDING_PROFILE && isProfileComplete(vendorProfile)) {
             vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);
             // Keep deprecated booleans in sync
             vendorProfile.setIsActive(true);
@@ -139,6 +154,15 @@ public class VendorProfileService {
             throw new EntityNotFoundException("Vendor address not found");
         }
 
+        boolean addressLineChanged = request.getAddressLine() != null
+                && !request.getAddressLine().equals(address.getAddressLine());
+        boolean cityChanged = request.getCity() != null
+                && !request.getCity().equals(address.getCity());
+        boolean postalCodeChanged = request.getPostalCode() != null
+                && !request.getPostalCode().equals(address.getPostalCode());
+        boolean provinceChanged = request.getProvince() != null
+                && !request.getProvince().equals(address.getProvince());
+
         updateIfNotNull(request.getAddressLine(), address::setAddressLine);
         updateIfNotNull(request.getCity(), address::setCity);
         updateIfNotNull(request.getProvince(), address::setProvince);
@@ -146,6 +170,9 @@ public class VendorProfileService {
         updateIfNotNull(request.getCountry(), address::setCountry);
 
         address = addressRepository.save(address);
+        if (addressLineChanged || cityChanged || postalCodeChanged || provinceChanged) {
+            outboxEventService.addressGeocodingRequested(address.getPublicAddressId());
+        }
         return vendorMapper.toAddressResponseDto(address);
     }
 

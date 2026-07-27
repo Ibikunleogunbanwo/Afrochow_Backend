@@ -48,7 +48,21 @@ public class AdminProfileService {
     }
 
     /**
-     * Update admin profile
+     * Update admin profile — SELF-SERVICE ONLY.
+     *
+     * <p>Deliberately limited to cosmetic fields (department). {@code accessLevel}
+     * and every {@code can*} permission flag are granted once, at admin-creation
+     * time, by a SUPERADMIN via {@code /auth/register/admin} — they must never be
+     * settable through this endpoint, since it operates on the caller's own
+     * profile with no additional privilege check. Previously this method applied
+     * every field on the request DTO unconditionally, which let any authenticated
+     * admin call PUT /admin/profile on themselves and grant themselves
+     * canManageUsers/canManagePayments/canVerifyVendors/canResolveDisputes or
+     * bump their own accessLevel — a privilege-escalation bug.
+     *
+     * <p>If a legitimate need for admin-to-admin permission management shows up
+     * later, it should be a separate SUPERADMIN-only endpoint that takes a target
+     * {@code publicUserId}, not a change to this one.
      */
     @Transactional
     public AdminProfileResponseDto updateProfile(Long userId, AdminProfileUpdateRequestDto request) {
@@ -64,33 +78,9 @@ public class AdminProfileService {
             throw new EntityNotFoundException("Admin profile not found");
         }
 
-        // Update admin profile fields
+        // Only cosmetic, non-privileged fields may be self-updated.
         if (request.getDepartment() != null) {
             adminProfile.setDepartment(Department.valueOf(request.getDepartment()));
-        }
-        if (request.getAccessLevel() != null) {
-            adminProfile.setAccessLevel(request.getAccessLevel());
-        }
-        if (request.getEmployeeId() != null) {
-            adminProfile.setEmployeeId(request.getEmployeeId());
-        }
-        if (request.getCanVerifyVendors() != null) {
-            adminProfile.setCanVerifyVendors(request.getCanVerifyVendors());
-        }
-        if (request.getCanManageUsers() != null) {
-            adminProfile.setCanManageUsers(request.getCanManageUsers());
-        }
-        if (request.getCanViewReports() != null) {
-            adminProfile.setCanViewReports(request.getCanViewReports());
-        }
-        if (request.getCanManagePayments() != null) {
-            adminProfile.setCanManagePayments(request.getCanManagePayments());
-        }
-        if (request.getCanManageCategories() != null) {
-            adminProfile.setCanManageCategories(request.getCanManageCategories());
-        }
-        if (request.getCanResolveDisputes() != null) {
-            adminProfile.setCanResolveDisputes(request.getCanResolveDisputes());
         }
 
         adminProfileRepository.save(adminProfile);

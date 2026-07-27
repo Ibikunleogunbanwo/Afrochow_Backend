@@ -1,0 +1,94 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Compile
+        run: chmod +x ./mvnw && ./mvnw -q -DskipTests compile
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST"
+          test -n "$VPS_PORT"
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_USER"
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/afrochow_vps
+          chmod 600 ~/.ssh/afrochow_vps
+          ssh-keyscan -p "$VPS_PORT" "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+          VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+        run: |
+          set -euo pipefail
+
+          ssh -i ~/.ssh/afrochow_vps -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          cd /opt/afrochow
+
+          git fetch origin main
+          git reset --hard origin/main
+          git clean -fd
+
+          test -f .env.prod
+          test -f deploy/nginx/certs/cloudflare-origin.pem
+          test -f deploy/nginx/certs/cloudflare-origin.key
+
+          docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet
+          docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+
+          for attempt in $(seq 1 30); do
+            if curl -kfsS -H "Host: api.afrochow.ca" https://127.0.0.1/api/actuator/health | grep -q '"status":"UP"'; then
+              echo "Afrochow API is healthy"
+              docker compose --env-file .env.prod -f docker-compose.prod.yml ps
+              exit 0
+            fi
+
+            echo "Health check not ready yet (${attempt}/30)"
+            sleep 5
+          done
+
+          echo "Deployment health check failed"
+          docker compose --env-file .env.prod -f docker-compose.prod.yml ps
+          docker logs --tail=160 afrochow-app || true
+          exit 1
+          REMOTE

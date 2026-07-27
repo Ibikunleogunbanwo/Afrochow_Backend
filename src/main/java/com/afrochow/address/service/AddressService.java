@@ -6,6 +6,7 @@ import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.outbox.service.OutboxEventService;
+import com.afrochow.search.VendorGeoIndexService;
 import com.afrochow.security.Utils.GeocodingService;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
@@ -27,6 +28,7 @@ public class AddressService {
     private final UserRepository     userRepository;
     private final GeocodingService geocodingService;
     private final OutboxEventService outboxEventService;
+    private final VendorGeoIndexService vendorGeoIndexService;
 
     // ── Public methods ────────────────────────────────────────────────────────
 
@@ -166,6 +168,9 @@ public class AddressService {
         Address address = getAddressEntity(publicAddressId);
         geocodeAndAttach(address);
         addressRepository.save(address);
+        if (address.getVendor() != null) {
+            vendorGeoIndexService.indexVendor(address.getVendor());
+        }
     }
 
     private User getCustomerUser(String publicUserId) {

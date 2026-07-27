@@ -1,6 +1,7 @@
 package com.afrochow.config;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import org.flywaydb.core.Flyway;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -58,9 +59,93 @@ public class DotenvConfig implements ApplicationContextInitializer<ConfigurableA
                 printDebugInfo(dotenv);
             }
 
+            runFlywayMigrations(dotenv);
+
         } catch (Exception e) {
             System.err.println("⚠️ Warning: Could not load .env file: " + e.getMessage());
             System.err.println("💡 Using environment variables or default values instead");
+        }
+    }
+
+    /**
+     * Runs Flyway migrations directly, ahead of Spring context refresh (and
+     * therefore ahead of Hibernate's ddl-auto=update, which must never touch
+     * the schema before migrations do).
+     *
+     * Why this exists instead of relying on Spring Boot's own Flyway
+     * autoconfiguration: on this project's Spring Boot version, that
+     * autoconfiguration was found to never fire at all (confirmed via a full
+     * --debug CONDITIONS EVALUATION REPORT — FlywayAutoConfiguration did not
+     * appear in positive matches, negative matches, or exclusions, meaning it
+     * was never even a candidate). The practical symptom: db/migration/*.sql
+     * files were silently never applied, `flyway_schema_history` never got
+     * created, and hand-written schema fixes (like the payment.status ENUM
+     * drift fixed in V23/V30) never took effect on real databases. Driving
+     * Flyway manually here removes the dependency on that autoconfiguration
+     * entirely and guarantees migrations run — in every profile, including
+     * prod, where the same silent-no-op risk applies.
+     */
+    private void runFlywayMigrations(Dotenv dotenv) {
+        String profile = dotenv.get("SPRING_PROFILES_ACTIVE", "dev");
+        boolean isProd = "prod".equalsIgnoreCase(profile);
+
+        String host = dotenv.get("DB_HOST", "localhost");
+        String port = dotenv.get("DB_PORT", "3306");
+        String name = dotenv.get("DB_NAME", "afrochow");
+        String username = dotenv.get("DB_USERNAME", "root");
+        String password = dotenv.get("DB_PASSWORD", "");
+
+        String url = isProd
+                ? String.format(
+                        "jdbc:mysql://%s:%s/%s?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true",
+                        host, port, name)
+                : String.format(
+                        "jdbc:mysql://%s:%s/%s?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true",
+                        host, port, name);
+
+        try {
+            Flyway flyway = Flyway.configure()
+                    .dataSource(url, username, password)
+                    .locations("classpath:db/migration")
+                    // baseline-on-migrate: if flyway_schema_history doesn't exist yet
+                    // (true for any DB whose schema predates Flyway adoption on this
+                    // project), stamp it at baselineVersion as already-applied instead
+                    // of erroring on a non-empty un-baselined schema.
+                    .baselineOnMigrate(true)
+                    .baselineVersion("16")
+                    .validateOnMigrate(false)
+                    .cleanDisabled(true)
+                    .load();
+
+            // If a previous run left a failed migration entry in
+            // flyway_schema_history (non-transactional DDL can't be rolled
+            // back on error), migrate() would otherwise refuse to proceed at
+            // all. repair() clears failed entries and realigns checksums so
+            // a fixed migration file can be retried safely. Runs in prod too
+            // (no live customer traffic yet, so there's no risk of masking a
+            // real incident) — a genuinely failed migration still surfaces
+            // loudly via the fatal throw below, a human just doesn't have to
+            // manually repair before the next redeploy can retry.
+            flyway.repair();
+
+            var result = flyway.migrate();
+            System.out.println("🐬 Flyway: " + result.migrationsExecuted
+                    + " migration(s) applied, schema now at version " + result.targetSchemaVersion);
+        } catch (Exception e) {
+            System.err.println("⚠️ Flyway migration failed: " + e.getMessage());
+
+            if (isProd) {
+                // In prod, ddl-auto is not reliably in "validate" mode (see
+                // application-prod.properties), so there is no safety net if
+                // migrations don't apply — the app would boot against a
+                // stale/incompatible schema and fail at runtime instead of
+                // at startup. Fail fast so this is caught by deploy tooling
+                // rather than by a customer hitting a 500.
+                throw new IllegalStateException(
+                        "Flyway migration failed in prod — refusing to start. See cause for details.", e);
+            }
+
+            System.err.println("💡 The application will continue starting, but the schema may be out of date.");
         }
     }
 

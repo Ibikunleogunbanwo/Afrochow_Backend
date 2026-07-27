@@ -11,7 +11,6 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import java.time.LocalDateTime;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -80,7 +79,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /**
      * Derived-query search by name OR description (case-insensitive partial match).
      * Does not filter on availability or admin visibility — callers apply those
-     * filters in Java (see SearchService.searchProducts / getVendorsByProductName).
+     * filters in Java (see SearchService.getVendorsByProductName).
      */
     List<Product> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
             String name, String description);
@@ -103,27 +102,20 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /** Public use — available AND platform-visible products. */
     List<Product> findByAvailableTrueAndAdminVisibleTrue();
 
-    // ========== FIND BY PRICE RANGE ==========
-
-    List<Product> findByPriceBetweenAndAvailable(BigDecimal minPrice, BigDecimal maxPrice, Boolean available);
-
-    /** Public use — available, platform-visible products within a price range. */
-    List<Product> findByPriceBetweenAndAvailableTrueAndAdminVisibleTrue(BigDecimal minPrice, BigDecimal maxPrice);
-
-    // ========== FIND BY DIETARY ==========
-
-    List<Product> findByIsVegetarianAndAvailable(Boolean isVegetarian, Boolean available);
-
-    List<Product> findByIsVeganAndAvailable(Boolean isVegan, Boolean available);
-
-    List<Product> findByIsGlutenFreeAndAvailable(Boolean isGlutenFree, Boolean available);
-
-    /** Public dietary filters — platform-visible only. */
-    List<Product> findByIsVegetarianTrueAndAvailableTrueAndAdminVisibleTrue();
-
-    List<Product> findByIsVeganTrueAndAvailableTrueAndAdminVisibleTrue();
-
-    List<Product> findByIsGlutenFreeTrueAndAvailableTrueAndAdminVisibleTrue();
+    @Query("""
+        SELECT p FROM Product p
+        JOIN FETCH p.vendor v
+        JOIN FETCH v.user u
+        LEFT JOIN FETCH v.address a
+        LEFT JOIN FETCH p.category c
+        WHERE p.available = true
+          AND p.adminVisible = true
+          AND v.isVerified = true
+          AND v.isActive = true
+          AND u.publicUserId IN :publicVendorIds
+        """)
+    List<Product> findAvailablePublicProductsByVendorPublicIds(
+            @Param("publicVendorIds") List<String> publicVendorIds);
 
     // ========== POPULAR PRODUCTS ==========
 
@@ -160,53 +152,69 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * ranked by recent order count then total review count.
      * Returns a Page so the caller sets the SQL LIMIT via Pageable (no full-table scan in Java).
      * The service passes a pool size (e.g. 32) and then applies vendor-diversity capping.
+     *
+     * City-scoped at the DB level (pass null to search nationally) — this avoids the
+     * "starved smaller market" bug where a global top-N pool would be ranked and capped
+     * BEFORE any city filtering happened, leaving very few (or zero) results for cities
+     * whose vendors don't place in the national top-N by recent order count.
      */
     @Query("""
             SELECT p FROM Product p
             JOIN p.orderLines ol
-            WHERE p.available          = true
-              AND p.adminVisible       = true
-              AND p.vendor.isVerified  = true
-              AND p.vendor.isActive    = true
-              AND ol.order.createdAt  >= :cutoff
+            JOIN p.vendor v
+            JOIN v.address a
+            WHERE p.available     = true
+              AND p.adminVisible  = true
+              AND v.isVerified    = true
+              AND v.isActive      = true
+              AND ol.order.createdAt >= :cutoff
+              AND (:city IS NULL OR LOWER(a.city) = LOWER(:city))
             GROUP BY p
             ORDER BY COUNT(ol) DESC,
                      SIZE(p.reviews)  DESC
             """)
-    Page<Product> findFeaturedProducts(Pageable pageable, @Param("cutoff") LocalDateTime cutoff);
+    Page<Product> findFeaturedProducts(Pageable pageable, @Param("cutoff") LocalDateTime cutoff, @Param("city") String city);
 
     /**
      * Broad fallback: no recency window — used when the platform is new
      * and there aren't enough recent orders to fill the featured section.
      * Ranked by all-time order count then review count.
+     * City-scoped at the DB level (pass null to search nationally).
      */
     @Query("""
             SELECT p FROM Product p
-            WHERE p.available         = true
-              AND p.adminVisible      = true
-              AND p.vendor.isVerified = true
-              AND p.vendor.isActive   = true
-              AND SIZE(p.orderLines)  > 0
+            JOIN p.vendor v
+            JOIN v.address a
+            WHERE p.available        = true
+              AND p.adminVisible     = true
+              AND v.isVerified       = true
+              AND v.isActive         = true
+              AND SIZE(p.orderLines) > 0
+              AND (:city IS NULL OR LOWER(a.city) = LOWER(:city))
             ORDER BY SIZE(p.orderLines) DESC,
                      SIZE(p.reviews)    DESC
             """)
-    Page<Product> findFeaturedProductsBroad(Pageable pageable);
+    Page<Product> findFeaturedProductsBroad(Pageable pageable, @Param("city") String city);
 
     /**
      * Zero-order fallback: returns available products from verified vendors
      * ranked by review count then newest — better than pure newest-first for
      * platforms that have reviews but no orders yet.
+     * City-scoped at the DB level (pass null to search nationally).
      */
     @Query("""
             SELECT p FROM Product p
-            WHERE p.available         = true
-              AND p.adminVisible      = true
-              AND p.vendor.isVerified = true
-              AND p.vendor.isActive   = true
+            JOIN p.vendor v
+            JOIN v.address a
+            WHERE p.available    = true
+              AND p.adminVisible = true
+              AND v.isVerified   = true
+              AND v.isActive     = true
+              AND (:city IS NULL OR LOWER(a.city) = LOWER(:city))
             ORDER BY SIZE(p.reviews) DESC,
                      p.createdAt     DESC
             """)
-    Page<Product> findAnyFeaturedProducts(Pageable pageable);
+    Page<Product> findAnyFeaturedProducts(Pageable pageable, @Param("city") String city);
 
     /**
      * Admin-pinned featured products — always surfaced first regardless of order history.

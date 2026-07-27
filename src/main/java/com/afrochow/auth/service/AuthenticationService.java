@@ -395,11 +395,14 @@ public class AuthenticationService {
         User requestingAdmin = userRepository.findById(requestingAdminId)
                 .orElseThrow(() -> new UnauthorizedException("Admin user not found"));
 
-        if (!requestingAdmin.isAdmin() || requestingAdmin.getAdminProfile() == null) {
-            throw new InsufficientPermissionException("Only admins can create other admin accounts");
-        }
-        if (requestingAdmin.getAdminProfile().getAccessLevel() != AdminAccessLevel.SUPER_ADMIN) {
-            throw new InsufficientPermissionException("Only SUPER_ADMIN can create admin accounts");
+        // Gate on the real, enforced role — not AdminProfile.accessLevel, which is
+        // a legacy display-only field that can drift out of sync with User.role
+        // (e.g. after a promote/demote via SuperAdminController). This also keeps
+        // this service-level check consistent with the @PreAuthorize("hasRole('SUPERADMIN')")
+        // on AuthController and the matching SecurityConfig filter-chain rule for
+        // this same endpoint.
+        if (requestingAdmin.getRole() != Role.SUPERADMIN) {
+            throw new InsufficientPermissionException("Only SUPERADMIN can create admin accounts");
         }
 
         validateRegistrationData(request.getEmail(), request.getUsername(), request.getPhone());
@@ -751,18 +754,26 @@ public class AuthenticationService {
                 && profile.hasOperatingDays();
     }
 
+    /**
+     * Creates the AdminProfile row for a newly-registered admin.
+     *
+     * <p>{@code accessLevel} is always MODERATOR and every {@code can*} flag is
+     * always false here, regardless of what the request might send — these are
+     * legacy, unenforced fields (see {@link AdminProfile#isSuperAdmin()}). Real
+     * SUPERADMIN status is granted exclusively via
+     * {@code SuperAdminController.promoteToSuperAdmin}, which sets {@code User.role}
+     * directly and is itself SUPERADMIN-gated. Letting this endpoint accept an
+     * arbitrary {@code accessLevel}/{@code can*} combination used to let a
+     * requesting SUPERADMIN create an account that displayed as "Super Admin —
+     * full access" while actually being a plain ADMIN under the hood — a
+     * misleading, since-fixed bug.
+     */
     private void createAdminProfile(User user, AdminProfileRequestDto request) {
         AdminProfile adminProfile = AdminProfile.builder()
                 .user(user)
                 .department(request.getDepartment())
-                .accessLevel(request.getAccessLevel() != null ? request.getAccessLevel() : AdminAccessLevel.MODERATOR)
+                .accessLevel(AdminAccessLevel.MODERATOR)
                 .employeeId(request.getEmployeeId())
-                .canVerifyVendors(Boolean.TRUE.equals(request.getCanVerifyVendors()))
-                .canManageUsers(Boolean.TRUE.equals(request.getCanManageUsers()))
-                .canViewReports(Boolean.TRUE.equals(request.getCanViewReports()))
-                .canManagePayments(Boolean.TRUE.equals(request.getCanManagePayments()))
-                .canManageCategories(Boolean.TRUE.equals(request.getCanManageCategories()))
-                .canResolveDisputes(Boolean.TRUE.equals(request.getCanResolveDisputes()))
                 .build();
 
         user.setAdminProfile(adminProfile);
@@ -843,8 +854,8 @@ public class AuthenticationService {
                 .accessLevel(profile.getAccessLevel())
                 .username(user.getUsername())
                 .employeeId(profile.getEmployeeId())
-                .isSuperAdmin(profile.getAccessLevel() == AdminAccessLevel.SUPER_ADMIN)
-                .hasFullAccess(profile.getAccessLevel() == AdminAccessLevel.SUPER_ADMIN)
+                .isSuperAdmin(profile.isSuperAdmin())
+                .hasFullAccess(profile.hasFullAccess())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .email(user.getEmail())

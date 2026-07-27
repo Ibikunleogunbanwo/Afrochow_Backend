@@ -48,6 +48,8 @@ public class AnalyticsService {
     public VendorAnalytics getVendorAnalytics(String username) {
         VendorProfile vendor = vendorProfileRepository.findByUser_Username(username)
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
+        LocalDateTime startOfDay = LocalDateTime.now().toLocalDate().atStartOfDay();
+        LocalDateTime endOfDay = startOfDay.plusDays(1);
 
         return VendorAnalytics.builder()
                 .totalOrders(orderRepository.countByVendor(vendor))
@@ -60,10 +62,10 @@ public class AnalyticsService {
                 .deliveredOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.DELIVERED))
                 .cancelledOrders(orderRepository.countByVendorAndStatus(vendor, OrderStatus.CANCELLED))
                 .activeOrders(orderRepository.countActiveOrdersByVendor(vendor))
-                .todayOrders(orderRepository.countVendorTodayOrders(vendor))
+                .todayOrders(orderRepository.countVendorTodayOrders(vendor, startOfDay, endOfDay))
                 // Revenue (DELIVERED orders only)
                 .totalRevenue(nvl(orderRepository.calculateVendorRevenue(vendor)))
-                .todayRevenue(nvl(orderRepository.calculateVendorTodayRevenue(vendor)))
+                .todayRevenue(nvl(orderRepository.calculateVendorTodayRevenue(vendor, startOfDay, endOfDay)))
                 .last7DaysRevenue(nvl(orderRepository.calculateVendorRevenueFromDate(vendor, LocalDateTime.now().minusDays(7))))
                 .last30DaysRevenue(nvl(orderRepository.calculateVendorRevenueFromDate(vendor, LocalDateTime.now().minusDays(30))))
                 // Catalog
@@ -186,6 +188,8 @@ public class AnalyticsService {
      */
     public AdminAnalytics getAdminAnalytics(LocalDateTime startDate, LocalDateTime endDate) {
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startOfToday = now.toLocalDate().atStartOfDay();
+        LocalDateTime endOfToday = startOfToday.plusDays(1);
         boolean isFiltered = startDate != null && endDate != null;
 
         return AdminAnalytics.builder()
@@ -226,7 +230,7 @@ public class AnalyticsService {
                 .activeOrders(isFiltered
                         ? orderRepository.countActiveOrdersBetween(startDate, endDate)
                         : orderRepository.countActiveOrders())
-                .todayOrders(orderRepository.countTodayOrders())
+                .todayOrders(orderRepository.countTodayOrders(startOfToday, endOfToday))
 
                 // Revenue — filtered when date range provided
                 .totalRevenue(isFiltered

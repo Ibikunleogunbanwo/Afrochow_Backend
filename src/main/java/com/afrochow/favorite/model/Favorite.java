@@ -8,6 +8,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Entity representing a customer's favorite vendor or product
@@ -20,10 +21,11 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "favorite",
-       uniqueConstraints = {
-           @UniqueConstraint(columnNames = {"customer_profile_id", "vendor_profile_id"}),
-           @UniqueConstraint(columnNames = {"customer_profile_id", "product_id"})
-       },
+           uniqueConstraints = {
+	           @UniqueConstraint(columnNames = {"public_favorite_id"}),
+	           @UniqueConstraint(columnNames = {"customer_profile_id", "vendor_profile_id"}),
+	           @UniqueConstraint(columnNames = {"customer_profile_id", "product_id"})
+	       },
        indexes = {
            @Index(name = "idx_favorite_customer", columnList = "customer_profile_id"),
            @Index(name = "idx_favorite_vendor", columnList = "vendor_profile_id"),
@@ -39,6 +41,9 @@ public class Favorite {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long favoriteId;
+
+    @Column(name = "public_favorite_id", nullable = false, unique = true, length = 36, updatable = false)
+    private String publicFavoriteId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_profile_id", nullable = false)
@@ -68,6 +73,10 @@ public class Favorite {
      */
     @PrePersist
     protected void onCreate() {
+        if (publicFavoriteId == null || publicFavoriteId.isBlank()) {
+            publicFavoriteId = UUID.randomUUID().toString();
+        }
+
         // Set timestamp
         createdAt = LocalDateTime.now();
 

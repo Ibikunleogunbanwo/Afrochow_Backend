@@ -29,11 +29,17 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RestController
 @RequestMapping("/admin/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+// USERS area = CUSTOMER_SUPPORT department (or SUPERADMIN, which @deptAccess.can()
+// always allows). Role-change and delete methods below override this class-level
+// rule with a stricter hasRole('SUPERADMIN') — untouched by department scoping.
+@PreAuthorize("@deptAccess.can('USERS')")
 @Tag(name = "Admin User Management", description = "Admin APIs for managing all users")
 public class AdminUserManagementController {
 
@@ -78,19 +84,39 @@ public class AdminUserManagementController {
         size = Math.min(size, 100); // hard cap — never return more than 100 at once
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
-        // Compose every filter as a Specification — null specs are no-ops, so
-        // the chain works regardless of which params the caller actually sent.
-        Specification<User> spec = Specification
-                .where(UserSpecifications.hasRole(role))
-                .and(UserSpecifications.isActive(active))
-                .and(UserSpecifications.nameContains(q))
-                .and(UserSpecifications.createdAtAfter(createdAfter))
-                .and(UserSpecifications.createdAtBefore(createdBefore));
+        // Compose every filter as a Specification. UserSpecifications' factories
+        // return null for unset filters. Neither Specification.where(...).and(...)
+        // NOR Specification.allOf(...) are null-safe on this Spring Data JPA
+        // version — both eventually call Specification.and(other), which asserts
+        // other != null, and allOf's reduce doesn't pre-filter nulls either. So we
+        // filter the nulls out ourselves before reducing.
+        //
+        // IMPORTANT: repository.findAll(spec, ...) does NOT treat a null
+        // Specification as "no filter" on this Spring Data JPA version —
+        // SimpleJpaRepository.getQuery() asserts the Specification itself is
+        // non-null before it ever gets a chance to be a no-op. That assumption
+        // caused a 500 on every single unfiltered page load ("Specification must
+        // not be null"). So when no filters are set, we fall back to an
+        // always-true Specification instead of null.
+        Specification<User> spec = Stream.of(
+                        UserSpecifications.hasRole(role),
+                        UserSpecifications.isActive(active),
+                        UserSpecifications.nameContains(q),
+                        UserSpecifications.createdAtAfter(createdAfter),
+                        UserSpecifications.createdAtBefore(createdBefore))
+                .filter(Objects::nonNull)
+                .reduce(Specification::and)
+                .orElseGet(() -> (root, query, cb) -> cb.conjunction());
 
         Page<User> userPage = userRepository.findAll(spec, pageable);
 
+        // Batch-fetch order counts for the whole page in two grouped queries instead
+        // of one COUNT query per row (toUserSummary previously called countOrders(user)
+        // per user, which issued up to `size` individual queries per page).
+        OrderCounts orderCounts = batchCountOrders(userPage.getContent());
+
         List<UserSummaryDto> summaries = userPage.getContent().stream()
-                .map(this::toUserSummary)
+                .map(user -> toUserSummary(user, orderCounts))
                 .toList();
 
         Map<String, Object> body = Map.of(
@@ -312,6 +338,85 @@ public class AdminUserManagementController {
             case VENDOR     -> "Orders Fulfilled";
             default         -> null;
         };
+    }
+
+    /** Pre-computed, page-scoped order counts — see {@link #batchCountOrders}. */
+    private record OrderCounts(Map<Long, Long> byCustomerId, Map<Long, Long> byVendorId) {}
+
+    /**
+     * Batch-fetches order counts for a page of users in exactly two grouped queries
+     * (one for customers, one for vendors) instead of {@link #countOrders} issuing
+     * one query per user. Users with zero orders simply won't have an entry in the
+     * returned maps — callers should default missing keys to 0.
+     */
+    private OrderCounts batchCountOrders(List<User> users) {
+        List<Long> customerIds = users.stream()
+                .filter(u -> u.getRole() == Role.CUSTOMER && u.getCustomerProfile() != null)
+                .map(u -> u.getCustomerProfile().getCustomerProfileId())
+                .toList();
+        List<Long> vendorIds = users.stream()
+                .filter(u -> u.getRole() == Role.VENDOR && u.getVendorProfile() != null)
+                .map(u -> u.getVendorProfile().getId())
+                .toList();
+
+        Map<Long, Long> byCustomerId = customerIds.isEmpty()
+                ? Map.of()
+                : orderRepository.countGroupedByCustomerIds(customerIds).stream()
+                        .collect(Collectors.toMap(
+                                row -> (Long) row[0], row -> (Long) row[1]));
+
+        Map<Long, Long> byVendorId = vendorIds.isEmpty()
+                ? Map.of()
+                : orderRepository.countGroupedByVendorIdsAndStatus(vendorIds, OrderStatus.DELIVERED).stream()
+                        .collect(Collectors.toMap(
+                                row -> (Long) row[0], row -> (Long) row[1]));
+
+        return new OrderCounts(byCustomerId, byVendorId);
+    }
+
+    /** Batched variant of {@link #countOrders(User)} — looks up pre-fetched counts instead of querying. */
+    private Long countOrders(User user, OrderCounts counts) {
+        if (user.getRole() == Role.CUSTOMER) {
+            CustomerProfile profile = user.getCustomerProfile();
+            if (profile == null) return 0L;
+            return counts.byCustomerId().getOrDefault(profile.getCustomerProfileId(), 0L);
+        }
+        if (user.getRole() == Role.VENDOR) {
+            if (user.getVendorProfile() == null) return 0L;
+            return counts.byVendorId().getOrDefault(user.getVendorProfile().getId(), 0L);
+        }
+        return null; // admins don't have orders
+    }
+
+    /** Batched variant of {@link #toUserSummary(User)} — used by the paginated list endpoint. */
+    private UserSummaryDto toUserSummary(User user, OrderCounts orderCounts) {
+        Long totalOrders = countOrders(user, orderCounts);
+        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "EMAIL";
+        boolean isLocked = loginAttemptService.isAccountLocked(user.getEmail());
+        VendorStatus vendorStatus = user.getVendorProfile() != null
+                ? user.getVendorProfile().getVendorStatus()
+                : null;
+        String restaurantName = user.getVendorProfile() != null
+                ? user.getVendorProfile().getRestaurantName()
+                : null;
+        return UserSummaryDto.builder()
+                .publicUserId(user.getPublicUserId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .restaurantName(restaurantName)
+                .role(user.getRole())
+                .isActive(user.getIsActive())
+                .emailVerified(user.getEmailVerified())
+                .isLocked(isLocked)
+                .userStatus(resolveUserStatus(user, isLocked))
+                .vendorStatus(vendorStatus)
+                .profileImageUrl(user.getProfileImageUrl())
+                .totalOrders(totalOrders)
+                .orderLabel(resolveOrderLabel(user))
+                .createdAt(user.getCreatedAt())
+                .isProfileComplete(resolveProfileComplete(user, vendorStatus))
+                .authProvider(authProvider)
+                .build();
     }
 
     private UserSummaryDto toUserSummary(User user) {

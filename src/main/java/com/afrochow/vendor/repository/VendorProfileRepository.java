@@ -63,10 +63,33 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     // ========== ACTIVE + VERIFIED ==========
 
-    // Name reflects the query accurately — the actual open-now check is @Transient
-    // and must be evaluated in-memory in SearchService.getOpenVendors().
+    // Currently unused — was backing SearchService.getOpenVendors(), removed as
+    // dead code (GET /search/vendors/open had no frontend caller). Left here
+    // since it's a cheap, correct query that may be useful again.
     @Query("SELECT v FROM VendorProfile v WHERE v.isActive = true AND v.isVerified = true")
     List<VendorProfile> findActiveAndVerifiedVendors();
+
+    @Query("""
+            SELECT v FROM VendorProfile v
+            JOIN FETCH v.user u
+            JOIN FETCH v.address a
+            WHERE v.isActive = true
+              AND v.isVerified = true
+              AND a.latitude IS NOT NULL
+              AND a.longitude IS NOT NULL
+            """)
+    List<VendorProfile> findActiveVerifiedGeocodedVendors();
+
+    @Query("""
+            SELECT v FROM VendorProfile v
+            JOIN FETCH v.user u
+            LEFT JOIN FETCH v.address a
+            WHERE u.publicUserId IN :publicUserIds
+              AND v.isActive = true
+              AND v.isVerified = true
+            """)
+    List<VendorProfile> findActiveVerifiedVendorsByPublicUserIds(
+            @Param("publicUserIds") List<String> publicUserIds);
 
     // ========== JOIN FETCH (prevents N+1) ==========
 

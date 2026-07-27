@@ -44,6 +44,13 @@ public class ProductResponseDto {
     private String vendorCountry;
     private String vendorFormattedAddress;
 
+    // Distance from the requesting user, in km — computed server-side via the
+    // Redis vendor geo index (see VendorGeoIndexService.getDistancesKm). Null
+    // when no lat/lng was supplied on the request, or the vendor isn't indexed
+    // (e.g. Redis unavailable, vendor missing geocoded coordinates, or outside
+    // the lookup radius).
+    private Double distanceKm;
+
     // Featured
     private Boolean isFeatured;
     private LocalDateTime featuredAt;

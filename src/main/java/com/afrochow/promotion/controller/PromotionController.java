@@ -121,7 +121,7 @@ public class PromotionController {
     // ========== ADMIN ENDPOINTS ==========
 
     @PostMapping("/admin")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('PROMOTIONS')") // PROMOTIONS area = MARKETING department (or SUPERADMIN)
     @Operation(summary = "Create promotion", description = "Create a new promotional code (admin only)")
     public ResponseEntity<ApiResponse<PromotionResponseDto>> createPromotion(
             @Valid @RequestBody PromotionRequestDto request) {
@@ -131,7 +131,7 @@ public class PromotionController {
     }
 
     @PutMapping("/admin/{publicPromotionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('PROMOTIONS')") // PROMOTIONS area = MARKETING department (or SUPERADMIN)
     @Operation(summary = "Update promotion", description = "Update an existing promotion (admin only)")
     public ResponseEntity<ApiResponse<PromotionResponseDto>> updatePromotion(
             @PathVariable String publicPromotionId,
@@ -141,7 +141,7 @@ public class PromotionController {
     }
 
     @DeleteMapping("/admin/{publicPromotionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('PROMOTIONS')") // PROMOTIONS area = MARKETING department (or SUPERADMIN)
     @Operation(summary = "Deactivate promotion", description = "Deactivate a promotion (admin only)")
     public ResponseEntity<ApiResponse<Void>> deactivatePromotion(@PathVariable String publicPromotionId) {
         promotionService.deactivatePromotion(publicPromotionId);
@@ -149,7 +149,7 @@ public class PromotionController {
     }
 
     @PatchMapping("/admin/{publicPromotionId}/activate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('PROMOTIONS')") // PROMOTIONS area = MARKETING department (or SUPERADMIN)
     @Operation(summary = "Activate promotion", description = "Reactivate a deactivated promotion (admin only)")
     public ResponseEntity<ApiResponse<PromotionResponseDto>> activatePromotion(@PathVariable String publicPromotionId) {
         PromotionResponseDto updated = promotionService.activatePromotion(publicPromotionId);
@@ -157,7 +157,7 @@ public class PromotionController {
     }
 
     @DeleteMapping("/admin/{publicPromotionId}/permanent")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('PROMOTIONS')") // PROMOTIONS area = MARKETING department (or SUPERADMIN)
     @Operation(summary = "Delete promotion", description = "Permanently delete a promotion (admin only)")
     public ResponseEntity<ApiResponse<Void>> deletePromotion(@PathVariable String publicPromotionId) {
         promotionService.deletePromotion(publicPromotionId);
@@ -165,14 +165,14 @@ public class PromotionController {
     }
 
     @GetMapping("/admin")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('PROMOTIONS')") // PROMOTIONS area = MARKETING department (or SUPERADMIN)
     @Operation(summary = "Get all promotions", description = "List all promotions with usage stats (admin only)")
     public ResponseEntity<ApiResponse<List<PromotionResponseDto>>> getAllPromotions() {
         return ResponseEntity.ok(ApiResponse.success(promotionService.getAllPromotions()));
     }
 
     @GetMapping("/admin/{publicPromotionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("@deptAccess.can('PROMOTIONS')") // PROMOTIONS area = MARKETING department (or SUPERADMIN)
     @Operation(summary = "Get promotion by ID", description = "Get a single promotion with usage stats (admin only)")
     public ResponseEntity<ApiResponse<PromotionResponseDto>> getPromotion(
             @PathVariable String publicPromotionId) {

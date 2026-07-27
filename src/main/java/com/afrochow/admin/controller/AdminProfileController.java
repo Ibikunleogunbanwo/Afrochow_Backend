@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,10 +18,14 @@ import org.springframework.web.bind.annotation.*;
  *
  * Endpoints:
  * - GET /admin/profile - Get my admin profile
- * - PUT /admin/profile - Update my admin profile
+ * - PUT /admin/profile - Update my admin profile (cosmetic fields only —
+ *   permissions/accessLevel are set at admin-creation time by a SUPERADMIN
+ *   via /auth/register/admin and are intentionally NOT editable here, to
+ *   prevent an admin from self-granting elevated permissions)
  */
 @RestController
 @RequestMapping("/admin/profile")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
 @Tag(name = "Admin Profile", description = "Admin profile management endpoints")
 public class AdminProfileController {
 

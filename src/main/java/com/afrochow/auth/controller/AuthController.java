@@ -142,7 +142,12 @@ public class AuthController {
      * @return JWT tokens and user info (no email verification needed)
      */
     @PostMapping("/register/admin")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    // Must match SecurityConfig's "/auth/register/admin" -> hasRole("SUPERADMIN")
+    // rule exactly. Previously this said hasAnyRole('ADMIN','SUPERADMIN') — harmless
+    // only because the filter-chain rule is stricter and wins, but misleading, and a
+    // future edit to "de-duplicate" the filter-chain rule against this annotation
+    // would have let any ADMIN mint new admin accounts.
+    @PreAuthorize("hasRole('SUPERADMIN')")
     @Operation(
             summary = "Register Admin",
             description = "Register a new admin account. Requires SUPER_ADMIN privileges. Returns JWT tokens immediately."
