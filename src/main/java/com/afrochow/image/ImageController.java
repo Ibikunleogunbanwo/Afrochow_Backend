@@ -2,6 +2,7 @@ package com.afrochow.image;
 
 import com.afrochow.common.ApiResponse;
 import com.afrochow.common.exceptions.ImageNotFoundException;
+import com.afrochow.security.Utils.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.*;
 public class ImageController {
 
     private final ImageUploadService imageUploadService;
+    private final ImageOwnershipService imageOwnershipService;
 
     // ─── Serve image (dev / local filesystem only) ────────────────────────────
 
@@ -71,10 +73,14 @@ public class ImageController {
 
     @DeleteMapping
     @Operation(summary = "Delete image by URL",
-            description = "Delete an image file using its full URL. The URL must belong to this server.")
+            description = "Delete an image file using its full URL. The URL must belong to this server, " +
+                    "and must either be one of the caller's own saved images (vendor profile logo/banner/" +
+                    "license, or one of their own products) or not yet attached to anyone's saved record " +
+                    "(e.g. a mid-registration upload the caller is replacing).")
     @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Image deleted successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid or external image URL"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Image belongs to another user"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Image not found")
     })
     public ResponseEntity<ApiResponse<Void>> deleteImage(
@@ -84,6 +90,18 @@ public class ImageController {
         if (imageUrl == null || imageUrl.isBlank()) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.badRequest("Image URL is required"));
+        }
+
+        // Ownership gate: SecurityConfig only requires the caller to be
+        // authenticated, which previously meant ANY logged-in user could delete
+        // ANY other user's saved logo/banner/license/product photo just by
+        // knowing its URL. See ImageOwnershipService for the exact rule.
+        boolean canDelete = imageOwnershipService.canDelete(
+                imageUrl, SecurityUtils.getCurrentUserId(), SecurityUtils.getCurrentUserRole());
+        if (!canDelete) {
+            log.warn("Blocked delete of image not owned by caller: {}", imageUrl);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.forbidden("You do not have permission to delete this image"));
         }
 
         try {

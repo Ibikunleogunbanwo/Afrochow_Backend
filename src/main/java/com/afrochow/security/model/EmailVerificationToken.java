@@ -8,10 +8,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.Random;
-import java.util.UUID;
 
 /**
  * Email Verification Token for confirming user email addresses
@@ -51,12 +50,18 @@ public class EmailVerificationToken {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    // java.util.Random is seeded from the clock and is predictable enough that an
+    // attacker who observes a couple of codes (or just knows roughly when they were
+    // issued) can narrow down the RNG state and predict future codes. SecureRandom
+    // draws from the OS entropy pool instead, so codes aren't guessable from timing.
+    private static final SecureRandom CODE_RNG = new SecureRandom();
+
     /**
      * Create a new email verification token
      */
     public static EmailVerificationToken create(User user, long expirationMinutes) {
         return EmailVerificationToken.builder()
-                .token(String.format("%06d", new Random().nextInt(1_000_000)))
+                .token(String.format("%06d", CODE_RNG.nextInt(1_000_000)))
                 .user(user)
                 .expiresAt(Instant.now().plusSeconds(expirationMinutes * 60))
                 .isUsed(false)

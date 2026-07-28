@@ -29,6 +29,10 @@ public interface VendorProfileRepository extends JpaRepository<VendorProfile, Lo
 
     Optional<VendorProfile> findByUser_Username(String username);
 
+    // ========== IMAGE OWNERSHIP (ImageOwnershipService) ==========
+
+    boolean existsByLogoUrlOrBannerUrlOrBusinessLicenseUrl(String logoUrl, String bannerUrl, String businessLicenseUrl);
+
     // ========== FIND BY PUBLIC VENDOR ID ==========
     // publicVendorId is @Transient (delegates to user.publicUserId) — no DB column,
     // so a derived query is not possible; delegate to the user path instead.

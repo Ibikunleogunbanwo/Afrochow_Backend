@@ -527,13 +527,22 @@ public class AuthenticationService {
        ========================================================== */
 
     /**
-     * Verify email address using the token received via email.
+     * Verify email address using the 6-digit code received via email.
+     *
+     * Requires the email alongside the code (not code alone) and is rate-limited
+     * per email — a bare 6-digit code is only ~1,000,000 possibilities, and
+     * without both of those guards an attacker could brute-force any pending
+     * user's code with unlimited, unscoped guesses. See findValidToken()'s
+     * Javadoc for the scoping rationale.
      */
     @Transactional
-    public String verifyEmail(String token) {
+    public String verifyEmail(String email, String code) {
+        String canonicalEmail = getCanonicalIdentifier(email);
+        rateLimitService.verifyEmailVerificationLimit(canonicalEmail);
+
         EmailVerificationToken verificationToken = emailVerificationTokenRepository
-                .findValidToken(token, Instant.now())
-                .orElseThrow(() -> new BadCredentialsException("Invalid or expired verification token"));
+                .findValidToken(code, email, Instant.now())
+                .orElseThrow(() -> new BadCredentialsException("Invalid or expired verification code"));
 
         User user = verificationToken.getUser();
         user.setEmailVerified(true);
@@ -546,6 +555,8 @@ public class AuthenticationService {
         emailVerificationTokenRepository.save(verificationToken);
         userRepository.save(user);
 
+        rateLimitService.resetLimit("email-verify", canonicalEmail);
+
         log.info("Email verified for user: {}", user.getPublicUserId());
         return "Email verified successfully. You can now login to your account.";
     }
@@ -555,6 +566,8 @@ public class AuthenticationService {
      */
     @Transactional
     public void resendVerificationEmail(String email) {
+        rateLimitService.verifyEmailVerificationLimit(getCanonicalIdentifier(email));
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
 

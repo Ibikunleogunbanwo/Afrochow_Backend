@@ -318,7 +318,14 @@ public class AdminVendorManagementController {
         vendor.setVendorStatus(VendorStatus.REJECTED);
         vendor.setIsActive(false);
         vendor.setIsVerified(false);
-        if (vendor.getUser() != null) vendor.getUser().setIsActive(false);
+        // Deliberately NOT touching User.isActive: resubmitForReview() is a
+        // self-service, authenticated ("hasRole('VENDOR')") endpoint the vendor
+        // hits themselves after fixing their profile. Disabling the user account
+        // here (CustomUserDetails.isEnabled() requires isActive) would lock them
+        // out of login entirely, making that whole resubmit flow unreachable —
+        // there's no admin "un-reject" endpoint to undo it, unlike /reinstate for
+        // SUSPENDED vendors. The vendor profile itself (isActive/isVerified above)
+        // already keeps the store hidden and unable to receive orders.
         vendorProfileRepository.save(vendor);
 
         if (vendor.getUser() != null) {

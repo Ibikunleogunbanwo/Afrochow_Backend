@@ -104,12 +104,10 @@ public class SecurityConfig {
                                 "/api/images/**",
                                 "/images/**"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.POST,
-                                "/api/images/upload/registration",
-                                "/api/images/vendor_image_registration",
-                                "/images/upload/registration",
-                                "/images/vendor_image_registration"
-                        ).permitAll()
+                        // POST /upload/registration and /vendor_image_registration were removed
+                        // as dead code — the frontend uploads directly to Cloudinary client-side
+                        // with an unsigned preset, so ImageController never had these mappings to
+                        // begin with. No POST rule needed; uploads don't go through this backend.
                         // DELETE requires authentication — only the owning user/vendor/admin
                         // should be able to remove images. Access denied → falls through to anyRequest().authenticated()
                         .requestMatchers(HttpMethod.DELETE,

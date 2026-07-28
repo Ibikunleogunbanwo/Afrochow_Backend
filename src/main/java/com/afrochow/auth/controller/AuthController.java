@@ -433,7 +433,7 @@ public class AuthController {
             description = "Verify email address using the token received via email"
     )
     public ResponseEntity<ApiResponse<Void>> verifyEmail(@Valid @RequestBody VerifyEmailDto dto) {
-        String message = authenticationService.verifyEmail(dto.getCode());
+        String message = authenticationService.verifyEmail(dto.getEmail(), dto.getCode());
         return ResponseEntity.ok(
                 ApiResponse.success(message)
         );

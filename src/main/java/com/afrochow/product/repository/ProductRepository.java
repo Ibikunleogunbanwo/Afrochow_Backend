@@ -24,6 +24,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findByPublicProductId(String publicProductId);
 
+    // ========== IMAGE OWNERSHIP (ImageOwnershipService) ==========
+
+    boolean existsByVendorAndImageUrl(VendorProfile vendor, String imageUrl);
+
+    boolean existsByImageUrl(String imageUrl);
+
     /**
      * Fetch a product by its public ID with a database-level write lock.
      * Use this in toggleProductAvailability() so that two concurrent toggle

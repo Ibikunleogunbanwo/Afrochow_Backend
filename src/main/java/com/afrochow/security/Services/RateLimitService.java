@@ -34,6 +34,12 @@ public class RateLimitService {
     @Value("${rate-limit.password-reset.window-seconds:3600}")
     private int passwordResetWindow;
 
+    @Value("${rate-limit.email-verify.max:8}")
+    private int emailVerifyMax;
+
+    @Value("${rate-limit.email-verify.window-seconds:900}")
+    private int emailVerifyWindow;
+
     // ─── Storage ──────────────────────────────────────────────────────────────
 
     private final Map<String, AttemptTracker> attempts = new ConcurrentHashMap<>();
@@ -50,6 +56,15 @@ public class RateLimitService {
 
     public void verifyPasswordResetLimit(String canonicalIdentifier) {
         checkLimit("reset", canonicalIdentifier, passwordResetMax, passwordResetWindow);
+    }
+
+    // Covers both submitting a code (guards against 6-digit brute force — 8
+    // attempts/15min makes exhausting the 1,000,000-value space impractical)
+    // and requesting a resend (guards against using resend as an email bomb).
+    // Both share one bucket per email since either action targets the same
+    // account and either should count against the same abuse budget.
+    public void verifyEmailVerificationLimit(String canonicalEmail) {
+        checkLimit("email-verify", canonicalEmail, emailVerifyMax, emailVerifyWindow);
     }
 
     /**
