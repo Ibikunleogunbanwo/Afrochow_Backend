@@ -74,6 +74,17 @@ jobs:
           test -f deploy/nginx/certs/cloudflare-origin.key
 
           docker compose --env-file .env.prod -f docker-compose.prod.yml config --quiet
+
+          # Defensive cleanup: if a previous deploy was interrupted mid-recreate
+          # (killed job, OOM, etc.), Compose can leave a stuck container holding
+          # the "afrochow-app" name -- or a temp-renamed variant from its own
+          # rename-old/create-new/remove-old recreate sequence -- which then
+          # blocks `up -d --build` with "Conflict... name is already in use".
+          # Force-remove anything matching that name before recreating. Only
+          # targets the app container by name, so mysql/redis/kafka/db-backup
+          # are untouched.
+          docker ps -a --filter "name=afrochow-app" --format '{{.Names}}' | xargs -r docker rm -f
+
           docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 
           for attempt in $(seq 1 30); do
