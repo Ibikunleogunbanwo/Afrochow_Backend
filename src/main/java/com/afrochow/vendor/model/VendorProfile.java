@@ -74,6 +74,12 @@ public class VendorProfile {
     @Builder.Default
     private Boolean stripeOnboardingComplete = false;
 
+    // Distinguishes demo/seed vendors (see CompleteFinalSeeder) from real registered
+    // ones. Real registration never sets this true — see VendorProfileService.
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isSeedData = false;
+
     // ========== VENDOR STATUS (STATE MACHINE) ==========
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

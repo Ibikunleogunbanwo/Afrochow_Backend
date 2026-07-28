@@ -72,6 +72,12 @@ public class Review {
     @Builder.Default
     private Boolean isVisible = true;
 
+    // Distinguishes demo/seed reviews (see CompleteFinalSeeder) from real
+    // customer reviews. Real review creation never sets this true.
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isSeedData = false;
+
     // Optional: Link to order (proof of purchase)
     // ON DELETE SET NULL: when the referenced order is deleted, this column is nulled
     // instead of blocking deletion (avoids FK violation in cascade chains).

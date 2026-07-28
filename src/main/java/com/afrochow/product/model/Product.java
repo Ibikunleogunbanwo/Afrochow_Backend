@@ -73,6 +73,12 @@ public class Product {
     @Builder.Default
     private Boolean adminVisible = true;
 
+    // Distinguishes demo/seed products (see CompleteFinalSeeder) from real vendors'
+    // own products. Real product creation never sets this true.
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isSeedData = false;
+
     @Column(nullable = false)
     @Builder.Default
     private Integer preparationTimeMinutes = 20;
