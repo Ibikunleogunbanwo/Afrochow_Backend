@@ -3,6 +3,8 @@ package com.afrochow.auth.service;
 import com.afrochow.auth.dto.LoginResponse;
 import com.afrochow.common.enums.AuthProvider;
 import com.afrochow.common.enums.Role;
+import com.afrochow.common.exceptions.CustomerWaitlistModeException;
+import com.afrochow.common.exceptions.ResourceNotFoundException;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.security.JwtTokenProvider;
@@ -53,6 +55,7 @@ public class GoogleAuthService {
     private final String googleRedirectUri;
     private final String cookieDomain;
     private final HttpClient httpClient;
+    private final boolean customerWaitlistMode;
 
     private GoogleIdTokenVerifier verifier;
 
@@ -64,7 +67,8 @@ public class GoogleAuthService {
             @Value("${google.client-id}")     String googleClientId,
             @Value("${google.client-secret}") String googleClientSecret,
             @Value("${google.redirect-uri}")  String googleRedirectUri,
-            @Value("${app.cookie.domain:}")   String cookieDomain
+            @Value("${app.cookie.domain:}")   String cookieDomain,
+            @Value("${app.customer-waitlist-mode:true}") boolean customerWaitlistMode
     ) {
         this.userRepository      = userRepository;
         this.jwtTokenProvider    = jwtTokenProvider;
@@ -75,6 +79,7 @@ public class GoogleAuthService {
         this.googleRedirectUri   = googleRedirectUri;
         this.cookieDomain        = cookieDomain;
         this.httpClient          = HttpClient.newHttpClient();
+        this.customerWaitlistMode = customerWaitlistMode;
     }
 
     @PostConstruct
@@ -92,6 +97,7 @@ public class GoogleAuthService {
     @Transactional
     public LoginResponse authenticateWithGoogle(
             String code,
+            String context,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
@@ -107,7 +113,7 @@ public class GoogleAuthService {
         if (firstName == null || firstName.isBlank()) firstName = email.split("@")[0];
         if (lastName  == null || lastName.isBlank())  lastName  = ".";
 
-        User user = findOrCreateCustomer(email, googleId, firstName, lastName, pictureUrl);
+        User user = findOrCreateCustomer(email, googleId, firstName, lastName, pictureUrl, context);
 
         String accessToken  = jwtTokenProvider.createToken(user);
         String refreshToken = refreshTokenService.createRefreshTokenForUser(user, httpRequest);
@@ -183,7 +189,8 @@ public class GoogleAuthService {
 
     private User findOrCreateCustomer(
             String email, String googleId,
-            String firstName, String lastName, String pictureUrl
+            String firstName, String lastName, String pictureUrl,
+            String context
     ) {
         Optional<User> existing = userRepository.findByEmail(email);
         if (existing.isPresent()) {
@@ -192,7 +199,29 @@ public class GoogleAuthService {
                 user.setGoogleId(googleId);
                 userRepository.save(user);
             }
-            return user;  // returning user — no welcome email, already sent at registration
+            return user;  // returning user, any role — no welcome email, already sent at registration
+        }
+
+        // No existing account — this is a new sign-up, not a sign-in.
+        if ("vendor".equalsIgnoreCase(context)) {
+            // Google was clicked from the vendor registration flow's "Already have
+            // an account? Sign in," not the general customer entry point. Google
+            // can only ever produce a CUSTOMER account (no business name/address/
+            // etc. to build a vendor profile from), so an unknown email here must
+            // NOT be silently turned into a mismatched customer account — that
+            // would strand someone who came in to register as a vendor. Regardless
+            // of waitlist mode.
+            throw new ResourceNotFoundException(
+                    "No account found for that Google email. Please complete vendor registration below.");
+        }
+
+        // Customer entry point. Google auth has no client-side waitlist gate
+        // (unlike the manual sign-up form), so this is the only place that can
+        // block it: an unknown email must not silently mint a real CUSTOMER
+        // account while waitlist mode is active.
+        if (customerWaitlistMode) {
+            throw new CustomerWaitlistModeException(
+                    "Afrochow ordering is opening soon. Join the waitlist and we will let you know when customer accounts go live.");
         }
 
         // Generate username upfront — publicUserId and username are both generated

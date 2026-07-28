@@ -23,9 +23,14 @@ public class SearchController {
     // ========== VENDOR SEARCH ==========
 
     @GetMapping("/vendors/{publicUserId}")
-    @Operation(summary = "Get vendor details", description = "Get vendor profile details by public vendor ID")
-    public ResponseEntity<ApiResponse<VendorProfileResponseDto>> getVendorByPublicId(@PathVariable String publicUserId) {
-        VendorProfileResponseDto vendor = searchService.getVendorByPublicId(publicUserId);
+    @Operation(summary = "Get vendor details",
+            description = "Get vendor profile details by public vendor ID. Pass ?lat=&lng= (optional) to have " +
+                    "distanceKm from that point computed via the Redis vendor geo index.")
+    public ResponseEntity<ApiResponse<VendorProfileResponseDto>> getVendorByPublicId(
+            @PathVariable String publicUserId,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng) {
+        VendorProfileResponseDto vendor = searchService.getVendorByPublicId(publicUserId, lat, lng);
         return ResponseEntity.ok(ApiResponse.success("Vendor details retrieved successfully", vendor));
     }
 
@@ -85,6 +90,19 @@ public class SearchController {
             @RequestParam(required = false) Double lng) {
         List<ProductResponseDto> products = searchService.getFeaturedProducts(city, lat, lng);
         return ResponseEntity.ok(ApiResponse.success("Featured products retrieved successfully", products));
+    }
+
+    @GetMapping("/products/{publicProductId}/similar")
+    @Operation(summary = "Get the same dish at other vendors",
+            description = "Find this exact product (by name) sold by other active + verified vendors. " +
+                    "Pass ?lat=&lng= (optional) to have each result's distanceKm computed via the Redis " +
+                    "vendor geo index.")
+    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getSimilarProducts(
+            @PathVariable String publicProductId,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng) {
+        List<ProductResponseDto> products = searchService.getSimilarProducts(publicProductId, lat, lng);
+        return ResponseEntity.ok(ApiResponse.success(products));
     }
 
     @GetMapping("/products/popular/names")

@@ -65,7 +65,7 @@ public class AuthController {
             HttpServletResponse httpResponse
     ) {
         LoginResponse response = googleAuthService.authenticateWithGoogle(
-                request.getCode(), httpRequest, httpResponse);
+                request.getCode(), request.getContext(), httpRequest, httpResponse);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

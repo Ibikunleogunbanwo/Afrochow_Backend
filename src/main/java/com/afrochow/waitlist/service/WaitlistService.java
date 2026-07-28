@@ -1,5 +1,6 @@
 package com.afrochow.waitlist.service;
 
+import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.waitlist.dto.WaitlistRequestDto;
 import com.afrochow.waitlist.dto.WaitlistResponseDto;
 import com.afrochow.waitlist.model.WaitlistEntry;
@@ -13,9 +14,12 @@ import java.util.Locale;
 public class WaitlistService {
 
     private final WaitlistEntryRepository waitlistEntryRepository;
+    private final OutboxEventService outboxEventService;
 
-    public WaitlistService(WaitlistEntryRepository waitlistEntryRepository) {
+    public WaitlistService(WaitlistEntryRepository waitlistEntryRepository,
+                            OutboxEventService outboxEventService) {
         this.waitlistEntryRepository = waitlistEntryRepository;
+        this.outboxEventService = outboxEventService;
     }
 
     @Transactional
@@ -32,7 +36,14 @@ public class WaitlistService {
         entry.setName(request.getName().trim());
         entry.setCity(normalizeOptional(request.getCity()));
 
-        return toDto(waitlistEntryRepository.save(entry));
+        WaitlistEntry saved = waitlistEntryRepository.save(entry);
+
+        // Confirmation email — fired every join (including re-joins/updates), same
+        // as the rest of the outbox-driven notification pipeline.
+        outboxEventService.waitlistJoined(saved.getPublicWaitlistId(), saved.getEmail(),
+                saved.getName(), saved.getRole());
+
+        return toDto(saved);
     }
 
     private String normalizeEmail(String email) {

@@ -48,5 +48,8 @@ public enum OutboxEventType {
     VENDOR_REINSTATED,          // → notifyVendorReinstated
 
     // ── Admin broadcast ──────────────────────────────────────────────────────
-    BROADCAST_SENT               // → processBroadcast (fan-out to target audience)
+    BROADCAST_SENT,               // → processBroadcast (fan-out to target audience)
+
+    // ── Waitlist ─────────────────────────────────────────────────────────────
+    WAITLIST_JOINED               // → notifyWaitlistJoined (confirmation email, no account exists yet)
 }

@@ -341,6 +341,23 @@ public class OutboxEventService {
         ));
     }
 
+    // ── Waitlist ─────────────────────────────────────────────────────────────
+
+    /**
+     * Fired when someone joins the waitlist (pre-registration, no User account exists
+     * yet) so they get a confirmation email. Unlike the other USER events, this is
+     * NOT keyed on a publicUserId — publicWaitlistId is the aggregate identity here.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void waitlistJoined(String publicWaitlistId, String email, String name, String role) {
+        save(OutboxEventType.WAITLIST_JOINED, "WAITLIST", publicWaitlistId, Map.of(
+                "publicWaitlistId", publicWaitlistId,
+                "email",            email,
+                "name",             name,
+                "role",             role
+        ));
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
     private void saveOrderEvent(OutboxEventType type, String publicOrderId, Map<String, String> payload) {
