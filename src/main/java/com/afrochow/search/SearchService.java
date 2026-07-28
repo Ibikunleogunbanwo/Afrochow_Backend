@@ -161,6 +161,18 @@ public class SearchService {
          */
         @Transactional(readOnly = true)
         public List<ProductResponseDto> getFeaturedProducts(String city, Double lat, Double lng) {
+                return getFeaturedProducts(city, lat, lng, null);
+        }
+
+        /**
+         * Overload supporting an optional scheduleType filter — lets the homepage split
+         * featured products into a "ready to order today" rail (SAME_DAY) and a
+         * "pre-order / advance notice" rail (ADVANCE_ORDER) without duplicating the
+         * ranking/diversity algorithm. scheduleType == null keeps the original
+         * unfiltered behaviour (both schedule types mixed together).
+         */
+        @Transactional(readOnly = true)
+        public List<ProductResponseDto> getFeaturedProducts(String city, Double lat, Double lng, ScheduleType scheduleType) {
                 final int POOL_SIZE             = 50;
                 final int MAX_PER_VENDOR        = 2;
                 final int MAX_PER_CATEGORY      = 2;
@@ -173,6 +185,11 @@ public class SearchService {
                 // We still track their vendor/category counts so the algorithmic fill (Step 2)
                 // diversifies around them.
                 List<Product> pinned = productRepository.findAdminFeaturedProducts();
+                if (scheduleType != null) {
+                        pinned = pinned.stream()
+                                        .filter(p -> scheduleType.equals(p.getScheduleType()))
+                                        .toList();
+                }
 
                 // All pinned products always show + up to 8 algorithmic fill slots
                 final int MAX_TOTAL = Math.max(24, pinned.size() + 8);
@@ -205,15 +222,26 @@ public class SearchService {
 
                         List<Product> candidates = productRepository
                                 .findFeaturedProducts(pool, cutoff, cityFilter).getContent();
+                        if (scheduleType != null) {
+                                candidates = candidates.stream()
+                                                .filter(p -> scheduleType.equals(p.getScheduleType()))
+                                                .toList();
+                        }
 
                         if (candidates.size() < MIN_RECENCY_THRESHOLD) {
                                 candidates = productRepository.findFeaturedProductsBroad(pool, cityFilter).getContent();
+                                if (scheduleType != null) {
+                                        candidates = candidates.stream()
+                                                        .filter(p -> scheduleType.equals(p.getScheduleType()))
+                                                        .toList();
+                                }
                         }
 
                         if (candidates.size() < MIN_RECENCY_THRESHOLD) {
                                 // Tier 3: sort by rating DESC then newest — better than pure date order
                                 candidates = productRepository.findAnyFeaturedProducts(pool, cityFilter).getContent()
                                         .stream()
+                                        .filter(p -> scheduleType == null || scheduleType.equals(p.getScheduleType()))
                                         .sorted(Comparator
                                                 .comparingDouble(Product::getAverageRating).reversed()
                                                 .thenComparing(Product::getReviewCount,   Comparator.reverseOrder())
