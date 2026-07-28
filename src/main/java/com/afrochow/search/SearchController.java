@@ -83,12 +83,14 @@ public class SearchController {
     @Operation(summary = "Get featured products",
                description = "Admin-pinned products always included. Pass ?city= to filter algorithmic fill by vendor city. " +
                             "Pass ?lat=&lng= (optional) to have each product's distanceKm from that point computed via the " +
-                            "Redis vendor geo index.")
+                            "Redis vendor geo index. Pass ?scheduleType=SAME_DAY or ADVANCE_ORDER (optional) to split the " +
+                            "homepage into a \"ready to order\" rail vs a \"pre-order / advance notice\" rail.")
     public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getFeaturedProducts(
             @RequestParam(required = false) String city,
             @RequestParam(required = false) Double lat,
-            @RequestParam(required = false) Double lng) {
-        List<ProductResponseDto> products = searchService.getFeaturedProducts(city, lat, lng);
+            @RequestParam(required = false) Double lng,
+            @RequestParam(required = false) com.afrochow.common.enums.ScheduleType scheduleType) {
+        List<ProductResponseDto> products = searchService.getFeaturedProducts(city, lat, lng, scheduleType);
         return ResponseEntity.ok(ApiResponse.success("Featured products retrieved successfully", products));
     }
 
