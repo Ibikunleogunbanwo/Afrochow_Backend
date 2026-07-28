@@ -94,6 +94,12 @@ public class User {
     @Schema(description = "Must accept terms and conditions")
     private Boolean acceptTerms = true;
 
+    // Distinguishes demo/seed accounts (see CompleteFinalSeeder) from real
+    // registered users. Real registration never sets this true.
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isSeedData = false;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

@@ -24,6 +24,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -45,9 +46,17 @@ import java.util.*;
  * - @Transactional moved to createCompleteVendor() so one bad vendor doesn't roll back all others.
  * - Products created via vendor.addProduct() (not direct productRepository.save()) to maintain
  *   the bidirectional relationship consistently with the service layer.
+ *
+ * - @Profile("!prod") added once real vendors started registering: its only previous
+ *   safeguard was "skip if vendor_profile/customer_profile already have rows", which is a
+ *   one-shot gate, not an environment gate. If production's tables were ever emptied (a bad
+ *   migration, a restore, an incident), this would have silently reseeded 20 fake vendors and
+ *   10 fake customers straight into prod. Every row it creates is also explicitly flagged
+ *   isSeedData=true so it stays identifiable even if this class runs again in dev/test.
  */
 @Component
 @Order(100)
+@Profile("!prod")
 @RequiredArgsConstructor
 @Slf4j
 public class CompleteFinalSeeder implements CommandLineRunner {
@@ -338,6 +347,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                 .role(Role.VENDOR)
                 .emailVerified(true)
                 .isActive(true)
+                .isSeedData(true)
                 .build();
 
         return userRepository.save(user);
@@ -373,6 +383,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                 .preparationTime(20 + (vendorIndex * 5))
                 .totalOrdersCompleted(0)
                 .totalRevenue(BigDecimal.ZERO)
+                .isSeedData(true)
                 .build();
 
         profile.setOperatingHours(operatingHours);
@@ -411,6 +422,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                     .scheduleType(scheduleType)
                     .advanceNoticeHours(advanceNoticeHours)
                     .category(category)
+                    .isSeedData(true)
                     .build();
 
             // FIX: use addProduct() to wire the bidirectional relationship
@@ -487,6 +499,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                     .comment(comment)
                     .isVisible(true)
                     .helpfulCount(i % 5)
+                    .isSeedData(true)
                     .build();
 
             reviewRepository.save(review);
@@ -505,6 +518,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                     .role(Role.CUSTOMER)
                     .emailVerified(true)
                     .isActive(true)
+                    .isSeedData(true)
                     .build();
             User saved = userRepository.save(user);
             createCustomerProfile(saved, PaymentMethod.CREDIT_CARD, 0, null, null);
@@ -542,6 +556,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                     .role(Role.CUSTOMER)
                     .emailVerified(true)
                     .isActive(true)
+                    .isSeedData(true)
                     .build();
 
             user = userRepository.save(user);
@@ -559,6 +574,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                 .defaultDeliveryInstructions(deliveryInstructions)
                 .paymentMethod(paymentMethod)
                 .loyaltyPoints(loyaltyPoints)
+                .isSeedData(true)
                 .build();
 
         profile = customerProfileRepository.save(profile);
@@ -584,6 +600,7 @@ public class CompleteFinalSeeder implements CommandLineRunner {
                 .province(DEFAULT_PROVINCE)
                 .country(DEFAULT_COUNTRY)
                 .postalCode(generateCalgaryPostalCode(index))
+                .isSeedData(true)
                 .build();
 
         return addressRepository.save(address);

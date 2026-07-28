@@ -52,6 +52,12 @@ public class CustomerProfile {
     @Builder.Default
     private Boolean notificationsEnabled = true;
 
+    // Distinguishes demo/seed customers (see CompleteFinalSeeder) from real
+    // registered ones. Real registration never sets this true.
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isSeedData = false;
+
 
     // ==========================================
 // TIMESTAMPS

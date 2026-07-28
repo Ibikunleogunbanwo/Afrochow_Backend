@@ -52,6 +52,12 @@ public class Address {
     @Builder.Default
     private Boolean defaultAddress = false;
 
+    // Distinguishes demo/seed addresses (see CompleteFinalSeeder) from real
+    // customer/vendor addresses. Real address creation never sets this true.
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isSeedData = false;
+
     // =================================================
     // RELATIONSHIPS
     // =================================================
