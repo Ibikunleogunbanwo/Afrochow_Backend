@@ -976,6 +976,28 @@ public class NotificationService {
         }
     }
 
+    // ========== WAITLIST ==========
+
+    /**
+     * Confirms a waitlist join/update. No User account exists yet at this point,
+     * so — like notifyEmailVerificationSent — this is email-only, no in-app
+     * Notification row.
+     */
+    public void notifyWaitlistJoined(String email, String name, String role) {
+        String title = "You're on the waitlist!";
+        String message = "VENDOR".equals(role)
+                ? "Thanks for your interest in selling on Afrochow! We've added you to the vendor waitlist "
+                        + "and will reach out as soon as registrations open in your area."
+                : "Thanks for joining the Afrochow waitlist! We'll let you know as soon as we launch near you.";
+
+        try {
+            emailService.sendNotificationEmail(email, name, title, message);
+        } catch (Exception e) {
+            log.error("notifyWaitlistJoined — email failed for {}: {}", email, e.getMessage());
+            throw new IllegalStateException("Notification dispatch failed", e);
+        }
+    }
+
     // ========== VENDOR ADMIN LIFECYCLE ==========
 
     public void notifyVendorProvisional(String email, String firstName, String restaurantName) {

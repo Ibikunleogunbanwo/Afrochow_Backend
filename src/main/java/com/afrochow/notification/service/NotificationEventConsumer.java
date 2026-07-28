@@ -61,7 +61,8 @@ public class NotificationEventConsumer {
             OutboxEventType.VENDOR_REJECTED,
             OutboxEventType.VENDOR_SUSPENDED,
             OutboxEventType.VENDOR_REINSTATED,
-            OutboxEventType.BROADCAST_SENT
+            OutboxEventType.BROADCAST_SENT,
+            OutboxEventType.WAITLIST_JOINED
     );
 
     private final NotificationService notificationService;
@@ -254,6 +255,12 @@ public class NotificationEventConsumer {
                             required(p, "type", type, eventId),
                             required(p, "targetAudience", type, eventId),
                             required(p, "sentBy", type, eventId));
+
+            case WAITLIST_JOINED ->
+                    notificationService.notifyWaitlistJoined(
+                            required(p, "email", type, eventId),
+                            required(p, "name", type, eventId),
+                            required(p, "role", type, eventId));
         }
     }
 

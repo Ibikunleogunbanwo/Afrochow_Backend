@@ -80,6 +80,13 @@ public class AuthenticationService {
     private final AdminProfileRepository        adminProfileRepository;
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final PasswordEncoder               passwordEncoder;
+
+    // See CustomerWaitlistModeException — blocks new CUSTOMER account creation
+    // while the platform is pre-launch for customers. Mirrors the frontend's
+    // NEXT_PUBLIC_CUSTOMER_MODE flag (src/lib/mvp.js); vendor registration is
+    // unaffected.
+    @Value("${app.customer-waitlist-mode:true}")
+    private boolean customerWaitlistMode;
     private final GeocodingService geocodingService;
     private final AddressRepository addressRepository;
 
@@ -344,6 +351,11 @@ public class AuthenticationService {
             CustomerProfileRequestDto request,
             HttpServletRequest httpRequest
     ) {
+        if (customerWaitlistMode) {
+            throw new CustomerWaitlistModeException(
+                    "Afrochow ordering is opening soon. Join the waitlist and we will let you know when customer accounts go live.");
+        }
+
         String clientIp = SecurityUtils.getClientIP(httpRequest);
         rateLimitService.verifyRegistrationLimit(clientIp);
         validateRegistrationData(request.getEmail(), request.getUsername(), request.getPhone());

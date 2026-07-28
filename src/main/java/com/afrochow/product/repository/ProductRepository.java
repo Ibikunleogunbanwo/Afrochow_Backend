@@ -101,6 +101,28 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
         """)
     List<Product> searchPublic(@Param("query") String query);
 
+    /**
+     * "Same dish elsewhere" — public, platform-visible, available products with
+     * an exact (case-insensitive) name match at a DIFFERENT, active + verified
+     * vendor than the one passed in. Backs SearchService.getSimilarProducts /
+     * the restaurant page's "Also available at" section.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        JOIN FETCH p.vendor v
+        JOIN FETCH v.user u
+        LEFT JOIN FETCH v.address a
+        WHERE LOWER(p.name) = LOWER(:name)
+          AND p.available = true
+          AND p.adminVisible = true
+          AND v.isVerified = true
+          AND v.isActive = true
+          AND v.id != :excludeVendorId
+        """)
+    List<Product> findSameNameAtOtherVendors(
+            @Param("name") String name,
+            @Param("excludeVendorId") Long excludeVendorId);
+
     // ========== FIND BY AVAILABILITY ==========
 
     List<Product> findByAvailable(Boolean available);

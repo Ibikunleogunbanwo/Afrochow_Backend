@@ -87,6 +87,14 @@ public class VendorProfileResponseDto {
     // ── Location ──
     private AddressResponseDto address;
 
+    /**
+     * Distance in kilometres from the coordinates passed to the request
+     * (see SearchController#getVendorByPublicId lat/lng params). Null when no
+     * coordinates were supplied, Redis geo lookup is disabled, or this vendor
+     * isn't geo-indexed yet — same semantics as ProductResponseDto.distanceKm.
+     */
+    private Double distanceKm;
+
     // ── Statistics ──
     private Integer totalOrdersCompleted;
     private BigDecimal totalRevenue;

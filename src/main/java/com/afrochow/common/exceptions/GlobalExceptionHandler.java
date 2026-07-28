@@ -299,6 +299,13 @@ public class GlobalExceptionHandler {
     //  BUSINESS LOGIC EXCEPTIONS
     // ═════════════════════════════════════════════════════════════
 
+    @ExceptionHandler(CustomerWaitlistModeException.class)
+    public ResponseEntity<ApiResponse<Object>> handleCustomerWaitlistMode(
+            CustomerWaitlistModeException ex, WebRequest request) {
+        logger.info("Blocked new customer account creation — waitlist mode active: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<ApiResponse<Object>> handleEmailExists(
             EmailAlreadyExistsException ex, WebRequest request) {
