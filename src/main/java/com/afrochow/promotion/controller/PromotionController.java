@@ -47,8 +47,13 @@ public class PromotionController {
                 promotionService.getVendorOwnPromotions(authentication.getName())));
     }
 
+    // Public — anonymous visitors browsing a vendor's storefront need to see promo
+    // badges (e.g. "Free Delivery", "20% off") before signing in or joining the
+    // waitlist. Matches the SecurityConfig filter-chain rule (GET /promotions/** ->
+    // permitAll) and the sibling getActivePromotions() endpoint above; this was
+    // previously the one promotions GET that incorrectly required authentication,
+    // 403'ing every anonymous restaurant-page visit.
     @GetMapping("/vendor/{vendorPublicId}")
-    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get active promotions for vendor",
                description = "List global promotions and vendor-specific promotions for a given vendor")
     public ResponseEntity<ApiResponse<List<PromotionResponseDto>>> getActivePromotionsForVendor(
