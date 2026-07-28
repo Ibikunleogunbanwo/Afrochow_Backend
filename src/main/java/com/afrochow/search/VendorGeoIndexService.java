@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -124,7 +125,10 @@ public class VendorGeoIndexService {
     }
 
     /**
-     * Find vendors near a point, ordered by distance ascending, up to {@code limit}.
+     * Find vendors near a point, ranked by popularity/quality (see
+     * {@link #popularityScore}) with distance as a tiebreaker, up to {@code limit}.
+     * Distance is still a hard gate — a vendor has to be within delivery range to
+     * appear at all — it's just no longer the sort key once that's true.
      *
      * {@code radiusKm} is used as the fallback distance cap for vendors who haven't
      * configured their own {@code maxDeliveryDistanceKm} (or who are pickup-only) —
@@ -180,6 +184,17 @@ public class VendorGeoIndexService {
                             Function.identity(),
                             (existing, ignored) -> existing));
 
+            // Rank by popularity/quality within delivery range, not raw distance —
+            // distance is still the *gate* (a vendor that can't deliver to you is
+            // filtered out below via effectiveRadiusKm), but once a vendor clears
+            // that bar, being 200m closer shouldn't put an unproven, zero-review
+            // vendor ahead of a highly-rated, high-volume one. Distance only breaks
+            // ties between similarly-scored vendors (see popularityScore javadoc).
+            Comparator<Map.Entry<VendorProfile, Double>> byPopularityThenDistance = Comparator
+                    .comparingDouble((Map.Entry<VendorProfile, Double> e) -> popularityScore(e.getKey()))
+                    .reversed()
+                    .thenComparingDouble(Map.Entry::getValue);
+
             return distanceByVendorId.entrySet().stream()
                     .map(entry -> {
                         VendorProfile vendor = vendorsByPublicId.get(entry.getKey());
@@ -190,16 +205,36 @@ public class VendorGeoIndexService {
                                 ? vendor.getMaxDeliveryDistanceKm().doubleValue()
                                 : radiusKm;
 
-                        return entry.getValue() <= effectiveRadiusKm ? vendor : null;
+                        if (entry.getValue() > effectiveRadiusKm) return null;
+                        return Map.entry(vendor, entry.getValue());
                     })
                     .filter(Objects::nonNull)
+                    .sorted(byPopularityThenDistance)
                     .limit(limit)
+                    .map(Map.Entry::getKey)
                     .toList();
         } catch (Exception e) {
             log.warn("vendor.geo.index.lookup_failed key={} lat={} lng={} radiusKm={}",
                     vendorGeoKey, lat, lng, radiusKm, e);
             return Collections.emptyList();
         }
+    }
+
+    /**
+     * Popularity/quality score used to rank "near you" results — rating weighted
+     * by log(1 + completed orders), so a single 5-star review can't outrank a
+     * vendor with hundreds of proven orders, while a high-volume vendor with a
+     * merely-decent rating still beats an unproven one. Only used as the primary
+     * sort key in findNearbyVendors; raw distance still breaks ties, and every
+     * candidate is already filtered to its own delivery radius before this runs,
+     * so ranking by popularity never means "can't actually deliver to you."
+     * Brand-new vendors (no orders, no reviews) score 0 and sort by distance
+     * among themselves rather than being hidden entirely.
+     */
+    private double popularityScore(VendorProfile vendor) {
+        double rating = vendor.getAverageRating();
+        int orders = vendor.getTotalOrdersCompleted() != null ? vendor.getTotalOrdersCompleted() : 0;
+        return rating * Math.log(1 + orders);
     }
 
     /**

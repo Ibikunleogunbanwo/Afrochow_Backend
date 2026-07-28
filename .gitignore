@@ -15,6 +15,18 @@ target/
 *.war
 *.ear
 
+# Generated output
+output/
+
+tools/
+# Marketing assets (if you don't want them in Git)
+marketing/
+
+# Documentation (only if you don't want docs tracked)
+docs/
+
+# Generated script
+tools/create_afrochow_instagram_visuals.py
 # ===== IDE FILES =====
 .idea/
 *.iml
