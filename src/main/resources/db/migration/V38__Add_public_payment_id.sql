@@ -30,8 +30,11 @@ SET @sql := IF(@col_exists = 0,
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- Step 2: backfill any rows still missing a value (existing payments created
--- before this column existed).
-UPDATE payment SET public_payment_id = UUID() WHERE public_payment_id IS NULL;
+-- before this column existed). Covers both NULL (the normal case after Step 1)
+-- and empty-string values, since some environments' pre-existing payment rows
+-- were found to carry '' rather than NULL — UUID() is evaluated per-row, so
+-- this is safe to run against any number of rows without producing duplicates.
+UPDATE payment SET public_payment_id = UUID() WHERE public_payment_id IS NULL OR public_payment_id = '';
 
 -- Step 3: enforce NOT NULL now that every row has a value. Guarded so this
 -- is a no-op if already applied.
