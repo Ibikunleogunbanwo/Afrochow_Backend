@@ -110,15 +110,21 @@ public class StripeWebhookController {
             return ResponseEntity.badRequest().body("Invalid payload");
         }
 
-        log.info("Stripe webhook received: {}", event.getType());
-        switch (event.getType()) {
+        String eventType = event == null ? null : event.getType();
+        if (eventType == null || eventType.isBlank()) {
+            log.warn("Stripe webhook payload missing event type");
+            return ResponseEntity.badRequest().body("Invalid payload");
+        }
+
+        log.info("Stripe webhook received: {}", eventType);
+        switch (eventType) {
             case "account.updated"                          -> handleAccountUpdated(event);
             case "v2.core.account_link.returned"            -> handleAccountLinkReturned(payload);
             case "payment_intent.amount_capturable_updated" -> handlePaymentIntentAuthorized(event);
             case "payment_intent.succeeded"                 -> handlePaymentIntentSucceeded(event);
             case "payment_intent.payment_failed"            -> handlePaymentIntentFailed(event);
             case "charge.refunded"                          -> handleChargeRefunded(event);
-            default -> log.debug("Unhandled Stripe event type: {}", event.getType());
+            default -> log.debug("Unhandled Stripe event type: {}", eventType);
         }
 
         return ResponseEntity.ok("received");

@@ -10,6 +10,7 @@ import com.stripe.net.Webhook;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -33,6 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ({@code Account.retrieve}), which isn't mockable here.
  */
 @ControllerSliceTest(StripeWebhookController.class)
+@TestPropertySource(properties = "stripe.webhook.secret=whsec_test")
 class StripeWebhookControllerTest extends AbstractControllerTest {
 
     @MockitoBean private StripeConnectService stripeConnectService;
