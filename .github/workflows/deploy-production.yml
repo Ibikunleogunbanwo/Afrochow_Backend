@@ -99,16 +99,26 @@ jobs:
           ssh -i ~/.ssh/afrochow_vps -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
 
-          cd /opt/afrochow
+          APP_DIR="/opt/afrochow"
+
+          echo "Preparing application directory..."
+          if [ "$(id -u)" -eq 0 ]; then
+            mkdir -p "$APP_DIR"
+            chown -R "$(id -u):$(id -g)" "$APP_DIR"
+          elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            sudo mkdir -p "$APP_DIR"
+            sudo chown -R "$(id -u):$(id -g)" "$APP_DIR"
+          fi
+
+          if ! cd "$APP_DIR"; then
+            echo "Cannot access $APP_DIR as $(whoami)."
+            echo "Fix VPS ownership/permissions or set the GitHub VPS_USER secret to a user that can access it."
+            ls -ld /opt "$APP_DIR" || true
+            exit 1
+          fi
 
           echo "Preparing Git checkout..."
-          git config --global --add safe.directory /opt/afrochow
-
-          if [ "$(id -u)" -eq 0 ]; then
-            chown -R "$(id -u):$(id -g)" /opt/afrochow
-          elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-            sudo chown -R "$(id -u):$(id -g)" /opt/afrochow
-          fi
+          git config --global --add safe.directory "$APP_DIR"
 
           echo "Updating application..."
           if git fetch origin main; then
@@ -124,7 +134,7 @@ jobs:
               --exclude '.git/' \
               --exclude '.env.prod' \
               --exclude 'deploy/nginx/certs/' \
-              "$TMP_RELEASE"/ /opt/afrochow/
+              "$TMP_RELEASE"/ "$APP_DIR"/
 
             rm -rf "$TMP_RELEASE"
           fi
