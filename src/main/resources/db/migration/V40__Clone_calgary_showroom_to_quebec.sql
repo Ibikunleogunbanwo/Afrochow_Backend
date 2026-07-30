@@ -446,7 +446,7 @@ SELECT
     NULL,
     first_name,
     last_name,
-    phone,
+    CONCAT('438776', LPAD(reviewer_slot_no, 4, '0')),
     role,
     auth_provider,
     is_active,
