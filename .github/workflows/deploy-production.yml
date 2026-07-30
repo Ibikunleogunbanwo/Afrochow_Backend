@@ -185,25 +185,20 @@ jobs:
               docker exec -i afrochow-mysql mysql \
                 -u"$DB_USERNAME" \
                 -p"$DB_PASSWORD" \
-                "$DB_NAME" <<'SQL'
-              SELECT version, description, success, installed_on
-              FROM flyway_schema_history
-              WHERE version IN ('39','40','42','43')
-              ORDER BY installed_rank;
-
-              SELECT
-                a.city,
-                a.province,
-                COUNT(*) AS active_verified_vendors
-              FROM vendor_profile vp
-              JOIN users u ON u.user_id = vp.user_id
-              JOIN address a ON a.address_id = vp.address_id
-              WHERE u.public_user_id REGEXP '^VEN-(ONTOR|BCVAN|MBWPG|SKSSK|NSHAL|NBMON|PECHA|NLSTJ)'
-                AND vp.is_active = TRUE
-                AND vp.is_verified = TRUE
-              GROUP BY a.city, a.province
-              ORDER BY a.province, a.city;
-SQL
+                "$DB_NAME" \
+                -e "SELECT version, description, success, installed_on
+                    FROM flyway_schema_history
+                    WHERE version IN ('39','40','42','43')
+                    ORDER BY installed_rank;
+                    SELECT a.city, a.province, COUNT(*) AS active_verified_vendors
+                    FROM vendor_profile vp
+                    JOIN users u ON u.user_id = vp.user_id
+                    JOIN address a ON a.address_id = vp.address_id
+                    WHERE u.public_user_id REGEXP '^VEN-(ONTOR|BCVAN|MBWPG|SKSSK|NSHAL|NBMON|PECHA|NLSTJ)'
+                      AND vp.is_active = TRUE
+                      AND vp.is_verified = TRUE
+                    GROUP BY a.city, a.province
+                    ORDER BY a.province, a.city;"
 
               docker compose \
                 --env-file .env.prod \
