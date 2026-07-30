@@ -223,6 +223,14 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Spring Boot 4 modularized @WebMvcTest/@AutoConfigureMockMvc/MockMvc
+		     auto-configuration out of spring-boot-starter-test into its own
+		     per-technology test starter. Required for controller-slice tests. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
