@@ -1,20 +1,26 @@
 -- ===========================================================================
 -- Afrochow Database Migration V40
--- Description: Replace the hand-authored Quebec showroom with Calgary clones.
+-- Description: Replace the hand-authored Quebec showroom with cloned Calgary
+--              showroom data, changing only identifiers and location details.
 --
--- V39 created a small standalone Quebec sample set. The Calgary production
--- showroom is the flow we trust, so this migration copies the existing Calgary
--- seed vendors/products/reviews from prod MySQL and changes only the Quebec
--- identity/location fields.
+-- Why this exists:
+--   V39 created Quebec-specific sample vendors/products by hand. The product
+--   goal is now different: keep the already-proven Calgary showroom flow as the
+--   source of truth and replicate that same catalog/ratings/vendor setup into
+--   Quebec so the search/order/payment experience behaves the same by city.
 --
 -- Safety:
---   - Deletes only seed rows with reserved Quebec prefixes:
---     VEN-QC%, CUS-QCR%, PROD-QC%, PROD-VEN-QC%, ADDR-QC-%.
---   - Does not touch real vendors/customers.
---   - Does not write Redis directly; the app rebuilds Redis GEO from MySQL.
+--   This migration deletes only rows using reserved Quebec showroom prefixes:
+--     VEN-QC*, PROD-QC*, CUS-QC*, ADDR-QC*
+--   It does not touch real vendor/customer rows or the Calgary source rows.
+--
+-- Redis GEO note:
+--   No Redis writes are needed here. VendorGeoIndexService rebuilds the Redis
+--   vendor geo index from active, verified, geocoded vendors on app startup and
+--   on its scheduled refresh.
 -- ===========================================================================
 
--- ── 1. Cleanup the previous Quebec showroom rows ───────────────────────────
+-- ── 1. Remove V39 Quebec showroom rows by reserved public-id prefix ─────────
 
 DROP TEMPORARY TABLE IF EXISTS qc_seed_vendors_to_remove;
 DROP TEMPORARY TABLE IF EXISTS qc_seed_reviewers_to_remove;
@@ -22,129 +28,151 @@ DROP TEMPORARY TABLE IF EXISTS qc_seed_products_to_remove;
 DROP TEMPORARY TABLE IF EXISTS qc_seed_addresses_to_remove;
 
 CREATE TEMPORARY TABLE qc_seed_vendors_to_remove AS
-SELECT vp.id AS vendor_profile_id, vp.user_id, vp.address_id
+SELECT vp.id AS vendor_profile_id, u.user_id, vp.address_id
 FROM vendor_profile vp
 JOIN users u ON u.user_id = vp.user_id
-WHERE u.is_seed_data = TRUE
-  AND u.public_user_id COLLATE utf8mb4_unicode_ci LIKE 'VEN-QC%';
+WHERE u.public_user_id LIKE 'VEN-QC%';
 
 CREATE TEMPORARY TABLE qc_seed_reviewers_to_remove AS
-SELECT u.user_id
-FROM users u
-WHERE u.is_seed_data = TRUE
-  AND u.public_user_id COLLATE utf8mb4_unicode_ci LIKE 'CUS-QCR%';
+SELECT cp.customer_profile_id, u.user_id
+FROM customer_profile cp
+JOIN users u ON u.user_id = cp.user_id
+WHERE u.public_user_id LIKE 'CUS-QC%';
 
 CREATE TEMPORARY TABLE qc_seed_products_to_remove AS
 SELECT p.product_id
 FROM product p
-LEFT JOIN qc_seed_vendors_to_remove qv ON qv.vendor_profile_id = p.vendor_profile_id
-WHERE p.is_seed_data = TRUE
-  AND (
-       qv.vendor_profile_id IS NOT NULL
-       OR p.public_product_id COLLATE utf8mb4_unicode_ci LIKE 'PROD-QC%'
-       OR p.public_product_id COLLATE utf8mb4_unicode_ci LIKE 'PROD-VEN-QC%'
-  );
+WHERE p.public_product_id LIKE 'PROD-QC%'
+   OR p.public_product_id LIKE 'PROD-VEN-QC%';
 
 CREATE TEMPORARY TABLE qc_seed_addresses_to_remove AS
 SELECT a.address_id
 FROM address a
-WHERE a.is_seed_data = TRUE
-  AND a.public_address_id COLLATE utf8mb4_unicode_ci LIKE 'ADDR-QC-%';
+WHERE a.public_address_id LIKE 'ADDR-QC-%';
 
 DELETE f
 FROM favorite f
-LEFT JOIN qc_seed_vendors_to_remove qv ON qv.vendor_profile_id = f.vendor_profile_id
-LEFT JOIN qc_seed_products_to_remove qp ON qp.product_id = f.product_id
-WHERE qv.vendor_profile_id IS NOT NULL OR qp.product_id IS NOT NULL;
+LEFT JOIN qc_seed_reviewers_to_remove c ON c.customer_profile_id = f.customer_profile_id
+LEFT JOIN qc_seed_vendors_to_remove v ON v.vendor_profile_id = f.vendor_profile_id
+LEFT JOIN qc_seed_products_to_remove p ON p.product_id = f.product_id
+WHERE c.customer_profile_id IS NOT NULL
+   OR v.vendor_profile_id IS NOT NULL
+   OR p.product_id IS NOT NULL;
 
 DELETE r
 FROM review r
-LEFT JOIN qc_seed_vendors_to_remove qv ON qv.vendor_profile_id = r.vendor_profile_id
-LEFT JOIN qc_seed_products_to_remove qp ON qp.product_id = r.product_id
-LEFT JOIN qc_seed_reviewers_to_remove qr ON qr.user_id = r.user_id
-WHERE qv.vendor_profile_id IS NOT NULL
-   OR qp.product_id IS NOT NULL
-   OR qr.user_id IS NOT NULL;
+LEFT JOIN qc_seed_reviewers_to_remove c ON c.user_id = r.user_id
+LEFT JOIN qc_seed_vendors_to_remove v ON v.vendor_profile_id = r.vendor_profile_id
+LEFT JOIN qc_seed_products_to_remove p ON p.product_id = r.product_id
+WHERE c.user_id IS NOT NULL
+   OR v.vendor_profile_id IS NOT NULL
+   OR p.product_id IS NOT NULL;
 
-DELETE p FROM product p JOIN qc_seed_products_to_remove qp ON qp.product_id = p.product_id;
-DELETE cp FROM customer_profile cp JOIN qc_seed_reviewers_to_remove qr ON qr.user_id = cp.user_id;
-DELETE vp FROM vendor_profile vp JOIN qc_seed_vendors_to_remove qv ON qv.vendor_profile_id = vp.id;
-DELETE a FROM address a JOIN qc_seed_addresses_to_remove qa ON qa.address_id = a.address_id;
+DELETE p
+FROM product p
+JOIN qc_seed_products_to_remove old_p ON old_p.product_id = p.product_id;
+
+DELETE cp
+FROM customer_profile cp
+JOIN qc_seed_reviewers_to_remove old_cp ON old_cp.customer_profile_id = cp.customer_profile_id;
+
+DELETE vp
+FROM vendor_profile vp
+JOIN qc_seed_vendors_to_remove old_vp ON old_vp.vendor_profile_id = vp.id;
+
+DELETE a
+FROM address a
+JOIN qc_seed_addresses_to_remove old_a ON old_a.address_id = a.address_id;
 
 DELETE u
 FROM users u
-LEFT JOIN qc_seed_vendors_to_remove qv ON qv.user_id = u.user_id
-LEFT JOIN qc_seed_reviewers_to_remove qr ON qr.user_id = u.user_id
-WHERE qv.user_id IS NOT NULL OR qr.user_id IS NOT NULL;
+WHERE u.public_user_id LIKE 'VEN-QC%'
+   OR u.public_user_id LIKE 'CUS-QC%';
 
--- ── 2. Quebec target locations for the Calgary clone set ───────────────────
+-- ── 2. Build Quebec location slots ─────────────────────────────────────────
 
 DROP TEMPORARY TABLE IF EXISTS qc_vendor_slots;
 
 CREATE TEMPORARY TABLE qc_vendor_slots (
-    slot_no INT PRIMARY KEY,
-    public_user_id VARCHAR(16) NOT NULL,
-    username VARCHAR(50) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    phone VARCHAR(32) NOT NULL,
-    public_address_id VARCHAR(80) NOT NULL,
-    address_line VARCHAR(200) NOT NULL,
-    city VARCHAR(100) NOT NULL,
-    province VARCHAR(50) NOT NULL,
-    postal_code VARCHAR(20) NOT NULL,
+    slot_no INT NOT NULL PRIMARY KEY,
+    new_public_user_id VARCHAR(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    city VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    province VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    timezone VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    new_public_address_id VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    address_line VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    postal_code VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
     latitude DOUBLE NOT NULL,
-    longitude DOUBLE NOT NULL
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    longitude DOUBLE NOT NULL,
+    username_prefix VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    email_prefix VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+    phone VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL
+);
 
 INSERT INTO qc_vendor_slots VALUES
-(1,  'VEN-QCMTL01', 'qc_showroom_vendor_01', 'showroom.qc.vendor01@afrochow.ca', '5147770101', 'ADDR-QC-MTL-001', '5450 Avenue du Parc', 'Montreal', 'QC', 'H2V4G7', 45.5220, -73.5967),
-(2,  'VEN-QCMTL02', 'qc_showroom_vendor_02', 'showroom.qc.vendor02@afrochow.ca', '5147770102', 'ADDR-QC-MTL-002', '3509 Boulevard Saint-Laurent', 'Montreal', 'QC', 'H2X2T6', 45.5146, -73.5747),
-(3,  'VEN-QCMTL03', 'qc_showroom_vendor_03', 'showroom.qc.vendor03@afrochow.ca', '5147770103', 'ADDR-QC-MTL-003', '7070 Avenue Henri-Julien', 'Montreal', 'QC', 'H2S3S3', 45.5350, -73.6140),
-(4,  'VEN-QCMTL04', 'qc_showroom_vendor_04', 'showroom.qc.vendor04@afrochow.ca', '5147770104', 'ADDR-QC-MTL-004', '1240 Rue Stanley', 'Montreal', 'QC', 'H3B2S7', 45.4995, -73.5719),
-(5,  'VEN-QCMTL05', 'qc_showroom_vendor_05', 'showroom.qc.vendor05@afrochow.ca', '5147770105', 'ADDR-QC-MTL-005', '4634 Rue Wellington', 'Montreal', 'QC', 'H4G1W7', 45.4551, -73.5678),
-(6,  'VEN-QCMTL06', 'qc_showroom_vendor_06', 'showroom.qc.vendor06@afrochow.ca', '5147770106', 'ADDR-QC-MTL-006', '6700 Chemin de la Cote-des-Neiges', 'Montreal', 'QC', 'H3S2B2', 45.5069, -73.6290),
-(7,  'VEN-QCMTL07', 'qc_showroom_vendor_07', 'showroom.qc.vendor07@afrochow.ca', '5147770107', 'ADDR-QC-MTL-007', '2000 Rue Sainte-Catherine O', 'Montreal', 'QC', 'H3H2T2', 45.4935, -73.5801),
-(8,  'VEN-QCMTL08', 'qc_showroom_vendor_08', 'showroom.qc.vendor08@afrochow.ca', '5147770108', 'ADDR-QC-MTL-008', '4101 Rue Sherbrooke O', 'Montreal', 'QC', 'H3Z1A7', 45.4776, -73.6046),
-(9,  'VEN-QCMTL09', 'qc_showroom_vendor_09', 'showroom.qc.vendor09@afrochow.ca', '5147770109', 'ADDR-QC-MTL-009', '5333 Avenue Casgrain', 'Montreal', 'QC', 'H2T1X3', 45.5265, -73.5985),
-(10, 'VEN-QCMTL10', 'qc_showroom_vendor_10', 'showroom.qc.vendor10@afrochow.ca', '5147770110', 'ADDR-QC-MTL-010', '5600 Rue Jean-Talon E', 'Montreal', 'QC', 'H1S1M2', 45.5844, -73.5846),
-(11, 'VEN-QCLAV01', 'qc_showroom_vendor_11', 'showroom.qc.vendor11@afrochow.ca', '4507770101', 'ADDR-QC-LAV-001', '1600 Boulevard Le Corbusier', 'Laval', 'QC', 'H7S1Y9', 45.5632, -73.7310),
-(12, 'VEN-QCLAV02', 'qc_showroom_vendor_12', 'showroom.qc.vendor12@afrochow.ca', '4507770102', 'ADDR-QC-LAV-002', '3035 Boulevard Le Carrefour', 'Laval', 'QC', 'H7T1C8', 45.5687, -73.7486),
-(13, 'VEN-QCLAV03', 'qc_showroom_vendor_13', 'showroom.qc.vendor13@afrochow.ca', '4507770103', 'ADDR-QC-LAV-003', '1950 Rue Claude-Gagne', 'Laval', 'QC', 'H7N5H9', 45.5579, -73.7156),
-(14, 'VEN-QCLAV04', 'qc_showroom_vendor_14', 'showroom.qc.vendor14@afrochow.ca', '4507770104', 'ADDR-QC-LAV-004', '255 Boulevard de la Concorde O', 'Laval', 'QC', 'H7N5T1', 45.5638, -73.6995),
-(15, 'VEN-QCLAV05', 'qc_showroom_vendor_15', 'showroom.qc.vendor15@afrochow.ca', '4507770105', 'ADDR-QC-LAV-005', '3225 Boulevard Saint-Martin O', 'Laval', 'QC', 'H7T1S2', 45.5539, -73.7607),
-(16, 'VEN-QCLAV06', 'qc_showroom_vendor_16', 'showroom.qc.vendor16@afrochow.ca', '4507770106', 'ADDR-QC-LAV-006', '3025 Avenue des Aristocrates', 'Laval', 'QC', 'H7E5H7', 45.6071, -73.6510),
-(17, 'VEN-QCLAV07', 'qc_showroom_vendor_17', 'showroom.qc.vendor17@afrochow.ca', '4507770107', 'ADDR-QC-LAV-007', '4415 Boulevard Saint-Martin O', 'Laval', 'QC', 'H7T1C6', 45.5483, -73.7794),
-(18, 'VEN-QCLAV08', 'qc_showroom_vendor_18', 'showroom.qc.vendor18@afrochow.ca', '4507770108', 'ADDR-QC-LAV-008', '1177 Autoroute 13', 'Laval', 'QC', 'H7X4C9', 45.5291, -73.8060),
-(19, 'VEN-QCLAV09', 'qc_showroom_vendor_19', 'showroom.qc.vendor19@afrochow.ca', '4507770109', 'ADDR-QC-LAV-009', '1800 Boulevard des Laurentides', 'Laval', 'QC', 'H7M2P6', 45.5907, -73.7173),
-(20, 'VEN-QCLAV10', 'qc_showroom_vendor_20', 'showroom.qc.vendor20@afrochow.ca', '4507770110', 'ADDR-QC-LAV-010', '4600 Boulevard Samson', 'Laval', 'QC', 'H7W2H3', 45.5277, -73.7895);
+(1,  'VEN-QCMTL01', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-001', '5450 Avenue du Parc',             'H2V4G7', 45.5220, -73.5967, 'qc_mtl_01', 'showroom.qc.mtl.01', '5145550101'),
+(2,  'VEN-QCMTL02', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-002', '7070 Avenue Henri-Julien',        'H2S3S3', 45.5350, -73.6140, 'qc_mtl_02', 'showroom.qc.mtl.02', '5145550102'),
+(3,  'VEN-QCMTL03', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-003', '3509 Boulevard Saint-Laurent',     'H2X2T6', 45.5146, -73.5747, 'qc_mtl_03', 'showroom.qc.mtl.03', '5145550103'),
+(4,  'VEN-QCMTL04', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-004', '1450 Rue Peel',                    'H3A1T5', 45.5006, -73.5741, 'qc_mtl_04', 'showroom.qc.mtl.04', '5145550104'),
+(5,  'VEN-QCMTL05', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-005', '4300 Rue Wellington',              'H4G1W4', 45.4585, -73.5678, 'qc_mtl_05', 'showroom.qc.mtl.05', '5145550105'),
+(6,  'VEN-QCMTL06', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-006', '6700 Rue Saint-Hubert',            'H2S2M6', 45.5369, -73.6089, 'qc_mtl_06', 'showroom.qc.mtl.06', '5145550106'),
+(7,  'VEN-QCMTL07', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-007', '410 Rue Saint-Vincent',            'H2Y3A5', 45.5064, -73.5532, 'qc_mtl_07', 'showroom.qc.mtl.07', '5145550107'),
+(8,  'VEN-QCMTL08', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-008', '5401 Boulevard Decarie',           'H3W3C6', 45.4856, -73.6320, 'qc_mtl_08', 'showroom.qc.mtl.08', '5145550108'),
+(9,  'VEN-QCMTL09', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-009', '1221 Rue Sainte-Catherine Ouest',  'H3G1P5', 45.4983, -73.5732, 'qc_mtl_09', 'showroom.qc.mtl.09', '5145550109'),
+(10, 'VEN-QCMTL10', 'Montreal', 'QC', 'America/Montreal', 'ADDR-QC-MTL-010', '280 Rue Jean-Talon Est',           'H2R1S7', 45.5389, -73.6151, 'qc_mtl_10', 'showroom.qc.mtl.10', '5145550110'),
+(11, 'VEN-QCLAV01', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-001', '1600 Boulevard Le Corbusier',      'H7S1Y9', 45.5632, -73.7310, 'qc_lav_01', 'showroom.qc.lav.01', '4505550101'),
+(12, 'VEN-QCLAV02', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-002', '3035 Boulevard Le Carrefour',      'H7T1C8', 45.5687, -73.7486, 'qc_lav_02', 'showroom.qc.lav.02', '4505550102'),
+(13, 'VEN-QCLAV03', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-003', '1950 Rue Claude-Gagne',            'H7N5H9', 45.5579, -73.7156, 'qc_lav_03', 'showroom.qc.lav.03', '4505550103'),
+(14, 'VEN-QCLAV04', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-004', '2600 Avenue Pierre-Peladeau',      'H7T2Z8', 45.5708, -73.7552, 'qc_lav_04', 'showroom.qc.lav.04', '4505550104'),
+(15, 'VEN-QCLAV05', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-005', '3100 Boulevard de la Concorde Est', 'H7E2B8', 45.5880, -73.6663, 'qc_lav_05', 'showroom.qc.lav.05', '4505550105'),
+(16, 'VEN-QCLAV06', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-006', '940 Boulevard Cure-Labelle',        'H7V2V5', 45.5520, -73.7587, 'qc_lav_06', 'showroom.qc.lav.06', '4505550106'),
+(17, 'VEN-QCLAV07', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-007', '2475 Boulevard Saint-Martin Est',   'H7E4X6', 45.5862, -73.6924, 'qc_lav_07', 'showroom.qc.lav.07', '4505550107'),
+(18, 'VEN-QCLAV08', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-008', '500 Autoroute Chomedey Ouest',      'H7X3S9', 45.5365, -73.7890, 'qc_lav_08', 'showroom.qc.lav.08', '4505550108'),
+(19, 'VEN-QCLAV09', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-009', '1799 Avenue Pierre-Peladeau',      'H7T2Y5', 45.5714, -73.7510, 'qc_lav_09', 'showroom.qc.lav.09', '4505550109'),
+(20, 'VEN-QCLAV10', 'Laval',    'QC', 'America/Montreal', 'ADDR-QC-LAV-010', '1200 Boulevard Chomedey',           'H7V3Z3', 45.5538, -73.7478, 'qc_lav_10', 'showroom.qc.lav.10', '4505550110');
 
--- ── 3. Use prod Calgary seed vendors as the source of truth ────────────────
+-- ── 3. Select Calgary showroom vendors as the source of truth ──────────────
 
 DROP TEMPORARY TABLE IF EXISTS qc_source_vendors;
 
 CREATE TEMPORARY TABLE qc_source_vendors AS
-SELECT ranked.*
+SELECT *
 FROM (
     SELECT
         ROW_NUMBER() OVER (ORDER BY COALESCE(c.display_order, 999), vp.id) AS slot_no,
         u.user_id AS source_user_id,
-        vp.id AS source_vendor_profile_id,
+        u.username,
+        u.email,
         u.profile_image_url,
         u.password,
+        u.google_id,
         u.first_name,
         u.last_name,
+        u.role,
         u.auth_provider,
+        u.is_active AS user_is_active,
+        u.scheduled_for_deletion_at,
+        u.email_verified,
+        u.accept_terms,
+        vp.id AS source_vendor_profile_id,
         vp.restaurant_name,
         vp.description,
         vp.cuisine_type,
         vp.logo_url,
         vp.banner_url,
+        vp.stripe_account_id,
+        vp.stripe_onboarding_complete,
+        vp.vendor_status,
         vp.business_license_url,
         vp.tax_id,
+        vp.is_verified,
+        vp.is_active AS vendor_is_active,
         vp.food_handling_cert_url,
         vp.food_handling_cert_number,
         vp.food_handling_cert_issuing_body,
         vp.food_handling_cert_expiry,
+        vp.cert_verified_at,
+        vp.cert_verified_by_admin_id,
         vp.operating_hours_json,
         vp.offers_delivery,
         vp.offers_pickup,
@@ -158,18 +186,15 @@ FROM (
     FROM vendor_profile vp
     JOIN users u ON u.user_id = vp.user_id
     JOIN address a ON a.address_id = vp.address_id
-    LEFT JOIN category c
-           ON c.name COLLATE utf8mb4_unicode_ci = vp.cuisine_type COLLATE utf8mb4_unicode_ci
+    LEFT JOIN category c ON c.name = vp.cuisine_type
     WHERE vp.is_seed_data = TRUE
       AND u.is_seed_data = TRUE
       AND u.role = 'VENDOR'
       AND vp.is_active = TRUE
       AND vp.is_verified = TRUE
-      AND a.city COLLATE utf8mb4_unicode_ci = 'Calgary'
+      AND LOWER(a.city) = 'calgary'
 ) ranked
 WHERE ranked.slot_no <= 20;
-
--- ── 4. Clone users, addresses, vendors ─────────────────────────────────────
 
 INSERT INTO users (
     username, public_user_id, email, profile_image_url, password, google_id,
@@ -178,17 +203,17 @@ INSERT INTO users (
     created_at, updated_at, last_login_at
 )
 SELECT
-    qs.username,
-    qs.public_user_id,
-    qs.email,
-    sv.profile_image_url,
-    sv.password,
+    s.username_prefix,
+    s.new_public_user_id,
+    CONCAT(s.email_prefix, '@afrochow.ca'),
+    COALESCE(src.profile_image_url, src.logo_url),
+    src.password,
     NULL,
-    sv.first_name,
-    sv.last_name,
-    qs.phone,
-    'VENDOR',
-    COALESCE(sv.auth_provider, 'EMAIL'),
+    src.first_name,
+    src.last_name,
+    s.phone,
+    src.role,
+    src.auth_provider,
     TRUE,
     NULL,
     TRUE,
@@ -197,8 +222,8 @@ SELECT
     NOW(),
     NOW(),
     NULL
-FROM qc_source_vendors sv
-JOIN qc_vendor_slots qs ON qs.slot_no = sv.slot_no;
+FROM qc_source_vendors src
+JOIN qc_vendor_slots s ON s.slot_no = src.slot_no;
 
 INSERT INTO address (
     public_address_id, address_line, city, province, postal_code, country,
@@ -206,21 +231,21 @@ INSERT INTO address (
     created_at, updated_at
 )
 SELECT
-    qs.public_address_id,
-    qs.address_line,
-    qs.city,
-    qs.province,
-    qs.postal_code,
+    s.new_public_address_id,
+    s.address_line,
+    s.city,
+    s.province,
+    s.postal_code,
     'Canada',
-    qs.latitude,
-    qs.longitude,
+    s.latitude,
+    s.longitude,
     FALSE,
     TRUE,
     NULL,
     NOW(),
     NOW()
-FROM qc_source_vendors sv
-JOIN qc_vendor_slots qs ON qs.slot_no = sv.slot_no;
+FROM qc_source_vendors src
+JOIN qc_vendor_slots s ON s.slot_no = src.slot_no;
 
 INSERT INTO vendor_profile (
     user_id, restaurant_name, description, cuisine_type, logo_url, banner_url,
@@ -234,76 +259,70 @@ INSERT INTO vendor_profile (
     created_at, updated_at
 )
 SELECT
-    target_user.user_id,
-    REPLACE(REPLACE(sv.restaurant_name, 'Calgary', qs.city), 'YYC', qs.city),
-    sv.description,
-    sv.cuisine_type,
-    sv.logo_url,
-    sv.banner_url,
-    NULL,
-    FALSE,
+    new_u.user_id,
+    src.restaurant_name,
+    src.description,
+    src.cuisine_type,
+    src.logo_url,
+    src.banner_url,
+    src.stripe_account_id,
+    src.stripe_onboarding_complete,
     TRUE,
-    'VERIFIED',
-    REPLACE(REPLACE(COALESCE(sv.business_license_url, ''), 'calgary', LOWER(qs.city)), 'Calgary', qs.city),
-    sv.tax_id,
-    TRUE,
-    TRUE,
+    src.vendor_status,
+    src.business_license_url,
+    src.tax_id,
+    src.is_verified,
+    src.vendor_is_active,
     NOW(),
-    sv.food_handling_cert_url,
-    sv.food_handling_cert_number,
-    sv.food_handling_cert_issuing_body,
-    sv.food_handling_cert_expiry,
-    NOW(),
-    NULL,
-    'America/Montreal',
-    sv.operating_hours_json,
-    sv.offers_delivery,
-    sv.offers_pickup,
-    sv.preparation_time,
-    sv.delivery_fee,
-    sv.minimum_order_amount,
-    sv.estimated_delivery_minutes,
-    sv.max_delivery_distance_km,
-    target_address.address_id,
-    sv.total_orders_completed,
-    sv.total_revenue,
+    src.food_handling_cert_url,
+    src.food_handling_cert_number,
+    src.food_handling_cert_issuing_body,
+    src.food_handling_cert_expiry,
+    src.cert_verified_at,
+    src.cert_verified_by_admin_id,
+    s.timezone,
+    src.operating_hours_json,
+    src.offers_delivery,
+    src.offers_pickup,
+    src.preparation_time,
+    src.delivery_fee,
+    src.minimum_order_amount,
+    src.estimated_delivery_minutes,
+    src.max_delivery_distance_km,
+    new_a.address_id,
+    src.total_orders_completed,
+    src.total_revenue,
     NOW(),
     NOW()
-FROM qc_source_vendors sv
-JOIN qc_vendor_slots qs ON qs.slot_no = sv.slot_no
-JOIN users target_user
-     ON target_user.public_user_id COLLATE utf8mb4_unicode_ci = qs.public_user_id COLLATE utf8mb4_unicode_ci
-JOIN address target_address
-     ON target_address.public_address_id COLLATE utf8mb4_unicode_ci = qs.public_address_id COLLATE utf8mb4_unicode_ci;
+FROM qc_source_vendors src
+JOIN qc_vendor_slots s ON s.slot_no = src.slot_no
+JOIN users new_u ON new_u.public_user_id = s.new_public_user_id
+JOIN address new_a ON new_a.public_address_id = s.new_public_address_id;
 
 DROP TEMPORARY TABLE IF EXISTS qc_vendor_map;
 
 CREATE TEMPORARY TABLE qc_vendor_map AS
 SELECT
-    sv.slot_no,
-    sv.source_vendor_profile_id,
-    target_vp.id AS target_vendor_profile_id,
-    qs.public_user_id AS target_public_user_id
-FROM qc_source_vendors sv
-JOIN qc_vendor_slots qs ON qs.slot_no = sv.slot_no
-JOIN users target_user
-     ON target_user.public_user_id COLLATE utf8mb4_unicode_ci = qs.public_user_id COLLATE utf8mb4_unicode_ci
-JOIN vendor_profile target_vp ON target_vp.user_id = target_user.user_id;
+    src.source_vendor_profile_id,
+    new_vp.id AS new_vendor_profile_id,
+    s.new_public_user_id
+FROM qc_source_vendors src
+JOIN qc_vendor_slots s ON s.slot_no = src.slot_no
+JOIN users new_u ON new_u.public_user_id = s.new_public_user_id
+JOIN vendor_profile new_vp ON new_vp.user_id = new_u.user_id;
 
--- ── 5. Clone products into the matching Quebec vendors ─────────────────────
+-- ── 4. Clone Calgary products under the new Quebec vendors ─────────────────
 
 DROP TEMPORARY TABLE IF EXISTS qc_source_products;
 
 CREATE TEMPORARY TABLE qc_source_products AS
-SELECT
-    product_ranked.*,
-    CONCAT('PROD-', vm.target_public_user_id, '-', LPAD(product_ranked.product_slot, 2, '0')) AS target_public_product_id
+SELECT *
 FROM (
     SELECT
-        ROW_NUMBER() OVER (PARTITION BY p.vendor_profile_id ORDER BY p.product_id) AS product_slot,
+        ROW_NUMBER() OVER (PARTITION BY p.vendor_profile_id ORDER BY p.is_featured DESC, p.product_id) AS product_slot_no,
         p.product_id AS source_product_id,
         p.vendor_profile_id AS source_vendor_profile_id,
-        p.category_id,
+        p.version,
         p.name,
         p.description,
         p.price,
@@ -318,12 +337,12 @@ FROM (
         p.is_vegan,
         p.is_gluten_free,
         p.is_spicy,
-        p.is_featured
+        p.is_featured,
+        p.category_id
     FROM product p
-    JOIN qc_vendor_map source_map ON source_map.source_vendor_profile_id = p.vendor_profile_id
+    JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = p.vendor_profile_id
     WHERE p.is_seed_data = TRUE
-) product_ranked
-JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = product_ranked.source_vendor_profile_id;
+) ranked_products;
 
 INSERT INTO product (
     version, public_product_id, name, description, price, image_url,
@@ -334,7 +353,7 @@ INSERT INTO product (
 )
 SELECT
     0,
-    sp.target_public_product_id,
+    CONCAT('PROD-', vm.new_public_user_id, '-', LPAD(sp.product_slot_no, 2, '0')),
     sp.name,
     sp.description,
     sp.price,
@@ -352,7 +371,7 @@ SELECT
     sp.is_spicy,
     sp.is_featured,
     CASE WHEN sp.is_featured THEN NOW() ELSE NULL END,
-    vm.target_vendor_profile_id,
+    vm.new_vendor_profile_id,
     sp.category_id,
     NOW(),
     NOW()
@@ -362,36 +381,55 @@ JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = sp.source_vendor_profile_
 DROP TEMPORARY TABLE IF EXISTS qc_product_map;
 
 CREATE TEMPORARY TABLE qc_product_map AS
-SELECT sp.source_product_id, target_product.product_id AS target_product_id
-FROM qc_source_products sp
-JOIN product target_product
-     ON target_product.public_product_id COLLATE utf8mb4_unicode_ci =
-        sp.target_public_product_id COLLATE utf8mb4_unicode_ci;
-
--- ── 6. Clone seed reviews/reviewers for ratings consistency ────────────────
-
-DROP TEMPORARY TABLE IF EXISTS qc_source_reviews;
-
-CREATE TEMPORARY TABLE qc_source_reviews AS
 SELECT
-    DENSE_RANK() OVER (ORDER BY reviewer.user_id) AS reviewer_slot,
-    r.review_id AS source_review_id,
-    reviewer.first_name,
-    reviewer.last_name,
-    reviewer.profile_image_url,
-    reviewer.password,
-    reviewer.auth_provider,
-    vm.target_vendor_profile_id,
-    pm.target_product_id,
-    r.rating,
-    r.comment,
-    r.helpful_count,
-    r.is_visible
-FROM review r
-JOIN users reviewer ON reviewer.user_id = r.user_id
-JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = r.vendor_profile_id
-LEFT JOIN qc_product_map pm ON pm.source_product_id = r.product_id
-WHERE r.is_seed_data = TRUE;
+    sp.source_product_id,
+    new_p.product_id AS new_product_id
+FROM qc_source_products sp
+JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = sp.source_vendor_profile_id
+JOIN product new_p
+  ON new_p.vendor_profile_id = vm.new_vendor_profile_id
+ AND new_p.public_product_id = CONCAT('PROD-', vm.new_public_user_id, '-', LPAD(sp.product_slot_no, 2, '0'));
+
+-- ── 5. Clone seed reviewers/reviews used by the Calgary showroom ───────────
+
+DROP TEMPORARY TABLE IF EXISTS qc_source_reviewers;
+
+CREATE TEMPORARY TABLE qc_source_reviewers AS
+SELECT *
+FROM (
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY u.user_id) AS reviewer_slot_no,
+        u.user_id AS source_user_id,
+        u.username,
+        u.profile_image_url,
+        u.password,
+        u.google_id,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.role,
+        u.auth_provider,
+        u.is_active,
+        u.scheduled_for_deletion_at,
+        u.email_verified,
+        u.accept_terms,
+        cp.default_delivery_instructions,
+        cp.payment_method,
+        cp.loyalty_points,
+        cp.notifications_enabled
+    FROM review r
+    JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = r.vendor_profile_id
+    JOIN users u ON u.user_id = r.user_id
+    JOIN customer_profile cp ON cp.user_id = u.user_id
+    WHERE u.is_seed_data = TRUE
+      AND cp.is_seed_data = TRUE
+    GROUP BY
+        u.user_id, u.username, u.profile_image_url, u.password, u.google_id,
+        u.first_name, u.last_name, u.phone, u.role, u.auth_provider, u.is_active,
+        u.scheduled_for_deletion_at, u.email_verified, u.accept_terms,
+        cp.default_delivery_instructions, cp.payment_method, cp.loyalty_points,
+        cp.notifications_enabled
+) ranked_reviewers;
 
 INSERT INTO users (
     username, public_user_id, email, profile_image_url, password, google_id,
@@ -400,68 +438,78 @@ INSERT INTO users (
     created_at, updated_at, last_login_at
 )
 SELECT
-    CONCAT('qc_showroom_reviewer_', LPAD(reviewer_slot, 3, '0')),
-    CONCAT('CUS-QCR', LPAD(reviewer_slot, 3, '0')),
-    CONCAT('showroom.qc.reviewer', LPAD(reviewer_slot, 3, '0'), '@afrochow.ca'),
-    MAX(profile_image_url),
-    MAX(password),
+    CONCAT('qc_reviewer_', LPAD(reviewer_slot_no, 3, '0')),
+    CONCAT('CUS-QCR', LPAD(reviewer_slot_no, 3, '0')),
+    CONCAT('showroom.qc.reviewer.', LPAD(reviewer_slot_no, 3, '0'), '@afrochow.ca'),
+    profile_image_url,
+    password,
     NULL,
-    COALESCE(MAX(first_name), 'Quebec'),
-    COALESCE(MAX(last_name), 'Reviewer'),
-    CONCAT('438777', LPAD(reviewer_slot, 4, '0')),
-    'CUSTOMER',
-    COALESCE(MAX(auth_provider), 'EMAIL'),
-    TRUE,
+    first_name,
+    last_name,
+    phone,
+    role,
+    auth_provider,
+    is_active,
     NULL,
-    TRUE,
-    TRUE,
+    email_verified,
+    accept_terms,
     TRUE,
     NOW(),
     NOW(),
     NULL
-FROM qc_source_reviews
-GROUP BY reviewer_slot;
+FROM qc_source_reviewers;
 
 INSERT INTO customer_profile (
     user_id, default_delivery_instructions, payment_method, loyalty_points,
     notifications_enabled, is_seed_data, created_at, updated_at
 )
 SELECT
-    u.user_id,
-    'Quebec showroom reviewer cloned from Calgary seed flow',
-    'CREDIT_CARD',
-    100,
-    TRUE,
+    new_u.user_id,
+    COALESCE(src.default_delivery_instructions, 'Quebec showroom reviewer'),
+    src.payment_method,
+    src.loyalty_points,
+    src.notifications_enabled,
     TRUE,
     NOW(),
     NOW()
-FROM users u
-WHERE u.public_user_id COLLATE utf8mb4_unicode_ci LIKE 'CUS-QCR%';
+FROM qc_source_reviewers src
+JOIN users new_u ON new_u.public_user_id = CONCAT('CUS-QCR', LPAD(src.reviewer_slot_no, 3, '0'));
+
+DROP TEMPORARY TABLE IF EXISTS qc_reviewer_map;
+
+CREATE TEMPORARY TABLE qc_reviewer_map AS
+SELECT
+    src.source_user_id,
+    new_u.user_id AS new_user_id
+FROM qc_source_reviewers src
+JOIN users new_u ON new_u.public_user_id = CONCAT('CUS-QCR', LPAD(src.reviewer_slot_no, 3, '0'));
 
 INSERT INTO review (
     user_id, vendor_profile_id, product_id, order_id, rating, comment,
     helpful_count, is_visible, is_seed_data, created_at, updated_at
 )
 SELECT
-    target_reviewer.user_id,
-    sr.target_vendor_profile_id,
-    sr.target_product_id,
+    rm.new_user_id,
+    vm.new_vendor_profile_id,
+    pm.new_product_id,
     NULL,
-    sr.rating,
-    sr.comment,
-    sr.helpful_count,
-    sr.is_visible,
+    r.rating,
+    r.comment,
+    r.helpful_count,
+    r.is_visible,
     TRUE,
     NOW(),
     NOW()
-FROM qc_source_reviews sr
-JOIN users target_reviewer
-     ON target_reviewer.public_user_id COLLATE utf8mb4_unicode_ci =
-        CONCAT('CUS-QCR', LPAD(sr.reviewer_slot, 3, '0')) COLLATE utf8mb4_unicode_ci;
+FROM review r
+JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = r.vendor_profile_id
+JOIN qc_reviewer_map rm ON rm.source_user_id = r.user_id
+LEFT JOIN qc_product_map pm ON pm.source_product_id = r.product_id
+WHERE r.is_seed_data = TRUE;
 
--- ── 7. Cleanup temp tables ─────────────────────────────────────────────────
+-- ── 6. Cleanup temp tables ─────────────────────────────────────────────────
 
-DROP TEMPORARY TABLE IF EXISTS qc_source_reviews;
+DROP TEMPORARY TABLE IF EXISTS qc_reviewer_map;
+DROP TEMPORARY TABLE IF EXISTS qc_source_reviewers;
 DROP TEMPORARY TABLE IF EXISTS qc_product_map;
 DROP TEMPORARY TABLE IF EXISTS qc_source_products;
 DROP TEMPORARY TABLE IF EXISTS qc_vendor_map;
