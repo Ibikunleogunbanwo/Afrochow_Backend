@@ -297,12 +297,14 @@ DROP TEMPORARY TABLE IF EXISTS qc_source_products;
 CREATE TEMPORARY TABLE qc_source_products AS
 SELECT
     product_ranked.*,
-    CONCAT('PROD-', vm.target_public_user_id, '-', LPAD(product_ranked.product_slot, 2, '0')) AS target_public_product_id
+    CONCAT('PROD-', product_ranked.target_public_user_id, '-', LPAD(product_ranked.product_slot, 2, '0')) AS target_public_product_id
 FROM (
     SELECT
         ROW_NUMBER() OVER (PARTITION BY p.vendor_profile_id ORDER BY p.product_id) AS product_slot,
         p.product_id AS source_product_id,
         p.vendor_profile_id AS source_vendor_profile_id,
+        vm.target_vendor_profile_id,
+        vm.target_public_user_id,
         p.category_id,
         p.name,
         p.description,
@@ -320,10 +322,9 @@ FROM (
         p.is_spicy,
         p.is_featured
     FROM product p
-    JOIN qc_vendor_map source_map ON source_map.source_vendor_profile_id = p.vendor_profile_id
+    JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = p.vendor_profile_id
     WHERE p.is_seed_data = TRUE
-) product_ranked
-JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = product_ranked.source_vendor_profile_id;
+) product_ranked;
 
 INSERT INTO product (
     version, public_product_id, name, description, price, image_url,
@@ -352,12 +353,11 @@ SELECT
     sp.is_spicy,
     sp.is_featured,
     CASE WHEN sp.is_featured THEN NOW() ELSE NULL END,
-    vm.target_vendor_profile_id,
+    sp.target_vendor_profile_id,
     sp.category_id,
     NOW(),
     NOW()
-FROM qc_source_products sp
-JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = sp.source_vendor_profile_id;
+FROM qc_source_products sp;
 
 DROP TEMPORARY TABLE IF EXISTS qc_product_map;
 
