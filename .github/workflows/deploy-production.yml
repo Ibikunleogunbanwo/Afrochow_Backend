@@ -161,7 +161,12 @@ jobs:
           docker compose \
             --env-file .env.prod \
             -f docker-compose.prod.yml \
-            up -d --build
+            up -d mysql redis kafka
+
+          docker compose \
+            --env-file .env.prod \
+            -f docker-compose.prod.yml \
+            up -d --build --force-recreate --no-deps app nginx db-backup kafka-ui kafka-init
 
           echo "Reloading Nginx..."
           docker exec afrochow-nginx nginx -s reload || true
