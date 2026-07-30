@@ -65,7 +65,7 @@ CREATE TEMPORARY TABLE afrochow_qc_showroom_vendors (
     preparation_time INT NOT NULL,
     total_orders_completed INT NOT NULL,
     total_revenue DECIMAL(10,2) NOT NULL
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 INSERT INTO afrochow_qc_showroom_vendors VALUES
 ('VEN-QCMTL01', 'qc_mama_kemi', 'showroom.mama.kemi.mtl@afrochow.ca', 'Mama', 'Kemi', '5145550101',
@@ -144,7 +144,8 @@ SELECT v.username, v.public_user_id, v.email, v.logo_url,
 FROM afrochow_qc_showroom_vendors v
 WHERE NOT EXISTS (
     SELECT 1 FROM users u
-    WHERE u.email = v.email OR u.public_user_id = v.public_user_id
+    WHERE u.email COLLATE utf8mb4_unicode_ci = v.email COLLATE utf8mb4_unicode_ci
+       OR u.public_user_id COLLATE utf8mb4_unicode_ci = v.public_user_id COLLATE utf8mb4_unicode_ci
 );
 
 INSERT INTO address (
@@ -156,7 +157,8 @@ SELECT v.public_address_id, v.address_line, v.city, 'QC', v.postal_code, 'Canada
        v.latitude, v.longitude, FALSE, TRUE, NULL, NOW(), NOW()
 FROM afrochow_qc_showroom_vendors v
 WHERE NOT EXISTS (
-    SELECT 1 FROM address a WHERE a.public_address_id = v.public_address_id
+    SELECT 1 FROM address a
+    WHERE a.public_address_id COLLATE utf8mb4_unicode_ci = v.public_address_id COLLATE utf8mb4_unicode_ci
 );
 
 INSERT INTO vendor_profile (
@@ -181,8 +183,8 @@ SELECT u.user_id, v.restaurant_name, v.description, v.store_category, v.logo_url
        v.max_delivery_distance_km, a.address_id, v.total_orders_completed, v.total_revenue,
        NOW(), NOW()
 FROM afrochow_qc_showroom_vendors v
-JOIN users u ON u.public_user_id = v.public_user_id
-JOIN address a ON a.public_address_id = v.public_address_id
+JOIN users u ON u.public_user_id COLLATE utf8mb4_unicode_ci = v.public_user_id COLLATE utf8mb4_unicode_ci
+JOIN address a ON a.public_address_id COLLATE utf8mb4_unicode_ci = v.public_address_id COLLATE utf8mb4_unicode_ci
 WHERE NOT EXISTS (
     SELECT 1 FROM vendor_profile existing WHERE existing.user_id = u.user_id
 );
@@ -206,7 +208,7 @@ CREATE TEMPORARY TABLE afrochow_qc_showroom_products (
     is_gluten_free BOOLEAN NULL,
     is_spicy BOOLEAN NULL,
     is_featured BOOLEAN NOT NULL
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 INSERT INTO afrochow_qc_showroom_products VALUES
 ('PROD-QCMTL01-JOLLOF', 'VEN-QCMTL01', 'African Kitchen', 'Jollof Rice', 'Party jollof rice with roasted chicken and plantain.', 25.99, 'https://res.cloudinary.com/dntowouv0/image/upload/v1737919512/vk-bro-al9eh9QkdPA-unsplash_hgb5fp.jpg', 30, 'SAME_DAY', NULL, 720, FALSE, FALSE, TRUE, TRUE, TRUE),
@@ -247,11 +249,12 @@ SELECT 0, p.public_product_id, p.name, p.description, p.price, p.image_url,
        CASE WHEN p.is_featured THEN NOW() ELSE NULL END,
        vp.id, c.category_id, NOW(), NOW()
 FROM afrochow_qc_showroom_products p
-JOIN users u ON u.public_user_id = p.vendor_public_user_id
+JOIN users u ON u.public_user_id COLLATE utf8mb4_unicode_ci = p.vendor_public_user_id COLLATE utf8mb4_unicode_ci
 JOIN vendor_profile vp ON vp.user_id = u.user_id
-LEFT JOIN category c ON c.name = p.category_name
+LEFT JOIN category c ON c.name COLLATE utf8mb4_unicode_ci = p.category_name COLLATE utf8mb4_unicode_ci
 WHERE NOT EXISTS (
-    SELECT 1 FROM product existing WHERE existing.public_product_id = p.public_product_id
+    SELECT 1 FROM product existing
+    WHERE existing.public_product_id COLLATE utf8mb4_unicode_ci = p.public_product_id COLLATE utf8mb4_unicode_ci
 );
 
 -- ── 4. Add a small reusable Quebec reviewer pool and demo reviews ──────────
@@ -263,7 +266,7 @@ CREATE TEMPORARY TABLE afrochow_qc_showroom_reviewers (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     phone VARCHAR(32) NOT NULL
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 INSERT INTO afrochow_qc_showroom_reviewers VALUES
 ('CUS-QCREV01', 'qc_showroom_ada', 'showroom.qc.ada@afrochow.ca', 'Ada', 'Quebec', '5145550201'),
@@ -283,7 +286,8 @@ SELECT r.username, r.public_user_id, r.email, NULL,
 FROM afrochow_qc_showroom_reviewers r
 WHERE NOT EXISTS (
     SELECT 1 FROM users u
-    WHERE u.email = r.email OR u.public_user_id = r.public_user_id
+    WHERE u.email COLLATE utf8mb4_unicode_ci = r.email COLLATE utf8mb4_unicode_ci
+       OR u.public_user_id COLLATE utf8mb4_unicode_ci = r.public_user_id COLLATE utf8mb4_unicode_ci
 );
 
 INSERT INTO customer_profile (
@@ -293,7 +297,7 @@ INSERT INTO customer_profile (
 SELECT u.user_id, 'Quebec showroom reviewer', 'CREDIT_CARD', 100,
        TRUE, TRUE, NOW(), NOW()
 FROM afrochow_qc_showroom_reviewers r
-JOIN users u ON u.public_user_id = r.public_user_id
+JOIN users u ON u.public_user_id COLLATE utf8mb4_unicode_ci = r.public_user_id COLLATE utf8mb4_unicode_ci
 WHERE NOT EXISTS (
     SELECT 1 FROM customer_profile cp WHERE cp.user_id = u.user_id
 );
@@ -305,7 +309,7 @@ CREATE TEMPORARY TABLE afrochow_qc_showroom_reviews (
     rating INT NOT NULL,
     comment VARCHAR(1000) NOT NULL,
     helpful_count INT NOT NULL
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 INSERT INTO afrochow_qc_showroom_reviews VALUES
 ('CUS-QCREV01', 'VEN-QCMTL01', 'PROD-QCMTL01-JOLLOF', 5, 'Tastes like proper party jollof and the pickup experience was smooth.', 8),
@@ -322,16 +326,16 @@ INSERT INTO review (
 SELECT reviewer.user_id, vp.id, p.product_id, NULL, r.rating, r.comment,
        r.helpful_count, TRUE, TRUE, NOW(), NOW()
 FROM afrochow_qc_showroom_reviews r
-JOIN users reviewer ON reviewer.public_user_id = r.reviewer_public_user_id
-JOIN users vendor_user ON vendor_user.public_user_id = r.vendor_public_user_id
+JOIN users reviewer ON reviewer.public_user_id COLLATE utf8mb4_unicode_ci = r.reviewer_public_user_id COLLATE utf8mb4_unicode_ci
+JOIN users vendor_user ON vendor_user.public_user_id COLLATE utf8mb4_unicode_ci = r.vendor_public_user_id COLLATE utf8mb4_unicode_ci
 JOIN vendor_profile vp ON vp.user_id = vendor_user.user_id
-LEFT JOIN product p ON p.public_product_id = r.product_public_id
+LEFT JOIN product p ON p.public_product_id COLLATE utf8mb4_unicode_ci = r.product_public_id COLLATE utf8mb4_unicode_ci
 WHERE NOT EXISTS (
     SELECT 1
     FROM review existing
     WHERE existing.user_id = reviewer.user_id
       AND existing.vendor_profile_id = vp.id
-      AND existing.comment = r.comment
+      AND existing.comment COLLATE utf8mb4_unicode_ci = r.comment COLLATE utf8mb4_unicode_ci
 );
 
 DROP TEMPORARY TABLE IF EXISTS afrochow_qc_showroom_reviews;
