@@ -149,7 +149,7 @@ jobs:
             -u"$DB_USERNAME" \
             -p"$DB_PASSWORD" \
             "$DB_NAME" \
-            -e "DELETE FROM flyway_schema_history WHERE version IN ('40','42','43') AND success = 0;"
+            -e "DELETE FROM flyway_schema_history WHERE version IN ('40','42','43','44') AND success = 0;"
 
           echo "Removing any stale application containers..."
           docker ps -a \
@@ -188,7 +188,7 @@ jobs:
                 "$DB_NAME" \
                 -e "SELECT version, description, success, installed_on
                     FROM flyway_schema_history
-                    WHERE version IN ('39','40','42','43')
+                    WHERE version IN ('39','40','42','43','44')
                     ORDER BY installed_rank;
                     SELECT a.city, a.province, COUNT(*) AS active_verified_vendors
                     FROM vendor_profile vp
