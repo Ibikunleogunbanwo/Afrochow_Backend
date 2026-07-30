@@ -427,7 +427,8 @@ public class EmailService {
             String toEmail,
             String customerName,
             String orderPublicId,
-            String reason) {
+            String reason,
+            boolean orderExists) {
 
         if (!emailEnabled) {
             logger.info("Email disabled. Would send payment failed email to: {} for order: {}",
@@ -444,9 +445,24 @@ public class EmailService {
             context.setVariable("reason", reason);
             context.setVariable("appName", appName);
             context.setVariable("appUrl", appUrl);
-            // /retry-payment/ does not exist as a route — send the customer to the
-            // order confirmation page where they can see the failure and retry.
-            context.setVariable("retryUrl", String.format("%s/order-confirmation/%s", appUrl, orderPublicId));
+            context.setVariable("showOrderId", orderExists);
+
+            if (orderExists) {
+                // A real order to retry against — send the customer to order confirmation,
+                // where they can see the failure and retry the same order.
+                context.setVariable("introText",
+                        "Hi " + customerName + ", we were unable to process your payment — but don't worry, your order is still saved and you can retry anytime.");
+                context.setVariable("ctaLabel", "Retry Payment");
+                context.setVariable("retryUrl", String.format("%s/order-confirmation/%s", appUrl, orderPublicId));
+            } else {
+                // The order was never actually created (rolled back when the first charge
+                // attempt failed) — there's nothing to retry against, so don't claim
+                // otherwise or link to a page that will 404.
+                context.setVariable("introText",
+                        "Hi " + customerName + ", we were unable to process your payment, so your order could not be placed.");
+                context.setVariable("ctaLabel", "Return to Cart");
+                context.setVariable("retryUrl", String.format("%s/cart", appUrl));
+            }
 
             String subject = String.format("Payment Failed - %s", appName);
             String htmlContent = processTemplate("payment-failed", context);
