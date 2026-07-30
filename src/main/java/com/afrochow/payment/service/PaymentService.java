@@ -746,6 +746,132 @@ public class PaymentService {
         }
     }
 
+    // ========== WEBHOOK RECONCILIATION ==========
+    //
+    // Safety net for state transitions our own synchronous call chain might have
+    // missed — e.g. the customer's browser drops right after completing 3D Secure,
+    // before /confirm runs, or a PaymentIntent.create()/capture() call times out
+    // client-side even though Stripe actually processed it. Stripe's webhook
+    // redelivers these events (at-least-once), so every method here is a no-op
+    // once the Payment already reflects the event — safe to call any number of times.
+    // Invoked from StripeWebhookController.
+
+    /**
+     * Reconciles payment_intent.amount_capturable_updated — fires when a PaymentIntent
+     * successfully transitions to requires_capture (i.e. authorization/3DS succeeded).
+     * Mirrors the bookkeeping in {@link #recordSuccessfulAuthorization} and fires the
+     * same order-placed notifications confirmAfter3ds() fires on the synchronous path,
+     * since if this reconciliation runs at all, that synchronous path never completed.
+     */
+    @Transactional
+    public void reconcilePaymentIntentAuthorized(String transactionId) {
+        paymentRepository.findByTransactionId(transactionId).ifPresentOrElse(payment -> {
+            if (payment.getStatus() == PaymentStatus.AUTHORIZED || payment.getStatus() == PaymentStatus.COMPLETED) {
+                return; // synchronous path already handled it — normal case
+            }
+            Order order = payment.getOrder();
+            PaymentStatus previousStatus = payment.getStatus();
+            try {
+                PaymentIntent intent = PaymentIntent.retrieve(transactionId);
+                recordSuccessfulAuthorization(order, payment, intent);
+                outboxEventService.orderPlaced(order.getPublicOrderId());
+                outboxEventService.customerOrderReceived(order.getPublicOrderId());
+                log.warn("payment.webhook.reconciled_authorization publicOrderId={} transactionId={} previousStatus={}",
+                        order.getPublicOrderId(), transactionId, previousStatus);
+            } catch (StripeException e) {
+                log.error("payment.webhook.reconcile_authorized_failed transactionId={} message={}",
+                        transactionId, e.getMessage());
+            }
+        }, () -> log.debug("payment_intent.amount_capturable_updated — no matching Payment for transactionId={}", transactionId));
+    }
+
+    /**
+     * Reconciles payment_intent.succeeded — fires when a capture completes on Stripe's
+     * side. Mirrors captureStripePayment()'s completion bookkeeping using the webhook's
+     * own amount_received as the source of truth for the captured amount.
+     */
+    @Transactional
+    public void reconcilePaymentIntentCompleted(String transactionId, Long amountReceivedCents) {
+        paymentRepository.findByTransactionId(transactionId).ifPresentOrElse(payment -> {
+            if (payment.getStatus() == PaymentStatus.COMPLETED) {
+                return; // synchronous captureStripePayment() already handled it
+            }
+            Order order = payment.getOrder();
+            PaymentStatus previousStatus = payment.getStatus();
+
+            BigDecimal capturedAmount = amountReceivedCents != null
+                    ? BigDecimal.valueOf(amountReceivedCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                    : payment.getAmount();
+
+            long subtotalInCents = order.getSubtotal()
+                    .multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact();
+            long feeInCents = BigDecimal.valueOf(subtotalInCents)
+                    .multiply(BigDecimal.valueOf(platformFeePercent))
+                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP).longValueExact();
+
+            payment.setAmount(capturedAmount);
+            payment.setPlatformFeeAmount(
+                    BigDecimal.valueOf(feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            payment.setVendorPayout(
+                    BigDecimal.valueOf(subtotalInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            payment.completePayment(payment.getCardLast4(), payment.getCardBrand());
+            paymentRepository.save(payment);
+
+            outboxEventService.paymentCaptured(
+                    order.getCustomer().getUser().getPublicUserId(),
+                    transactionId,
+                    order.getPublicOrderId(),
+                    capturedAmount
+            );
+            log.warn("payment.webhook.reconciled_capture publicOrderId={} transactionId={} previousStatus={} amount={}",
+                    order.getPublicOrderId(), transactionId, previousStatus, capturedAmount);
+        }, () -> log.debug("payment_intent.succeeded — no matching Payment for transactionId={}", transactionId));
+    }
+
+    /**
+     * Reconciles payment_intent.payment_failed — the definitive Stripe-side confirmation
+     * that an authorization attempt failed. This is also what closes the loop on an
+     * ambiguous client-side timeout during chargeOrder/retryPayment: if our own call
+     * never got a response, this webhook tells us for certain the attempt failed rather
+     * than leaving the Payment in limbo.
+     */
+    @Transactional
+    public void reconcilePaymentIntentFailed(String transactionId, String failureReason) {
+        paymentRepository.findByTransactionId(transactionId).ifPresentOrElse(payment -> {
+            if (payment.getStatus() != PaymentStatus.PENDING) {
+                return; // only PENDING (awaiting 3DS/response) is genuinely ambiguous;
+                        // FAILED/CANCELLED already reflect this, AUTHORIZED/COMPLETED
+                        // means a later success superseded this failure event
+            }
+            Order order = payment.getOrder();
+            log.warn("payment.webhook.reconciled_failure publicOrderId={} transactionId={} reason={}",
+                    order.getPublicOrderId(), transactionId, failureReason);
+            failAndRecord(order, payment, failureReason);
+        }, () -> log.debug("payment_intent.payment_failed — no matching Payment for transactionId={}", transactionId));
+    }
+
+    /**
+     * Reconciles charge.refunded — catches refunds issued directly from the Stripe
+     * dashboard (bypassing refundPayment()) so the local record doesn't drift.
+     */
+    @Transactional
+    public void reconcileChargeRefunded(String transactionId) {
+        paymentRepository.findByTransactionId(transactionId).ifPresentOrElse(payment -> {
+            if (payment.getStatus() == PaymentStatus.REFUNDED) {
+                return;
+            }
+            if (payment.getStatus() != PaymentStatus.COMPLETED && payment.getStatus() != PaymentStatus.AUTHORIZED) {
+                log.warn("payment.webhook.refund_unexpected_state publicOrderId={} transactionId={} status={}",
+                        payment.getOrder().getPublicOrderId(), transactionId, payment.getStatus());
+                return;
+            }
+            payment.refundPayment();
+            paymentRepository.save(payment);
+            log.warn("payment.webhook.reconciled_refund publicOrderId={} transactionId={}",
+                    payment.getOrder().getPublicOrderId(), transactionId);
+        }, () -> log.debug("charge.refunded — no matching Payment for transactionId={}", transactionId));
+    }
+
     // ========== INTERNAL HELPERS ==========
 
     /**

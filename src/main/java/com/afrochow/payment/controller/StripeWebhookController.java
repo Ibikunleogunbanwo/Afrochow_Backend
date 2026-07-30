@@ -1,5 +1,6 @@
 package com.afrochow.payment.controller;
 
+import com.afrochow.payment.service.PaymentService;
 import com.afrochow.vendor.service.StripeConnectService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,8 +34,16 @@ import java.util.Arrays;
  *   https://dashboard.stripe.com/webhooks → Add endpoint → {APP_URL}/api/stripe/webhook
  *
  * Events handled:
- *   - account.updated                   → marks vendor stripeOnboardingComplete=true when details_submitted
- *   - v2.core.account_link.returned     → fetches account from Stripe API, marks complete if details_submitted
+ *   - account.updated                        → marks vendor stripeOnboardingComplete=true when details_submitted
+ *   - v2.core.account_link.returned          → fetches account from Stripe API, marks complete if details_submitted
+ *   - payment_intent.amount_capturable_updated → reconciles Payment to AUTHORIZED (safety net for missed 3DS confirms)
+ *   - payment_intent.succeeded                → reconciles Payment to COMPLETED (safety net for missed captures)
+ *   - payment_intent.payment_failed            → reconciles Payment to FAILED (resolves ambiguous client-side timeouts)
+ *   - charge.refunded                          → reconciles Payment to REFUNDED (catches dashboard-issued refunds)
+ *
+ * Register all of these event types on the Stripe dashboard endpoint — the reconciliation
+ * events in particular are a safety net, not the primary path, but production payments
+ * should not depend solely on synchronous API calls succeeding.
  */
 @RestController
 @RequestMapping("/stripe/webhook")
@@ -45,13 +54,15 @@ public class StripeWebhookController {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final StripeConnectService stripeConnectService;
+    private final PaymentService paymentService;
     private final Environment environment;
 
     @Value("${stripe.webhook.secret:}")
     private String webhookSecret;
 
-    public StripeWebhookController(StripeConnectService stripeConnectService, Environment environment) {
+    public StripeWebhookController(StripeConnectService stripeConnectService, PaymentService paymentService, Environment environment) {
         this.stripeConnectService = stripeConnectService;
+        this.paymentService = paymentService;
         this.environment = environment;
     }
 
@@ -101,12 +112,78 @@ public class StripeWebhookController {
 
         log.info("Stripe webhook received: {}", event.getType());
         switch (event.getType()) {
-            case "account.updated"                    -> handleAccountUpdated(event);
-            case "v2.core.account_link.returned"      -> handleAccountLinkReturned(payload);
+            case "account.updated"                          -> handleAccountUpdated(event);
+            case "v2.core.account_link.returned"            -> handleAccountLinkReturned(payload);
+            case "payment_intent.amount_capturable_updated" -> handlePaymentIntentAuthorized(event);
+            case "payment_intent.succeeded"                 -> handlePaymentIntentSucceeded(event);
+            case "payment_intent.payment_failed"            -> handlePaymentIntentFailed(event);
+            case "charge.refunded"                          -> handleChargeRefunded(event);
             default -> log.debug("Unhandled Stripe event type: {}", event.getType());
         }
 
         return ResponseEntity.ok("received");
+    }
+
+    private void handlePaymentIntentAuthorized(Event event) {
+        try {
+            String rawJson = event.getDataObjectDeserializer().getRawJson();
+            JsonNode root = MAPPER.readTree(rawJson);
+            String paymentIntentId = root.path("id").asText(null);
+            if (paymentIntentId == null || paymentIntentId.isBlank()) {
+                log.warn("payment_intent.amount_capturable_updated missing id");
+                return;
+            }
+            paymentService.reconcilePaymentIntentAuthorized(paymentIntentId);
+        } catch (Exception e) {
+            log.error("Error processing payment_intent.amount_capturable_updated event", e);
+        }
+    }
+
+    private void handlePaymentIntentSucceeded(Event event) {
+        try {
+            String rawJson = event.getDataObjectDeserializer().getRawJson();
+            JsonNode root = MAPPER.readTree(rawJson);
+            String paymentIntentId = root.path("id").asText(null);
+            if (paymentIntentId == null || paymentIntentId.isBlank()) {
+                log.warn("payment_intent.succeeded missing id");
+                return;
+            }
+            long amountReceived = root.path("amount_received").asLong(0);
+            paymentService.reconcilePaymentIntentCompleted(paymentIntentId, amountReceived > 0 ? amountReceived : null);
+        } catch (Exception e) {
+            log.error("Error processing payment_intent.succeeded event", e);
+        }
+    }
+
+    private void handlePaymentIntentFailed(Event event) {
+        try {
+            String rawJson = event.getDataObjectDeserializer().getRawJson();
+            JsonNode root = MAPPER.readTree(rawJson);
+            String paymentIntentId = root.path("id").asText(null);
+            if (paymentIntentId == null || paymentIntentId.isBlank()) {
+                log.warn("payment_intent.payment_failed missing id");
+                return;
+            }
+            String failureMessage = root.path("last_payment_error").path("message").asText("Payment failed");
+            paymentService.reconcilePaymentIntentFailed(paymentIntentId, failureMessage);
+        } catch (Exception e) {
+            log.error("Error processing payment_intent.payment_failed event", e);
+        }
+    }
+
+    private void handleChargeRefunded(Event event) {
+        try {
+            String rawJson = event.getDataObjectDeserializer().getRawJson();
+            JsonNode root = MAPPER.readTree(rawJson);
+            String paymentIntentId = root.path("payment_intent").asText(null);
+            if (paymentIntentId == null || paymentIntentId.isBlank()) {
+                log.warn("charge.refunded missing payment_intent");
+                return;
+            }
+            paymentService.reconcileChargeRefunded(paymentIntentId);
+        } catch (Exception e) {
+            log.error("Error processing charge.refunded event", e);
+        }
     }
 
     /**
