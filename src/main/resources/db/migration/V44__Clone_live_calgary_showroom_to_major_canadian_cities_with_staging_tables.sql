@@ -177,8 +177,8 @@ SELECT
     CONCAT('ADDR-', ms.market_code, '-', LPAD(sv.slot_no, 3, '0')) AS public_address_id,
     CONCAT((100 + sv.slot_no), ' ', ms.address_stub, ' ', LPAD(sv.slot_no, 2, '0')) AS address_line,
     ms.postal_code,
-    ms.base_lat + (((sv.slot_no - 1) MOD 5) - 2) * 0.0100 AS latitude,
-    ms.base_lng + (FLOOR((sv.slot_no - 1) / 5) - 1.5) * 0.0120 AS longitude
+    ms.base_lat + (((CAST(sv.slot_no AS SIGNED) - 1) MOD 5) - 2) * 0.0100 AS latitude,
+    ms.base_lng + (FLOOR((CAST(sv.slot_no AS SIGNED) - 1) / 5) - 1.5) * 0.0120 AS longitude
 FROM major_market_specs ms
 CROSS JOIN major_source_vendors sv;
 
