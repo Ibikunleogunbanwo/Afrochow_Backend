@@ -127,6 +127,44 @@ class SearchControllerTest extends AbstractControllerTest {
     }
 
     @Test
+    void getProductsNearMe_returns200() throws Exception {
+        when(searchService.getProductsNearMe("Montreal")).thenReturn(List.of(sampleProduct()));
+
+        mockMvc.perform(get("/search/products/near-me")
+                        .param("city", "Montreal"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+    }
+
+    @Test
+    void getProductsNearCoordinates_returns200() throws Exception {
+        when(searchService.getProductsNearCoordinates(45.5017, -73.5673, 25.0))
+                .thenReturn(List.of(sampleProduct()));
+
+        mockMvc.perform(get("/search/products/near-coordinates")
+                        .param("lat", "45.5017")
+                        .param("lng", "-73.5673"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+    }
+
+    @Test
+    void getProductsNearCoordinates_missingRequiredParams_returns400() throws Exception {
+        mockMvc.perform(get("/search/products/near-coordinates"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getMonthlyPopularProducts_returns200() throws Exception {
+        when(searchService.getProductsNearMe("Montreal")).thenReturn(List.of(sampleProduct()));
+
+        mockMvc.perform(get("/search/products/monthly-popular")
+                        .param("city", "Montreal"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+    }
+
+    @Test
     void getSimilarProducts_returns200() throws Exception {
         when(searchService.getSimilarProducts("prod-1", null, null)).thenReturn(List.of(sampleProduct()));
 
