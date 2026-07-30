@@ -200,6 +200,25 @@ jobs:
                     GROUP BY a.city, a.province
                     ORDER BY a.province, a.city;"
 
+              FAILED_SHOWROOM_MIGRATIONS="$(
+                docker exec afrochow-mysql mysql \
+                  -N \
+                  -u"$DB_USERNAME" \
+                  -p"$DB_PASSWORD" \
+                  "$DB_NAME" \
+                  -e "SELECT COUNT(*)
+                      FROM flyway_schema_history
+                      WHERE version IN ('40','42','43','44')
+                        AND success = 0;"
+              )"
+
+              if [ "$FAILED_SHOWROOM_MIGRATIONS" != "0" ]; then
+                echo "❌ One or more showroom migrations failed"
+                echo "===== Spring Boot Flyway Logs ====="
+                docker logs --tail=300 afrochow-app | grep -A60 -B20 -Ei "V40|V42|V43|V44|Flyway|Migration|SQL State|Error Code|Exception|ERROR" || true
+                exit 1
+              fi
+
               docker compose \
                 --env-file .env.prod \
                 -f docker-compose.prod.yml \
