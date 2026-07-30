@@ -149,7 +149,7 @@ jobs:
             -u"$DB_USERNAME" \
             -p"$DB_PASSWORD" \
             "$DB_NAME" \
-            -e "DELETE FROM flyway_schema_history WHERE version IN ('40','42') AND success = 0;"
+            -e "DELETE FROM flyway_schema_history WHERE version IN ('40','42','43') AND success = 0;"
 
           echo "Removing any stale application containers..."
           docker ps -a \
