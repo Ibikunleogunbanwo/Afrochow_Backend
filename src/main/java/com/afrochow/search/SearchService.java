@@ -379,6 +379,71 @@ public class SearchService {
                                 .toList();
         }
 
+        /**
+         * Compatibility endpoint for the frontend's "near me" product rail.
+         * City-only callers use the same city-scoped ranking as featured products,
+         * which keeps MVP showroom behaviour consistent without requiring browser
+         * coordinates.
+         */
+        @Transactional(readOnly = true)
+        public List<ProductResponseDto> getProductsNearMe(String city) {
+                return getFeaturedProducts(city, null, null, null);
+        }
+
+        /**
+         * Products near a coordinate, using the Redis vendor geo index as the primary
+         * lookup. Redis gives us eligible vendor IDs ordered/ranked by local relevance;
+         * products are then fetched for those vendors and mapped with distance labels.
+         * If Redis is unavailable or empty, fall back to the existing DB Haversine query.
+         */
+        @Transactional(readOnly = true)
+        public List<ProductResponseDto> getProductsNearCoordinates(double lat, double lng, double radiusKm) {
+                final int vendorLimit = 30;
+                final int productLimit = 48;
+
+                List<VendorProfile> nearbyVendors = vendorGeoIndexService.findNearbyVendors(
+                                lat, lng, radiusKm, vendorLimit);
+
+                if (!nearbyVendors.isEmpty()) {
+                        List<String> vendorIds = nearbyVendors.stream()
+                                        .map(VendorProfile::getPublicVendorId)
+                                        .filter(java.util.Objects::nonNull)
+                                        .distinct()
+                                        .toList();
+
+                        List<Product> products = productRepository
+                                        .findAvailablePublicProductsByVendorPublicIds(vendorIds);
+
+                        Map<String, Integer> vendorRank = new HashMap<>();
+                        for (int i = 0; i < vendorIds.size(); i++) {
+                                vendorRank.put(vendorIds.get(i), i);
+                        }
+
+                        Map<String, Double> distancesByVendor =
+                                        vendorGeoIndexService.getDistancesKm(lat, lng, vendorIds);
+
+                        return products.stream()
+                                        .sorted(Comparator
+                                                        .comparingInt((Product p) -> vendorRank.getOrDefault(
+                                                                        p.getVendor() != null
+                                                                                        ? p.getVendor().getPublicVendorId()
+                                                                                        : null,
+                                                                        Integer.MAX_VALUE))
+                                                        .thenComparing(Product::getTotalOrders, Comparator.reverseOrder())
+                                                        .thenComparing(Product::getAverageRating, Comparator.reverseOrder()))
+                                        .limit(productLimit)
+                                        .map(p -> toProductResponseDto(p, p.getVendor() != null
+                                                        ? distancesByVendor.get(p.getVendor().getPublicVendorId())
+                                                        : null))
+                                        .toList();
+                }
+
+                return productRepository.findProductsNearCoordinates(lat, lng, radiusKm).stream()
+                                .limit(productLimit)
+                                .map(this::toProductResponseDto)
+                                .toList();
+        }
+
         // ========== ADVANCED FILTERS ==========
 
         /**

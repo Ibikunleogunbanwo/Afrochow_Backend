@@ -110,6 +110,35 @@ public class SearchController {
         return ResponseEntity.ok(ApiResponse.success("Featured products retrieved successfully", products));
     }
 
+    @GetMapping("/products/near-me")
+    @Operation(summary = "Get products near me by city",
+            description = "Compatibility endpoint for the frontend near-me rail. Pass ?city= to scope products to that city; omit it to return featured products.")
+    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getProductsNearMe(
+            @RequestParam(required = false) String city) {
+        List<ProductResponseDto> products = searchService.getProductsNearMe(city);
+        return ResponseEntity.ok(ApiResponse.success("Products near me retrieved successfully", products));
+    }
+
+    @GetMapping("/products/near-coordinates")
+    @Operation(summary = "Get products near coordinates",
+            description = "Find available products from verified active vendors within radiusKm of the given lat/lng, using the Redis vendor geo index first.")
+    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getProductsNearCoordinates(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "25") double radiusKm) {
+        List<ProductResponseDto> products = searchService.getProductsNearCoordinates(lat, lng, radiusKm);
+        return ResponseEntity.ok(ApiResponse.success("Products near coordinates retrieved", products));
+    }
+
+    @GetMapping("/products/monthly-popular")
+    @Operation(summary = "Get monthly popular products",
+            description = "Compatibility endpoint for the frontend. Returns the same city-scoped featured ranking until monthly ranking is split out.")
+    public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getMonthlyPopularProducts(
+            @RequestParam(required = false) String city) {
+        List<ProductResponseDto> products = searchService.getProductsNearMe(city);
+        return ResponseEntity.ok(ApiResponse.success("Monthly popular products retrieved successfully", products));
+    }
+
     @GetMapping("/products/{publicProductId}/similar")
     @Operation(summary = "Get the same dish at other vendors",
             description = "Find this exact product (by name) sold by other active + verified vendors. " +
