@@ -101,6 +101,15 @@ jobs:
 
           cd /opt/afrochow
 
+          echo "Preparing Git checkout..."
+          git config --global --add safe.directory /opt/afrochow
+
+          if [ "$(id -u)" -eq 0 ]; then
+            chown -R "$(id -u):$(id -g)" /opt/afrochow
+          elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            sudo chown -R "$(id -u):$(id -g)" /opt/afrochow
+          fi
+
           echo "Updating application..."
           git fetch origin main
           git reset --hard origin/main
