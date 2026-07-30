@@ -140,6 +140,17 @@ jobs:
             -f docker-compose.prod.yml \
             config --quiet
 
+          echo "Repairing failed showroom migration attempts..."
+          DB_USERNAME="$(grep "^DB_USERNAME=" .env.prod | cut -d= -f2-)"
+          DB_PASSWORD="$(grep "^DB_PASSWORD=" .env.prod | cut -d= -f2-)"
+          DB_NAME="$(grep "^DB_NAME=" .env.prod | cut -d= -f2-)"
+
+          docker exec -i afrochow-mysql mysql \
+            -u"$DB_USERNAME" \
+            -p"$DB_PASSWORD" \
+            "$DB_NAME" \
+            -e "DELETE FROM flyway_schema_history WHERE version IN ('40','42') AND success = 0;"
+
           echo "Removing any stale application containers..."
           docker ps -a \
             --filter "name=afrochow-app" \
