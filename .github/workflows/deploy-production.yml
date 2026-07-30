@@ -145,7 +145,7 @@ jobs:
           DB_PASSWORD="$(grep "^DB_PASSWORD=" .env.prod | cut -d= -f2-)"
           DB_NAME="$(grep "^DB_NAME=" .env.prod | cut -d= -f2-)"
 
-          docker exec -i afrochow-mysql mysql \
+          docker exec afrochow-mysql mysql \
             -u"$DB_USERNAME" \
             -p"$DB_PASSWORD" \
             "$DB_NAME" \
@@ -182,7 +182,7 @@ jobs:
               echo "✅ Afrochow API is healthy"
 
               echo "Showroom migration summary:"
-              docker exec -i afrochow-mysql mysql \
+              docker exec afrochow-mysql mysql \
                 -u"$DB_USERNAME" \
                 -p"$DB_PASSWORD" \
                 "$DB_NAME" \
