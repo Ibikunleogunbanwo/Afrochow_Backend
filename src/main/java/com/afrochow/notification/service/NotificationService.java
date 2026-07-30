@@ -433,15 +433,28 @@ public class NotificationService {
             User user = resolveUser(userPublicId);
             if (!areNotificationsEnabled(user)) return;
 
+            // A payment failure on the very first charge attempt (OrderService.createOrder
+            // → PaymentService.chargeOrder) rolls back the ENTIRE order — nothing persists.
+            // But this method is also reached from retryPayment/confirmAfter3ds failures,
+            // where the order genuinely does exist and is just sitting with a FAILED
+            // payment. Those are different customer experiences: one has a real order to
+            // retry against, the other needs to start over from the cart. Without this
+            // check, every customer got told "your order is saved, retry anytime" with a
+            // link to an order-confirmation page that 404s for the never-persisted case.
+            boolean orderExists = orderRepository.findByPublicOrderId(orderPublicId).isPresent();
+
             createInAppNotification(user, NotificationType.SYSTEM_ALERT,
                     "Payment Failed",
-                    "Your payment for order #" + orderPublicId + " failed. Please try again.",
-                    RelatedEntityType.ORDER, orderPublicId);
+                    orderExists
+                            ? "Your payment for order #" + orderPublicId + " failed. Please try again."
+                            : "Your order could not be placed because the payment failed. Please try again from your cart.",
+                    orderExists ? RelatedEntityType.ORDER : null,
+                    orderExists ? orderPublicId : null);
 
             emailService.sendPaymentFailedEmail(
-                    user.getEmail(), user.getFirstName(), orderPublicId, reason);
+                    user.getEmail(), user.getFirstName(), orderPublicId, reason, orderExists);
 
-            log.info("Payment failed notifications sent for order: {}", orderPublicId);
+            log.info("Payment failed notifications sent for order: {} orderExists={}", orderPublicId, orderExists);
         } catch (Exception e) {
             log.error("Failed to send payment failed notifications for order: {}", orderPublicId, e);
             throw new IllegalStateException("Notification dispatch failed", e);

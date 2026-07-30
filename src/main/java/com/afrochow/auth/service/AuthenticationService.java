@@ -817,7 +817,11 @@ public class AuthenticationService {
         );
         passwordResetTokenRepository.save(token);
 
-        String resetLink = frontendUrl + "/customer/confirm-token?token=" + token.getTransientRawToken();
+        // Must match the actual frontend route — src/app/(auth)/reset-password/page.jsx
+        // reads ?token= there. This previously pointed at /customer/confirm-token,
+        // a route that has never existed, so every password-reset email sent a
+        // customer straight to a 404 instead of the reset form.
+        String resetLink = frontendUrl + "/reset-password?token=" + token.getTransientRawToken();
         securityEventService.logPasswordResetRequest(user.getEmail(), httpRequest);
         outboxEventService.passwordResetRequested(
                 user.getPublicUserId(), user.getEmail(), user.getFirstName(), resetLink);

@@ -20,6 +20,22 @@ public class SearchController {
 
     private final SearchService searchService;
 
+    // ========== MARKET AVAILABILITY ==========
+
+    @GetMapping("/market-status")
+    @Operation(summary = "Is Afrochow active in this location",
+            description = "Pass ?city= and/or ?lat=&lng= to check whether there's at least one active, " +
+                    "verified vendor in that city or within a ~100km radius of those coordinates. Lets the " +
+                    "frontend show an honest \"not in your area yet\" state instead of silently falling back " +
+                    "to nationwide content for a market Afrochow doesn't actually operate in.")
+    public ResponseEntity<ApiResponse<Boolean>> getMarketStatus(
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng) {
+        boolean served = searchService.isMarketServed(city, lat, lng);
+        return ResponseEntity.ok(ApiResponse.success(served));
+    }
+
     // ========== VENDOR SEARCH ==========
 
     @GetMapping("/vendors/{publicUserId}")
