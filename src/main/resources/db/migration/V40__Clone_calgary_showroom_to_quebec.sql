@@ -1,58 +1,51 @@
 -- ===========================================================================
 -- Afrochow Database Migration V40
--- Description: Replace the first Quebec showroom seed with a Calgary clone.
+-- Description: Replace the hand-authored Quebec showroom with Calgary clones.
 --
--- Context:
---   V39 added a small hand-authored Quebec showroom dataset. The production
---   Calgary seed data is the source of truth for the current customer/vendor
---   demo flow, so Quebec should mirror that data shape instead of diverging.
+-- V39 created a small standalone Quebec sample set. The Calgary production
+-- showroom is the flow we trust, so this migration copies the existing Calgary
+-- seed vendors/products/reviews from prod MySQL and changes only the Quebec
+-- identity/location fields.
 --
--- What this migration does:
---   1. Removes only Quebec showroom rows created with the reserved QC seed
---      public ID prefixes.
---   2. Reads existing Calgary seed vendors/products/reviews from production DB.
---   3. Inserts Montreal/Laval copies with new public IDs, emails, phones, and
---      addresses while preserving the proven Calgary product/review/vendor flow.
---
--- Redis GEO note:
---   No Redis writes are needed here. VendorGeoIndexService rebuilds the Redis
---   vendor geo index from active, verified, geocoded vendors on app startup and
---   on its scheduled refresh.
+-- Safety:
+--   - Deletes only seed rows with reserved Quebec prefixes:
+--     VEN-QC%, CUS-QCR%, PROD-QC%, PROD-VEN-QC%, ADDR-QC-%.
+--   - Does not touch real vendors/customers.
+--   - Does not write Redis directly; the app rebuilds Redis GEO from MySQL.
 -- ===========================================================================
 
--- ── 1. Remove the previous Quebec showroom seed rows only ───────────────────
+-- ── 1. Cleanup the previous Quebec showroom rows ───────────────────────────
 
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_cleanup_vendor_profiles;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_cleanup_reviewer_users;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_cleanup_products;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_cleanup_addresses;
+DROP TEMPORARY TABLE IF EXISTS qc_seed_vendors_to_remove;
+DROP TEMPORARY TABLE IF EXISTS qc_seed_reviewers_to_remove;
+DROP TEMPORARY TABLE IF EXISTS qc_seed_products_to_remove;
+DROP TEMPORARY TABLE IF EXISTS qc_seed_addresses_to_remove;
 
-CREATE TEMPORARY TABLE afrochow_qc_cleanup_vendor_profiles AS
+CREATE TEMPORARY TABLE qc_seed_vendors_to_remove AS
 SELECT vp.id AS vendor_profile_id, vp.user_id, vp.address_id
 FROM vendor_profile vp
 JOIN users u ON u.user_id = vp.user_id
 WHERE u.is_seed_data = TRUE
   AND u.public_user_id COLLATE utf8mb4_unicode_ci LIKE 'VEN-QC%';
 
-CREATE TEMPORARY TABLE afrochow_qc_cleanup_reviewer_users AS
+CREATE TEMPORARY TABLE qc_seed_reviewers_to_remove AS
 SELECT u.user_id
 FROM users u
 WHERE u.is_seed_data = TRUE
   AND u.public_user_id COLLATE utf8mb4_unicode_ci LIKE 'CUS-QCR%';
 
-CREATE TEMPORARY TABLE afrochow_qc_cleanup_products AS
+CREATE TEMPORARY TABLE qc_seed_products_to_remove AS
 SELECT p.product_id
 FROM product p
-LEFT JOIN afrochow_qc_cleanup_vendor_profiles qv
-       ON qv.vendor_profile_id = p.vendor_profile_id
+LEFT JOIN qc_seed_vendors_to_remove qv ON qv.vendor_profile_id = p.vendor_profile_id
 WHERE p.is_seed_data = TRUE
   AND (
-      qv.vendor_profile_id IS NOT NULL
-      OR p.public_product_id COLLATE utf8mb4_unicode_ci LIKE 'PROD-QC%'
-      OR p.public_product_id COLLATE utf8mb4_unicode_ci LIKE 'PROD-VEN-QC%'
+       qv.vendor_profile_id IS NOT NULL
+       OR p.public_product_id COLLATE utf8mb4_unicode_ci LIKE 'PROD-QC%'
+       OR p.public_product_id COLLATE utf8mb4_unicode_ci LIKE 'PROD-VEN-QC%'
   );
 
-CREATE TEMPORARY TABLE afrochow_qc_cleanup_addresses AS
+CREATE TEMPORARY TABLE qc_seed_addresses_to_remove AS
 SELECT a.address_id
 FROM address a
 WHERE a.is_seed_data = TRUE
@@ -60,53 +53,35 @@ WHERE a.is_seed_data = TRUE
 
 DELETE f
 FROM favorite f
-LEFT JOIN afrochow_qc_cleanup_vendor_profiles qv
-       ON qv.vendor_profile_id = f.vendor_profile_id
-LEFT JOIN afrochow_qc_cleanup_products qp
-       ON qp.product_id = f.product_id
-WHERE qv.vendor_profile_id IS NOT NULL
-   OR qp.product_id IS NOT NULL;
+LEFT JOIN qc_seed_vendors_to_remove qv ON qv.vendor_profile_id = f.vendor_profile_id
+LEFT JOIN qc_seed_products_to_remove qp ON qp.product_id = f.product_id
+WHERE qv.vendor_profile_id IS NOT NULL OR qp.product_id IS NOT NULL;
 
 DELETE r
 FROM review r
-LEFT JOIN afrochow_qc_cleanup_vendor_profiles qv
-       ON qv.vendor_profile_id = r.vendor_profile_id
-LEFT JOIN afrochow_qc_cleanup_products qp
-       ON qp.product_id = r.product_id
-LEFT JOIN afrochow_qc_cleanup_reviewer_users qr
-       ON qr.user_id = r.user_id
+LEFT JOIN qc_seed_vendors_to_remove qv ON qv.vendor_profile_id = r.vendor_profile_id
+LEFT JOIN qc_seed_products_to_remove qp ON qp.product_id = r.product_id
+LEFT JOIN qc_seed_reviewers_to_remove qr ON qr.user_id = r.user_id
 WHERE qv.vendor_profile_id IS NOT NULL
    OR qp.product_id IS NOT NULL
    OR qr.user_id IS NOT NULL;
 
-DELETE p
-FROM product p
-JOIN afrochow_qc_cleanup_products qp ON qp.product_id = p.product_id;
-
-DELETE cp
-FROM customer_profile cp
-JOIN afrochow_qc_cleanup_reviewer_users qr ON qr.user_id = cp.user_id;
-
-DELETE vp
-FROM vendor_profile vp
-JOIN afrochow_qc_cleanup_vendor_profiles qv ON qv.vendor_profile_id = vp.id;
-
-DELETE a
-FROM address a
-JOIN afrochow_qc_cleanup_addresses qa ON qa.address_id = a.address_id;
+DELETE p FROM product p JOIN qc_seed_products_to_remove qp ON qp.product_id = p.product_id;
+DELETE cp FROM customer_profile cp JOIN qc_seed_reviewers_to_remove qr ON qr.user_id = cp.user_id;
+DELETE vp FROM vendor_profile vp JOIN qc_seed_vendors_to_remove qv ON qv.vendor_profile_id = vp.id;
+DELETE a FROM address a JOIN qc_seed_addresses_to_remove qa ON qa.address_id = a.address_id;
 
 DELETE u
 FROM users u
-LEFT JOIN afrochow_qc_cleanup_vendor_profiles qv ON qv.user_id = u.user_id
-LEFT JOIN afrochow_qc_cleanup_reviewer_users qr ON qr.user_id = u.user_id
-WHERE qv.user_id IS NOT NULL
-   OR qr.user_id IS NOT NULL;
+LEFT JOIN qc_seed_vendors_to_remove qv ON qv.user_id = u.user_id
+LEFT JOIN qc_seed_reviewers_to_remove qr ON qr.user_id = u.user_id
+WHERE qv.user_id IS NOT NULL OR qr.user_id IS NOT NULL;
 
--- ── 2. Stage the Quebec locations that will receive Calgary clones ─────────
+-- ── 2. Quebec target locations for the Calgary clone set ───────────────────
 
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_vendor_slots;
+DROP TEMPORARY TABLE IF EXISTS qc_vendor_slots;
 
-CREATE TEMPORARY TABLE afrochow_qc_vendor_slots (
+CREATE TEMPORARY TABLE qc_vendor_slots (
     slot_no INT PRIMARY KEY,
     public_user_id VARCHAR(16) NOT NULL,
     username VARCHAR(50) NOT NULL,
@@ -121,7 +96,7 @@ CREATE TEMPORARY TABLE afrochow_qc_vendor_slots (
     longitude DOUBLE NOT NULL
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-INSERT INTO afrochow_qc_vendor_slots VALUES
+INSERT INTO qc_vendor_slots VALUES
 (1,  'VEN-QCMTL01', 'qc_showroom_vendor_01', 'showroom.qc.vendor01@afrochow.ca', '5147770101', 'ADDR-QC-MTL-001', '5450 Avenue du Parc', 'Montreal', 'QC', 'H2V4G7', 45.5220, -73.5967),
 (2,  'VEN-QCMTL02', 'qc_showroom_vendor_02', 'showroom.qc.vendor02@afrochow.ca', '5147770102', 'ADDR-QC-MTL-002', '3509 Boulevard Saint-Laurent', 'Montreal', 'QC', 'H2X2T6', 45.5146, -73.5747),
 (3,  'VEN-QCMTL03', 'qc_showroom_vendor_03', 'showroom.qc.vendor03@afrochow.ca', '5147770103', 'ADDR-QC-MTL-003', '7070 Avenue Henri-Julien', 'Montreal', 'QC', 'H2S3S3', 45.5350, -73.6140),
@@ -143,18 +118,17 @@ INSERT INTO afrochow_qc_vendor_slots VALUES
 (19, 'VEN-QCLAV09', 'qc_showroom_vendor_19', 'showroom.qc.vendor19@afrochow.ca', '4507770109', 'ADDR-QC-LAV-009', '1800 Boulevard des Laurentides', 'Laval', 'QC', 'H7M2P6', 45.5907, -73.7173),
 (20, 'VEN-QCLAV10', 'qc_showroom_vendor_20', 'showroom.qc.vendor20@afrochow.ca', '4507770110', 'ADDR-QC-LAV-010', '4600 Boulevard Samson', 'Laval', 'QC', 'H7W2H3', 45.5277, -73.7895);
 
--- ── 3. Pick Calgary seed vendors as the source of truth ────────────────────
+-- ── 3. Use prod Calgary seed vendors as the source of truth ────────────────
 
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_source_vendors;
+DROP TEMPORARY TABLE IF EXISTS qc_source_vendors;
 
-CREATE TEMPORARY TABLE afrochow_qc_source_vendors AS
+CREATE TEMPORARY TABLE qc_source_vendors AS
 SELECT ranked.*
 FROM (
     SELECT
         ROW_NUMBER() OVER (ORDER BY COALESCE(c.display_order, 999), vp.id) AS slot_no,
         u.user_id AS source_user_id,
         vp.id AS source_vendor_profile_id,
-        a.address_id AS source_address_id,
         u.profile_image_url,
         u.password,
         u.first_name,
@@ -195,7 +169,7 @@ FROM (
 ) ranked
 WHERE ranked.slot_no <= 20;
 
--- ── 4. Clone vendors/users/addresses into Montreal and Laval ───────────────
+-- ── 4. Clone users, addresses, vendors ─────────────────────────────────────
 
 INSERT INTO users (
     username, public_user_id, email, profile_image_url, password, google_id,
@@ -223,8 +197,8 @@ SELECT
     NOW(),
     NOW(),
     NULL
-FROM afrochow_qc_source_vendors sv
-JOIN afrochow_qc_vendor_slots qs ON qs.slot_no = sv.slot_no;
+FROM qc_source_vendors sv
+JOIN qc_vendor_slots qs ON qs.slot_no = sv.slot_no;
 
 INSERT INTO address (
     public_address_id, address_line, city, province, postal_code, country,
@@ -245,8 +219,8 @@ SELECT
     NULL,
     NOW(),
     NOW()
-FROM afrochow_qc_source_vendors sv
-JOIN afrochow_qc_vendor_slots qs ON qs.slot_no = sv.slot_no;
+FROM qc_source_vendors sv
+JOIN qc_vendor_slots qs ON qs.slot_no = sv.slot_no;
 
 INSERT INTO vendor_profile (
     user_id, restaurant_name, description, cuisine_type, logo_url, banner_url,
@@ -295,32 +269,32 @@ SELECT
     sv.total_revenue,
     NOW(),
     NOW()
-FROM afrochow_qc_source_vendors sv
-JOIN afrochow_qc_vendor_slots qs ON qs.slot_no = sv.slot_no
+FROM qc_source_vendors sv
+JOIN qc_vendor_slots qs ON qs.slot_no = sv.slot_no
 JOIN users target_user
      ON target_user.public_user_id COLLATE utf8mb4_unicode_ci = qs.public_user_id COLLATE utf8mb4_unicode_ci
 JOIN address target_address
      ON target_address.public_address_id COLLATE utf8mb4_unicode_ci = qs.public_address_id COLLATE utf8mb4_unicode_ci;
 
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_vendor_map;
+DROP TEMPORARY TABLE IF EXISTS qc_vendor_map;
 
-CREATE TEMPORARY TABLE afrochow_qc_vendor_map AS
+CREATE TEMPORARY TABLE qc_vendor_map AS
 SELECT
     sv.slot_no,
     sv.source_vendor_profile_id,
     target_vp.id AS target_vendor_profile_id,
     qs.public_user_id AS target_public_user_id
-FROM afrochow_qc_source_vendors sv
-JOIN afrochow_qc_vendor_slots qs ON qs.slot_no = sv.slot_no
+FROM qc_source_vendors sv
+JOIN qc_vendor_slots qs ON qs.slot_no = sv.slot_no
 JOIN users target_user
      ON target_user.public_user_id COLLATE utf8mb4_unicode_ci = qs.public_user_id COLLATE utf8mb4_unicode_ci
 JOIN vendor_profile target_vp ON target_vp.user_id = target_user.user_id;
 
--- ── 5. Clone Calgary products into the matching Quebec vendors ─────────────
+-- ── 5. Clone products into the matching Quebec vendors ─────────────────────
 
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_source_products;
+DROP TEMPORARY TABLE IF EXISTS qc_source_products;
 
-CREATE TEMPORARY TABLE afrochow_qc_source_products AS
+CREATE TEMPORARY TABLE qc_source_products AS
 SELECT
     product_ranked.*,
     CONCAT('PROD-', vm.target_public_user_id, '-', LPAD(product_ranked.product_slot, 2, '0')) AS target_public_product_id
@@ -346,12 +320,10 @@ FROM (
         p.is_spicy,
         p.is_featured
     FROM product p
-    JOIN afrochow_qc_vendor_map source_map
-         ON source_map.source_vendor_profile_id = p.vendor_profile_id
+    JOIN qc_vendor_map source_map ON source_map.source_vendor_profile_id = p.vendor_profile_id
     WHERE p.is_seed_data = TRUE
 ) product_ranked
-JOIN afrochow_qc_vendor_map vm
-     ON vm.source_vendor_profile_id = product_ranked.source_vendor_profile_id;
+JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = product_ranked.source_vendor_profile_id;
 
 INSERT INTO product (
     version, public_product_id, name, description, price, image_url,
@@ -384,30 +356,26 @@ SELECT
     sp.category_id,
     NOW(),
     NOW()
-FROM afrochow_qc_source_products sp
-JOIN afrochow_qc_vendor_map vm
-     ON vm.source_vendor_profile_id = sp.source_vendor_profile_id;
+FROM qc_source_products sp
+JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = sp.source_vendor_profile_id;
 
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_product_map;
+DROP TEMPORARY TABLE IF EXISTS qc_product_map;
 
-CREATE TEMPORARY TABLE afrochow_qc_product_map AS
-SELECT
-    sp.source_product_id,
-    target_product.product_id AS target_product_id
-FROM afrochow_qc_source_products sp
+CREATE TEMPORARY TABLE qc_product_map AS
+SELECT sp.source_product_id, target_product.product_id AS target_product_id
+FROM qc_source_products sp
 JOIN product target_product
      ON target_product.public_product_id COLLATE utf8mb4_unicode_ci =
         sp.target_public_product_id COLLATE utf8mb4_unicode_ci;
 
--- ── 6. Clone Calgary seed reviewers/reviews into Quebec showroom reviews ───
+-- ── 6. Clone seed reviews/reviewers for ratings consistency ────────────────
 
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_source_reviews;
+DROP TEMPORARY TABLE IF EXISTS qc_source_reviews;
 
-CREATE TEMPORARY TABLE afrochow_qc_source_reviews AS
+CREATE TEMPORARY TABLE qc_source_reviews AS
 SELECT
     DENSE_RANK() OVER (ORDER BY reviewer.user_id) AS reviewer_slot,
     r.review_id AS source_review_id,
-    reviewer.user_id AS source_reviewer_user_id,
     reviewer.first_name,
     reviewer.last_name,
     reviewer.profile_image_url,
@@ -421,10 +389,8 @@ SELECT
     r.is_visible
 FROM review r
 JOIN users reviewer ON reviewer.user_id = r.user_id
-JOIN afrochow_qc_vendor_map vm
-     ON vm.source_vendor_profile_id = r.vendor_profile_id
-LEFT JOIN afrochow_qc_product_map pm
-       ON pm.source_product_id = r.product_id
+JOIN qc_vendor_map vm ON vm.source_vendor_profile_id = r.vendor_profile_id
+LEFT JOIN qc_product_map pm ON pm.source_product_id = r.product_id
 WHERE r.is_seed_data = TRUE;
 
 INSERT INTO users (
@@ -434,15 +400,15 @@ INSERT INTO users (
     created_at, updated_at, last_login_at
 )
 SELECT
-    CONCAT('qc_showroom_reviewer_', LPAD(reviewer_slot, 3, '0')) AS username,
-    CONCAT('CUS-QCR', LPAD(reviewer_slot, 3, '0')) AS public_user_id,
-    CONCAT('showroom.qc.reviewer', LPAD(reviewer_slot, 3, '0'), '@afrochow.ca') AS email,
-    MAX(profile_image_url) AS profile_image_url,
-    MAX(password) AS password,
+    CONCAT('qc_showroom_reviewer_', LPAD(reviewer_slot, 3, '0')),
+    CONCAT('CUS-QCR', LPAD(reviewer_slot, 3, '0')),
+    CONCAT('showroom.qc.reviewer', LPAD(reviewer_slot, 3, '0'), '@afrochow.ca'),
+    MAX(profile_image_url),
+    MAX(password),
     NULL,
     COALESCE(MAX(first_name), 'Quebec'),
     COALESCE(MAX(last_name), 'Reviewer'),
-    CONCAT('438777', LPAD(reviewer_slot, 4, '0')) AS phone,
+    CONCAT('438777', LPAD(reviewer_slot, 4, '0')),
     'CUSTOMER',
     COALESCE(MAX(auth_provider), 'EMAIL'),
     TRUE,
@@ -453,7 +419,7 @@ SELECT
     NOW(),
     NOW(),
     NULL
-FROM afrochow_qc_source_reviews
+FROM qc_source_reviews
 GROUP BY reviewer_slot;
 
 INSERT INTO customer_profile (
@@ -488,23 +454,23 @@ SELECT
     TRUE,
     NOW(),
     NOW()
-FROM afrochow_qc_source_reviews sr
+FROM qc_source_reviews sr
 JOIN users target_reviewer
      ON target_reviewer.public_user_id COLLATE utf8mb4_unicode_ci =
         CONCAT('CUS-QCR', LPAD(sr.reviewer_slot, 3, '0')) COLLATE utf8mb4_unicode_ci;
 
--- ── 7. Cleanup temporary staging tables ────────────────────────────────────
+-- ── 7. Cleanup temp tables ─────────────────────────────────────────────────
 
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_source_reviews;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_product_map;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_source_products;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_vendor_map;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_source_vendors;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_vendor_slots;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_cleanup_addresses;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_cleanup_products;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_cleanup_reviewer_users;
-DROP TEMPORARY TABLE IF EXISTS afrochow_qc_cleanup_vendor_profiles;
+DROP TEMPORARY TABLE IF EXISTS qc_source_reviews;
+DROP TEMPORARY TABLE IF EXISTS qc_product_map;
+DROP TEMPORARY TABLE IF EXISTS qc_source_products;
+DROP TEMPORARY TABLE IF EXISTS qc_vendor_map;
+DROP TEMPORARY TABLE IF EXISTS qc_source_vendors;
+DROP TEMPORARY TABLE IF EXISTS qc_vendor_slots;
+DROP TEMPORARY TABLE IF EXISTS qc_seed_addresses_to_remove;
+DROP TEMPORARY TABLE IF EXISTS qc_seed_products_to_remove;
+DROP TEMPORARY TABLE IF EXISTS qc_seed_reviewers_to_remove;
+DROP TEMPORARY TABLE IF EXISTS qc_seed_vendors_to_remove;
 
 -- ===========================================================================
 -- End of V40 migration
