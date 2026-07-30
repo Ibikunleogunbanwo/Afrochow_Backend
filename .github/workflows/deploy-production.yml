@@ -102,12 +102,18 @@ jobs:
           APP_DIR="/opt/afrochow"
 
           echo "Preparing application directory..."
+          echo "Remote user: $(whoami)"
+          id
+          ls -ld /opt "$APP_DIR" 2>/dev/null || true
+
           if [ "$(id -u)" -eq 0 ]; then
             mkdir -p "$APP_DIR"
             chown -R "$(id -u):$(id -g)" "$APP_DIR"
+            chmod 755 /opt "$APP_DIR"
           elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
             sudo mkdir -p "$APP_DIR"
             sudo chown -R "$(id -u):$(id -g)" "$APP_DIR"
+            sudo chmod 755 /opt "$APP_DIR"
           fi
 
           if ! cd "$APP_DIR"; then
