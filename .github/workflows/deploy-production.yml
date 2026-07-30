@@ -111,9 +111,23 @@ jobs:
           fi
 
           echo "Updating application..."
-          git fetch origin main
-          git reset --hard origin/main
-          git clean -fd
+          if git fetch origin main; then
+            git reset --hard origin/main
+            git clean -fd
+          else
+            echo "Git fetch failed, falling back to a fresh source sync..."
+
+            TMP_RELEASE="$(mktemp -d)"
+            git clone --depth 1 --branch main https://github.com/Ibikunleogunbanwo/Afrochow_Backend.git "$TMP_RELEASE"
+
+            rsync -a --delete \
+              --exclude '.git/' \
+              --exclude '.env.prod' \
+              --exclude 'deploy/nginx/certs/' \
+              "$TMP_RELEASE"/ /opt/afrochow/
+
+            rm -rf "$TMP_RELEASE"
+          fi
 
           echo "Verifying required files..."
           test -f .env.prod
