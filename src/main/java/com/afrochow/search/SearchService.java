@@ -57,6 +57,41 @@ public class SearchService {
         }
 
         /**
+         * Is this city/location an active Afrochow market — i.e. is there at least
+         * one active + verified vendor either in the named city or within a
+         * reasonable radius of the given coordinates?
+         *
+         * Distinct from the homepage rails' own "fall back to nationwide content"
+         * behaviour: those fall back whenever the LOCAL pool is too thin to fill a
+         * rail (e.g. a brand-new market with 2 vendors), which is a fine, honest
+         * thing to paper over with popular-elsewhere content. This check answers a
+         * different question — "does Afrochow operate here at all" — so the
+         * frontend can show a real "we're not in your area yet" state instead of
+         * silently serving another city's vendors as if they were local.
+         *
+         * Coordinates are checked first (more precise, catches unincorporated/
+         * suburb mismatches a raw city-string compare would miss); city name is
+         * the fallback when coordinates aren't available yet (e.g. IP-based
+         * detection before the browser grants precise geolocation).
+         */
+        @Transactional(readOnly = true)
+        public boolean isMarketServed(String city, Double lat, Double lng) {
+                final double MARKET_RADIUS_KM = 100; // generous metro-area radius
+
+                if (lat != null && lng != null) {
+                        return !vendorProfileRepository
+                                        .findVendorsNearCoordinates(lat, lng, MARKET_RADIUS_KM)
+                                        .isEmpty();
+                }
+                if (city != null && !city.isBlank()) {
+                        return !vendorProfileRepository.findByCity(city.trim()).isEmpty();
+                }
+                // No location signal at all — assume served rather than falsely telling
+                // someone we're not in their area before we even know where they are.
+                return true;
+        }
+
+        /**
          * "Same dish elsewhere" — given a product, finds that exact dish (by name)
          * sold by other active + verified vendors. Backs the restaurant page's
          * "Also available at" section. Pass lat/lng (optional) to have each result's
@@ -188,6 +223,18 @@ public class SearchService {
                 if (scheduleType != null) {
                         pinned = pinned.stream()
                                         .filter(p -> scheduleType.equals(p.getScheduleType()))
+                                        .toList();
+                }
+                // Admin-pinned products still must not cross city boundaries — otherwise a
+                // product pinned in one served market (e.g. Calgary) silently shows up as
+                // "Featured Products near you" for a user in a city Afrochow doesn't even
+                // operate in yet. Being admin-chosen only exempts a product from the
+                // vendor/category diversity caps below, not from location relevance.
+                if (cityFilter != null) {
+                        pinned = pinned.stream()
+                                        .filter(p -> p.getVendor() != null
+                                                        && p.getVendor().getAddress() != null
+                                                        && cityFilter.equalsIgnoreCase(p.getVendor().getAddress().getCity()))
                                         .toList();
                 }
 
