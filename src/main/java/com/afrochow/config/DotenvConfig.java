@@ -2,6 +2,8 @@ package com.afrochow.config;
 
 import io.github.cdimascio.dotenv.Dotenv;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationInfo;
+import org.flywaydb.core.api.MigrationVersion;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -9,15 +11,8 @@ import org.springframework.core.env.MapPropertySource;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 public class DotenvConfig implements ApplicationContextInitializer<ConfigurableApplicationContext> {
-
-    private static final Set<String> SENSITIVE_KEYS = Set.of(
-            "DB_PASSWORD", "PROD_DB_PASSWORD", "APP_JWT_SECRET",
-            "APP_JWT_ENCRYPTION_KEY", "SPRING_MAIL_PASSWORD",
-            "DEV_GMAIL_PASSWORD", "PROD_SENDGRID_PASSWORD", "SMTP_PASSWORD"
-    );
 
     @Override
     public void initialize(ConfigurableApplicationContext applicationContext) {
@@ -129,8 +124,10 @@ public class DotenvConfig implements ApplicationContextInitializer<ConfigurableA
             flyway.repair();
 
             var result = flyway.migrate();
+            MigrationInfo currentMigration = flyway.info().current();
             System.out.println("🐬 Flyway: " + result.migrationsExecuted
-                    + " migration(s) applied, schema now at version " + result.targetSchemaVersion);
+                    + " migration(s) applied, schema now at version "
+                    + schemaVersionDescription(currentMigration == null ? null : currentMigration.getVersion()));
         } catch (Exception e) {
             System.err.println("⚠️ Flyway migration failed: " + e.getMessage());
 
@@ -157,17 +154,18 @@ public class DotenvConfig implements ApplicationContextInitializer<ConfigurableA
     private void printDebugInfo(Dotenv dotenv) {
         System.out.println("\n🔍 DEBUG MODE - Configuration Details:");
         System.out.println("   DB_HOST: " + dotenv.get("DB_HOST", "not-set"));
-        System.out.println("   DB_USERNAME: " + dotenv.get("DB_USERNAME", "not-set"));
-        System.out.println("   DB_PASSWORD: " + maskValue(dotenv.get("DB_PASSWORD")));
+        System.out.println("   DB_USERNAME: " + configuredStatus(dotenv.get("DB_USERNAME")));
+        System.out.println("   DB_PASSWORD: " + configuredStatus(dotenv.get("DB_PASSWORD")));
         System.out.println("   DB_DRIVER: " + dotenv.get("DB_DRIVER", "com.mysql.cj.jdbc.Driver"));
-        System.out.println("   JWT_SECRET: " + maskValue(dotenv.get("APP_JWT_SECRET")));
+        System.out.println("   JWT_SECRET: " + configuredStatus(dotenv.get("APP_JWT_SECRET")));
         System.out.println();
     }
 
-    private String maskValue(String value) {
-        if (value == null || value.length() <= 4) {
-            return "****";
-        }
-        return value.substring(0, 2) + "****" + value.substring(value.length() - 2);
+    static String configuredStatus(String value) {
+        return value == null || value.isBlank() ? "not-set" : "set";
+    }
+
+    static String schemaVersionDescription(MigrationVersion version) {
+        return version == null ? "none" : version.toString();
     }
 }

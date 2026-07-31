@@ -70,6 +70,9 @@ public class KafkaConfig {
     @Value("${spring.kafka.consumer.auto-offset-reset:earliest}")
     private String autoOffsetReset;
 
+    @Value("${spring.kafka.consumer.properties.isolation.level:read_committed}")
+    private String consumerIsolationLevel;
+
     @Value("${app.kafka.topics.domain-events-dlq:afrochow.domain-events.dlq}")
     private String domainEventsDlqTopic;
 
@@ -107,6 +110,7 @@ public class KafkaConfig {
         config.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
         config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        config.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, consumerIsolationLevel);
         return new DefaultKafkaConsumerFactory<>(config);
     }
 
@@ -145,10 +149,10 @@ public class KafkaConfig {
         putIfPresent(config, SaslConfigs.SASL_JAAS_CONFIG, saslJaasConfig);
         putIfPresent(config, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, truststoreLocation);
         putIfPresent(config, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, truststorePassword);
-        putIfPresent(config, SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, truststoreType);
+        putIfPresentWhen(config, SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, truststoreType, truststoreLocation);
         putIfPresent(config, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keystoreLocation);
         putIfPresent(config, SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, keystorePassword);
-        putIfPresent(config, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, keystoreType);
+        putIfPresentWhen(config, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, keystoreType, keystoreLocation);
         putIfPresent(config, SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
 
         return config;
@@ -157,6 +161,12 @@ public class KafkaConfig {
     private void putIfPresent(Map<String, Object> config, String key, String value) {
         if (value != null && !value.isBlank()) {
             config.put(key, value);
+        }
+    }
+
+    private void putIfPresentWhen(Map<String, Object> config, String key, String value, String requiredValue) {
+        if (requiredValue != null && !requiredValue.isBlank()) {
+            putIfPresent(config, key, value);
         }
     }
 }
