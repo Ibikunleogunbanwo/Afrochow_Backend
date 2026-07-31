@@ -20,6 +20,7 @@
 	<properties>
 		<!-- Java 21 required for Spring Boot 4 -->
 		<java.version>21</java.version>
+		<maven.compiler.release>${java.version}</maven.compiler.release>
 
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -163,6 +164,13 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-resolver-dns-native-macos</artifactId>
+			<classifier>osx-aarch_64</classifier>
+			<scope>runtime</scope>
+		</dependency>
+
 		<!-- ShedLock — distributed scheduler lock (JDBC / MySQL backend) -->
 		<dependency>
 			<groupId>net.javacrumbs.shedlock</groupId>
@@ -257,11 +265,32 @@
 
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>3.6.2</version>
+				<executions>
+					<execution>
+						<id>enforce-java-21</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireJavaVersion>
+									<version>[21,22)</version>
+									<message>Afrochow must be built and run with Java 21. Set JAVA_HOME to a JDK 21 installation before running Maven.</message>
+								</requireJavaVersion>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.13.0</version>
 				<configuration>
-					<source>${java.version}</source>
-					<target>${java.version}</target>
+					<release>${java.version}</release>
 					<annotationProcessorPaths>
 						<path>
 							<groupId>org.projectlombok</groupId>

@@ -1,5 +1,6 @@
 package com.afrochow;
 
+import com.afrochow.config.JavaRuntimeVersionGuard;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
@@ -21,6 +22,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class AfrochowApplication {
 
 	public static void main(String[] args) {
+		JavaRuntimeVersionGuard.validateCurrentRuntime();
 		SpringApplication.run(AfrochowApplication.class, args);
 	}
 }
