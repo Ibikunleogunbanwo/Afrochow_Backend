@@ -83,9 +83,38 @@ public class Order {
     @Column(length = 2)
     private String taxProvince;
 
+    /**
+     * Total discount applied — always equals foodDiscount + deliveryDiscount.
+     * Kept as its own column because receipts and the admin UI show a single
+     * "Discount" line; the split below is what the payout math reads.
+     */
     @Column(precision = 10, scale = 2)
     @Builder.Default
     private BigDecimal discount = BigDecimal.ZERO;
+
+    /**
+     * The portion of {@link #discount} that reduces the food subtotal
+     * (PERCENTAGE / FIXED_AMOUNT promos).
+     *
+     * <p>Promos are vendor-funded, so this directly reduces the base the platform
+     * charges commission on — the vendor is not charged commission on money they
+     * chose not to collect.
+     */
+    @Column(name = "food_discount", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal foodDiscount = BigDecimal.ZERO;
+
+    /**
+     * The portion of {@link #discount} that reduces the delivery fee
+     * (FREE_DELIVERY promos).
+     *
+     * <p>Held separately from {@link #foodDiscount} because it must NOT reduce the
+     * commission base: a waived delivery fee costs the vendor their delivery
+     * revenue, not their food revenue.
+     */
+    @Column(name = "delivery_discount", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal deliveryDiscount = BigDecimal.ZERO;
 
     /** Promo code applied to this order (nullable — no promo applied). */
     @Column(length = 50)
@@ -253,25 +282,57 @@ public class Order {
     }
 
     /**
+     * Food subtotal after any vendor-funded food discount — the consideration the
+     * customer actually pays for the food, and the base the platform's commission
+     * is charged on. Floored at zero.
+     */
+    @Transient
+    public BigDecimal effectiveSubtotal() {
+        BigDecimal disc = foodDiscount != null ? foodDiscount : BigDecimal.ZERO;
+        return calculateSubtotal().subtract(disc).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Delivery fee after any FREE_DELIVERY promo. Floored at zero.
+     */
+    @Transient
+    public BigDecimal effectiveDeliveryFee() {
+        BigDecimal fee  = deliveryFee      != null ? deliveryFee      : BigDecimal.ZERO;
+        BigDecimal disc = deliveryDiscount != null ? deliveryDiscount : BigDecimal.ZERO;
+        return fee.subtract(disc).max(BigDecimal.ZERO);
+    }
+
+    /**
      * Calculate tax using the stored taxRate field.
      * Called by updateFinancials() — taxRate must be set before @PrePersist fires.
+     *
+     * <p>Tax is charged on the DISCOUNTED consideration. For a price reduction
+     * offered by the supplier (which is what a vendor-funded promo is), GST/HST
+     * applies to what the customer actually pays, not to the pre-discount list
+     * price. Taxing the pre-discount base overcharges the customer and hands the
+     * vendor tax to remit on revenue nobody received.
      */
     @Transient
     public BigDecimal calculateTax() {
         BigDecimal rate = this.taxRate != null ? this.taxRate : BigDecimal.ZERO;
-        BigDecimal sub  = calculateSubtotal();
-        BigDecimal fee  = deliveryFee != null ? deliveryFee : BigDecimal.ZERO;
-        // Tax applies to subtotal + delivery fee
-        return sub.add(fee).multiply(rate).setScale(2, RoundingMode.HALF_UP);
+        return effectiveSubtotal()
+                .add(effectiveDeliveryFee())
+                .multiply(rate)
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * The amount actually charged to the customer.
+     *
+     * <p>The discount is already netted into effectiveSubtotal/effectiveDeliveryFee,
+     * so it is deliberately NOT subtracted again here. Because both components are
+     * floored at zero and tax is non-negative, this can never go negative.
+     */
     @Transient
     public BigDecimal calculateTotal() {
-        BigDecimal sub      = calculateSubtotal();
-        BigDecimal delivery = deliveryFee != null ? deliveryFee : BigDecimal.ZERO;
-        BigDecimal taxAmt   = calculateTax();
-        BigDecimal disc     = discount   != null ? discount    : BigDecimal.ZERO;
-        return sub.add(delivery).add(taxAmt).subtract(disc);
+        return effectiveSubtotal()
+                .add(effectiveDeliveryFee())
+                .add(calculateTax());
     }
 
     private void updateFinancials() {

@@ -18,7 +18,14 @@ public enum ProvincialTax {
     ON("Ontario",                    "HST",       new BigDecimal("0.13")),
     PE("Prince Edward Island",       "HST",       new BigDecimal("0.15")),
     QC("Quebec",                     "GST + QST", new BigDecimal("0.14975")),
-    SK("Saskatchewan",               "GST + PST", new BigDecimal("0.11"));
+    SK("Saskatchewan",               "GST + PST", new BigDecimal("0.11")),
+    // The three territories charge GST only, at the same 5% as Alberta. They were
+    // missing here while the frontend tax table listed them, so fromCode() fell back
+    // to AB: the rate came out right by coincidence, but every territorial order was
+    // stored and printed as "Alberta"/"AB" — wrong on receipts and in tax reporting.
+    NT("Northwest Territories",      "GST",       new BigDecimal("0.05")),
+    NU("Nunavut",                    "GST",       new BigDecimal("0.05")),
+    YT("Yukon",                      "GST",       new BigDecimal("0.05"));
 
     private final String provinceName;
     private final String taxLabel;

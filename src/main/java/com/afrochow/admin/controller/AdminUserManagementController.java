@@ -66,6 +66,9 @@ public class AdminUserManagementController {
      *   <li>{@code q}      — substring match against firstName OR lastName, min 2 chars (optional)</li>
      *   <li>{@code createdAfter}  — ISO-8601 date-time, inclusive (optional)</li>
      *   <li>{@code createdBefore} — ISO-8601 date-time, inclusive (optional)</li>
+     *   <li>{@code seedData} — true = demo/showroom accounts only, false = genuine
+     *       registrations only (optional). Use {@code seedData=false} to see real
+     *       sign-up activity without the seeded catalogue inflating the count.</li>
      * </ul>
      */
     @GetMapping
@@ -76,6 +79,7 @@ public class AdminUserManagementController {
             @RequestParam(required = false)     Role    role,
             @RequestParam(required = false)     Boolean active,
             @RequestParam(required = false)     String  q,
+            @RequestParam(required = false)     Boolean seedData,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime createdAfter,
             @RequestParam(required = false)
@@ -102,6 +106,7 @@ public class AdminUserManagementController {
                         UserSpecifications.hasRole(role),
                         UserSpecifications.isActive(active),
                         UserSpecifications.nameContains(q),
+                        UserSpecifications.isSeedData(seedData),
                         UserSpecifications.createdAtAfter(createdAfter),
                         UserSpecifications.createdAtBefore(createdBefore))
                 .filter(Objects::nonNull)
@@ -284,6 +289,11 @@ public class AdminUserManagementController {
         long superAdmins   = userRepository.countByRole(Role.SUPERADMIN);
         long activeUsers   = userRepository.countByIsActiveTrue();
         long inactiveUsers = totalUsers - activeUsers;
+        // Real (non-seed) counts: the totals above include the seeded showroom
+        // catalogue, so they can't tell you whether anyone has actually signed up.
+        long realUsers     = userRepository.countRealUsers();
+        long realCustomers = userRepository.countRealUsersByRole(Role.CUSTOMER);
+        long realVendors   = userRepository.countRealUsersByRole(Role.VENDOR);
 
         UserStats stats = UserStats.builder()
                 .totalUsers(totalUsers)
@@ -293,6 +303,10 @@ public class AdminUserManagementController {
                 .totalVendors(vendors)
                 .totalAdmins(admins)
                 .totalSuperAdmins(superAdmins)
+                .realUsers(realUsers)
+                .realCustomers(realCustomers)
+                .realVendors(realVendors)
+                .seedUsers(totalUsers - realUsers)
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success(stats));
@@ -416,6 +430,7 @@ public class AdminUserManagementController {
                 .createdAt(user.getCreatedAt())
                 .isProfileComplete(resolveProfileComplete(user, vendorStatus))
                 .authProvider(authProvider)
+                .isSeedData(user.getIsSeedData())
                 .build();
     }
 
@@ -446,6 +461,7 @@ public class AdminUserManagementController {
                 .createdAt(user.getCreatedAt())
                 .isProfileComplete(resolveProfileComplete(user, vendorStatus))
                 .authProvider(authProvider)
+                .isSeedData(user.getIsSeedData())
                 .build();
     }
 
@@ -480,6 +496,7 @@ public class AdminUserManagementController {
                 .lastLoginAt(user.getLastLoginAt())
                 .isProfileComplete(resolveProfileComplete(user, vendorStatus))
                 .authProvider(authProvider)
+                .isSeedData(user.getIsSeedData())
                 .build();
     }
 
@@ -534,6 +551,12 @@ public class AdminUserManagementController {
         private java.time.LocalDateTime createdAt;
         private Boolean isProfileComplete;
         private String authProvider;
+        /**
+         * True for demo/showroom accounts created by the seeder or the showroom
+         * migrations, false for real sign-ups. Lets admins tell genuine registration
+         * activity apart from the seeded catalogue that ships with the app.
+         */
+        private Boolean isSeedData;
     }
 
     @lombok.Data
@@ -564,6 +587,8 @@ public class AdminUserManagementController {
         private java.time.LocalDateTime lastLoginAt;
         private Boolean isProfileComplete;
         private String authProvider;
+        /** See {@link UserSummaryDto#isSeedData}. */
+        private Boolean isSeedData;
     }
 
     @lombok.Data
@@ -576,5 +601,16 @@ public class AdminUserManagementController {
         private Long totalVendors;
         private Long totalAdmins;
         private Long totalSuperAdmins;  // Added
+
+        // ===== Real vs seeded =====
+        // The totals above count the seeded showroom catalogue alongside genuine
+        // sign-ups, which makes them useless for judging launch traction. These are
+        // the numbers to watch.
+        /** Accounts that are not demo/showroom data — genuine registrations. */
+        private Long realUsers;
+        private Long realCustomers;
+        private Long realVendors;
+        /** Demo/showroom accounts. realUsers + seedUsers == totalUsers. */
+        private Long seedUsers;
     }
 }

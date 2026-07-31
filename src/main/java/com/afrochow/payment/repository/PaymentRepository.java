@@ -41,6 +41,21 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("SELECT p FROM Payment p WHERE p.status = 'FAILED' ORDER BY p.paymentTime DESC")
     List<Payment> findFailedPayments();
 
+    /**
+     * Payments where money was taken from the customer but never forwarded to the
+     * vendor — captured funds still sitting in the platform account.
+     *
+     * <p>This is the query that makes a stranded payout discoverable. The transfer is
+     * driven by a Kafka event, and a persistent failure (vendor onboarding incomplete,
+     * a payout amount Stripe rejects) ends in the dead-letter topic, where nothing
+     * surfaces it. Reconciling COMPLETED-without-a-transfer against this list is how
+     * that money gets found.
+     */
+    @Query("SELECT p FROM Payment p WHERE p.status = 'COMPLETED' " +
+           "AND (p.stripeTransferId IS NULL OR p.stripeTransferId = '') " +
+           "ORDER BY p.completedAt ASC")
+    List<Payment> findCompletedWithoutTransfer();
+
     Long countByStatus(PaymentStatus status);
 
     /**

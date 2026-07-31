@@ -1,5 +1,6 @@
 package com.afrochow.payment.service;
 
+import com.afrochow.common.enums.OrderStatus;
 import com.afrochow.common.enums.PaymentStatus;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.notification.service.NotificationService;
@@ -82,6 +83,9 @@ class PaymentServiceTest {
         VendorProfile vendor = VendorProfile.builder()
                 .user(vendorUser)
                 .stripeAccountId("acct_vendor123")
+                // An account ID alone no longer makes a vendor payable — onboarding must
+                // be complete, or Stripe would reject the payout after we took the money.
+                .stripeOnboardingComplete(true)
                 .build();
 
         User customerUser = User.builder().userId(42L).publicUserId("CUST123").build();
@@ -92,6 +96,9 @@ class PaymentServiceTest {
                 .subtotal(new BigDecimal("100.00"))
                 .taxRate(new BigDecimal("0.05"))
                 .totalAmount(new BigDecimal("105.00"))
+                // PENDING = still awaiting payment. Charge and retry paths check this so
+                // a dead order can never be charged.
+                .status(OrderStatus.PENDING)
                 .vendor(vendor)
                 .customer(customer)
                 .build();
@@ -146,9 +153,96 @@ class PaymentServiceTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.AUTHORIZED);
         assertThat(payment.getTransactionId()).isEqualTo("pi_123");
         assertThat(payment.getCardLast4()).isEqualTo("4242");
-        // subtotal $100, 10% platform fee => $10 fee, $90 to vendor
+        // Captured $105 = $100 food + $5 tax. Commission is 10% of the FOOD only ($10);
+        // the vendor receives everything else, tax included, because they are the
+        // supplier of record and remit it. $105 - $10 = $95.
         assertThat(payment.getPlatformFeeAmount()).isEqualByComparingTo("10.00");
-        assertThat(payment.getVendorPayout()).isEqualByComparingTo("90.00");
+        assertThat(payment.getVendorPayout()).isEqualByComparingTo("95.00");
+        // The invariant that makes a Transfer safe: the two always sum to the capture.
+        assertThat(payment.getPlatformFeeAmount().add(payment.getVendorPayout()))
+                .isEqualByComparingTo(order.getTotalAmount());
+    }
+
+    /**
+     * The regression that motivated the split rework. With a vendor-funded promo and a
+     * delivery fee, the old code paid the vendor `subtotal - fee` computed from the
+     * PRE-discount subtotal, which could exceed the amount actually captured. Because
+     * the Transfer is built with source_transaction, Stripe rejects a transfer larger
+     * than its source charge — so the payout failed outright and the vendor's money was
+     * stranded in the platform account with no alert.
+     */
+    @Test
+    void chargeOrder_withVendorFundedPromoAndDeliveryFee_neverPaysOutMoreThanCaptured() {
+        // $100 food, $20 vendor-funded discount, $5 vendor delivery fee, 5% tax.
+        // Tax is on the discounted consideration: ($80 + $5) x 5% = $4.25.
+        // Captured = $80 + $5 + $4.25 = $89.25.
+        order.setDeliveryFee(new BigDecimal("5.00"));
+        order.setFoodDiscount(new BigDecimal("20.00"));
+        order.setDiscount(new BigDecimal("20.00"));
+        order.setTotalAmount(new BigDecimal("89.25"));
+
+        when(paymentRepository.findByOrder(order)).thenReturn(Optional.of(payment));
+        PaymentIntent intent = mockIntent("requires_capture");
+        PaymentMethod stripeCard = mockStripeCard();
+
+        try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class);
+             MockedStatic<PaymentMethod> pmStatic = mockStatic(PaymentMethod.class)) {
+            piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(RequestOptions.class))).thenReturn(intent);
+            pmStatic.when(() -> PaymentMethod.retrieve("pm_123")).thenReturn(stripeCard);
+
+            paymentService.chargeOrder(order, "pm_123");
+        }
+
+        // Commission is 10% of the discounted FOOD ($80) — not the $100 list price, and
+        // not the delivery fee the vendor earns by delivering themselves.
+        assertThat(payment.getPlatformFeeAmount()).isEqualByComparingTo("8.00");
+        // Vendor receives the remainder: discounted food + delivery + tax - commission.
+        assertThat(payment.getVendorPayout()).isEqualByComparingTo("81.25");
+        // The invariant. Under the old math this summed to $110 against an $89.25 charge.
+        assertThat(payment.getPlatformFeeAmount().add(payment.getVendorPayout()))
+                .isEqualByComparingTo("89.25");
+        assertThat(payment.getVendorPayout()).isLessThan(order.getTotalAmount());
+    }
+
+    /**
+     * A FREE_DELIVERY promo waives the vendor's delivery fee, so it must NOT reduce the
+     * commission base — the vendor gave up delivery revenue, not food revenue.
+     */
+    @Test
+    void chargeOrder_freeDeliveryPromo_leavesCommissionBaseOnFullFood() {
+        // $100 food, $5 delivery fully waived, 5% tax on $100 = $5. Captured $105.
+        order.setDeliveryFee(new BigDecimal("5.00"));
+        order.setDeliveryDiscount(new BigDecimal("5.00"));
+        order.setDiscount(new BigDecimal("5.00"));
+        order.setTotalAmount(new BigDecimal("105.00"));
+
+        when(paymentRepository.findByOrder(order)).thenReturn(Optional.of(payment));
+        PaymentIntent intent = mockIntent("requires_capture");
+        PaymentMethod stripeCard = mockStripeCard();
+
+        try (MockedStatic<PaymentIntent> piStatic = mockStatic(PaymentIntent.class);
+             MockedStatic<PaymentMethod> pmStatic = mockStatic(PaymentMethod.class)) {
+            piStatic.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(RequestOptions.class))).thenReturn(intent);
+            pmStatic.when(() -> PaymentMethod.retrieve("pm_123")).thenReturn(stripeCard);
+
+            paymentService.chargeOrder(order, "pm_123");
+        }
+
+        // Food untouched, so commission is still 10% of $100.
+        assertThat(payment.getPlatformFeeAmount()).isEqualByComparingTo("10.00");
+        assertThat(payment.getVendorPayout()).isEqualByComparingTo("95.00");
+    }
+
+    @Test
+    void chargeOrder_vendorOnboardingIncomplete_refusesRatherThanStrandingFunds() {
+        order.getVendor().setStripeOnboardingComplete(false);
+        when(paymentRepository.findByOrder(order)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> paymentService.chargeOrder(order, "pm_123"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("not currently able to accept payments");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
     }
 
     @Test
@@ -340,9 +434,12 @@ class PaymentServiceTest {
         }
 
         assertThat(payment.getAmount()).isEqualByComparingTo("52.50");
-        // implied subtotal = 52.50 / 1.05 = 50.00, fee = 10% = 5.00, payout = 45.00
+        // implied food = 52.50 / 1.05 = 50.00, commission = 10% = 5.00,
+        // vendor gets the remainder including the $2.50 tax = 47.50
         assertThat(payment.getPlatformFeeAmount()).isEqualByComparingTo("5.00");
-        assertThat(payment.getVendorPayout()).isEqualByComparingTo("45.00");
+        assertThat(payment.getVendorPayout()).isEqualByComparingTo("47.50");
+        assertThat(payment.getPlatformFeeAmount().add(payment.getVendorPayout()))
+                .isEqualByComparingTo("52.50");
     }
 
     // ========== transferToVendor ==========
@@ -538,6 +635,28 @@ class PaymentServiceTest {
         verify(outboxEventService, times(1)).customerOrderReceived("ORD123");
     }
 
+    /**
+     * A FAILED payment outlives its order: SLA auto-expiry cancels the order, and
+     * markPaymentCancelled() only transitions AUTHORIZED/PENDING payments, so a FAILED
+     * one stays FAILED — and so retryable — on an order that will never be fulfilled.
+     * Without the order-status guard the card is charged for a CANCELLED order and
+     * orderPlaced fires on it.
+     */
+    @Test
+    void retryPayment_orderAlreadyCancelled_refusesToCharge() {
+        payment.setStatus(PaymentStatus.FAILED);
+        order.setStatus(OrderStatus.CANCELLED);
+        when(orderRepository.findByPublicOrderId("ORD123")).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrder(order)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() ->
+                paymentService.retryPayment(userId(), "ORD123", "pm_new"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("no longer awaiting payment");
+
+        verify(outboxEventService, never()).orderPlaced(any());
+    }
+
     @Test
     void retryPayment_blankPaymentMethod_throwsIllegalArgument() {
         when(orderRepository.findByPublicOrderId("ORD123")).thenReturn(Optional.of(order));
@@ -574,6 +693,99 @@ class PaymentServiceTest {
 
         assertThatThrownBy(() -> paymentService.getPaymentByOrderId(1L, "MISSING"))
                 .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    // ========== webhook reconciliation ==========
+
+    /**
+     * The cancel/3DS race. If SLA expiry cancels the order while the customer is mid-3DS,
+     * the payment is already CANCELLED — a webhook still in flight must not flip it back
+     * to AUTHORIZED and announce the order to the vendor.
+     */
+    @Test
+    void reconcilePaymentIntentAuthorized_orderAlreadyCancelled_doesNotResurrectIt() {
+        payment.setStatus(PaymentStatus.CANCELLED);
+        payment.setTransactionId("pi_123");
+        order.setStatus(OrderStatus.CANCELLED);
+        when(paymentRepository.findByTransactionId("pi_123")).thenReturn(Optional.of(payment));
+
+        paymentService.reconcilePaymentIntentAuthorized("pi_123");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+        verify(outboxEventService, never()).orderPlaced(any());
+        verify(outboxEventService, never()).customerOrderReceived(any());
+    }
+
+    @Test
+    void reconcilePaymentIntentCanceled_authorizedPayment_releasesTheHold() {
+        payment.setStatus(PaymentStatus.AUTHORIZED);
+        payment.setTransactionId("pi_123");
+        when(paymentRepository.findByTransactionId("pi_123")).thenReturn(Optional.of(payment));
+
+        paymentService.reconcilePaymentIntentCanceled("pi_123");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+    }
+
+    @Test
+    void reconcilePaymentIntentCanceled_alreadyCaptured_isANoOp() {
+        payment.setStatus(PaymentStatus.COMPLETED);
+        payment.setTransactionId("pi_123");
+        when(paymentRepository.findByTransactionId("pi_123")).thenReturn(Optional.of(payment));
+
+        paymentService.reconcilePaymentIntentCanceled("pi_123");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+    }
+
+    // ========== disputes ==========
+
+    @Test
+    void recordDisputeOpened_marksDisputedAndAlertsAdmins() {
+        payment.setStatus(PaymentStatus.COMPLETED);
+        payment.setTransactionId("pi_123");
+        when(paymentRepository.findByTransactionId("pi_123")).thenReturn(Optional.of(payment));
+
+        paymentService.recordDisputeOpened("pi_123", 10500L, "fraudulent");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.DISPUTED);
+        assertThat(payment.getNotes()).contains("fraudulent");
+        verify(notificationService).notifyAdminsPaymentDisputed(
+                eq("ORD123"), eq(new BigDecimal("105.00")), eq("fraudulent"));
+    }
+
+    @Test
+    void recordDisputeOpened_redeliveredEvent_isANoOp() {
+        payment.setStatus(PaymentStatus.DISPUTED);
+        payment.setTransactionId("pi_123");
+        when(paymentRepository.findByTransactionId("pi_123")).thenReturn(Optional.of(payment));
+
+        paymentService.recordDisputeOpened("pi_123", 10500L, "fraudulent");
+
+        verify(notificationService, never()).notifyAdminsPaymentDisputed(any(), any(), any());
+    }
+
+    @Test
+    void recordDisputeClosed_won_returnsPaymentToCompleted() {
+        payment.setStatus(PaymentStatus.DISPUTED);
+        payment.setTransactionId("pi_123");
+        when(paymentRepository.findByTransactionId("pi_123")).thenReturn(Optional.of(payment));
+
+        paymentService.recordDisputeClosed("pi_123", "won");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+    }
+
+    @Test
+    void recordDisputeClosed_lost_staysDisputed() {
+        payment.setStatus(PaymentStatus.DISPUTED);
+        payment.setTransactionId("pi_123");
+        when(paymentRepository.findByTransactionId("pi_123")).thenReturn(Optional.of(payment));
+
+        paymentService.recordDisputeClosed("pi_123", "lost");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.DISPUTED);
+        assertThat(payment.getNotes()).contains("lost");
     }
 
     // ========== helpers ==========

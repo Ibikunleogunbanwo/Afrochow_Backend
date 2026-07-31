@@ -205,11 +205,17 @@ public class PaymentService {
      */
     private ChargeOutcome attemptAuthorization(Order order, Payment payment, String paymentMethodId, String attemptTag) {
         String vendorStripeAccountId = order.getVendor().getStripeAccountId();
-        boolean useConnect = connectRequired &&
-                vendorStripeAccountId != null &&
-                !vendorStripeAccountId.isBlank();
-        if (connectRequired && !useConnect) {
-            return failAndRecord(order, payment, "Vendor does not have a Stripe account configured for payouts");
+        // An account ID alone is not enough to be payable — Stripe rejects transfers to
+        // an account that has not finished onboarding, so a vendor with an ID but
+        // details_submitted=false would still take the order, have funds captured, and
+        // then fail at payout. Refuse the charge up front instead of stranding money.
+        // Same predicate the admin UI shows as "payout ready", deliberately shared so
+        // the two can't disagree about why a restaurant is blocked.
+        boolean vendorPayable = order.getVendor().isPayoutReady();
+        boolean useConnect = connectRequired && vendorPayable;
+        if (connectRequired && !vendorPayable) {
+            return failAndRecord(order, payment,
+                    "This restaurant is not currently able to accept payments. Please try another restaurant.");
         }
 
         try {
@@ -274,6 +280,58 @@ public class PaymentService {
     }
 
     /**
+     * How one order's money divides between the platform and the vendor.
+     * {@code commission} + {@code vendorPayout} always equals exactly the amount
+     * captured — see {@link #computeSplit}.
+     */
+    public record PaymentSplit(BigDecimal commission, BigDecimal vendorPayout) {}
+
+    /**
+     * The single source of truth for the platform/vendor split. Every path that
+     * needs it — initial authorization, partial capture, and webhook reconciliation —
+     * calls this, because three hand-maintained copies of this arithmetic drifted
+     * apart and disagreed about the delivery fee, the tax, and the discount.
+     *
+     * <p>The model, given that promos are vendor-funded and vendors perform their
+     * own delivery:
+     * <ul>
+     *   <li>Commission is charged on the FOOD only, after any vendor-funded food
+     *       discount. Never on tax (that would be taking a cut of the CRA's money)
+     *       and never on the delivery fee (the vendor performs that service and
+     *       sets its price on their own profile).</li>
+     *   <li>The vendor receives everything else: the discounted food, their
+     *       delivery fee, and the tax — which they are the supplier of record for
+     *       and remit themselves.</li>
+     * </ul>
+     *
+     * <p>{@code vendorPayout} is deliberately computed as a REMAINDER of the captured
+     * amount rather than independently summed. That makes the invariant
+     * {@code commission + vendorPayout == capturedAmount} hold by construction, with
+     * no rounding drift, and means a Transfer built from it can never exceed its
+     * source charge — the failure that previously stranded a vendor's money in the
+     * platform account whenever a promo was applied.
+     *
+     * @param capturedAmount the amount actually captured — the full order total on a
+     *                       normal capture, or the reduced amount on a partial one
+     */
+    private PaymentSplit computeSplit(Order order, BigDecimal capturedAmount) {
+        BigDecimal taxRate = order.getTaxRate() != null ? order.getTaxRate() : BigDecimal.ZERO;
+
+        // Back the tax out of what was captured, then remove the delivery fee, to
+        // isolate the food consideration the commission applies to. Using the
+        // captured amount (not the order's stored subtotal) is what makes this
+        // correct for partial captures too.
+        BigDecimal preTax = capturedAmount.divide(BigDecimal.ONE.add(taxRate), 10, RoundingMode.HALF_UP);
+        BigDecimal foodConsideration = preTax.subtract(order.effectiveDeliveryFee()).max(BigDecimal.ZERO);
+
+        BigDecimal commission = foodConsideration
+                .multiply(BigDecimal.valueOf(platformFeePercent))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+        return new PaymentSplit(commission, capturedAmount.subtract(commission));
+    }
+
+    /**
      * Bookkeeping for a successful authorization (requires_capture): computes and stores
      * the platform fee / vendor payout split, pulls card display details, marks the Payment
      * AUTHORIZED. Shared by the initial charge, a retry, and the post-3DS confirm path —
@@ -294,22 +352,12 @@ public class PaymentService {
             // Don't fail the order over cosmetic card details
         }
 
-        // Platform fee: e.g. 10% of subtotal (excluding tax) → kept by Afrochow; remainder goes to vendor
-        long subtotalInCents = order.getSubtotal()
-                .multiply(BigDecimal.valueOf(100))
-                .setScale(0, RoundingMode.HALF_UP)
-                .longValueExact();
-        long feeInCents = BigDecimal.valueOf(subtotalInCents)
-                .multiply(BigDecimal.valueOf(platformFeePercent))
-                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-                .longValueExact();
+        PaymentSplit split = computeSplit(order, order.getTotalAmount());
 
         payment.authorizePayment(last4, brand);
         payment.setTransactionId(intent.getId());
-        payment.setPlatformFeeAmount(
-                BigDecimal.valueOf(feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
-        payment.setVendorPayout(
-                BigDecimal.valueOf(subtotalInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+        payment.setPlatformFeeAmount(split.commission());
+        payment.setVendorPayout(split.vendorPayout());
         paymentRepository.save(payment);
         log.info("payment.authorized publicOrderId={} paymentId={} transactionId={} amount={} fee={} vendorPayout={}",
                 order.getPublicOrderId(),
@@ -318,6 +366,19 @@ public class PaymentService {
                 payment.getAmount(),
                 payment.getPlatformFeeAmount(),
                 payment.getVendorPayout());
+    }
+
+    /**
+     * Whether an order is still legitimately awaiting payment.
+     *
+     * <p>Only PENDING qualifies: that is the window between order creation and the
+     * vendor accepting. From CONFIRMED onward the authorization has already been
+     * captured, and CANCELLED/REFUNDED/DELIVERED orders must never accept a fresh
+     * charge. Used to gate the customer-initiated retry and the webhook
+     * reconciliation paths, both of which can otherwise act on a dead order.
+     */
+    private boolean isPayable(com.afrochow.common.enums.OrderStatus status) {
+        return status == com.afrochow.common.enums.OrderStatus.PENDING;
     }
 
     /**
@@ -434,27 +495,10 @@ public class PaymentService {
                 // reconciliation reports stay accurate.
                 if (finalAmount != null) {
                     BigDecimal capturedAmount = finalAmount.setScale(2, RoundingMode.HALF_UP);
-                    long capturedCents = capturedAmount
-                            .multiply(BigDecimal.valueOf(100))
-                            .setScale(0, RoundingMode.HALF_UP)
-                            .longValue();
-                    // Fee is on subtotal only — back out tax proportionally from captured amount
-                    BigDecimal taxRate = order.getTaxRate() != null ? order.getTaxRate() : BigDecimal.ZERO;
-                    BigDecimal capturedSubtotal = capturedAmount
-                            .divide(BigDecimal.ONE.add(taxRate), 10, RoundingMode.HALF_UP);
-                    long capturedSubtotalCents = capturedSubtotal
-                            .multiply(BigDecimal.valueOf(100))
-                            .setScale(0, RoundingMode.HALF_UP)
-                            .longValue();
-                    long feeCents = BigDecimal.valueOf(capturedSubtotalCents)
-                            .multiply(BigDecimal.valueOf(platformFeePercent))
-                            .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
-                            .longValue();
+                    PaymentSplit split = computeSplit(order, capturedAmount);
                     payment.setAmount(capturedAmount);
-                    payment.setPlatformFeeAmount(
-                            BigDecimal.valueOf(feeCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
-                    payment.setVendorPayout(
-                            BigDecimal.valueOf(capturedSubtotalCents - feeCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+                    payment.setPlatformFeeAmount(split.commission());
+                    payment.setVendorPayout(split.vendorPayout());
                     log.info("payment.partial_capture publicOrderId={} originalAmount={} capturedAmount={} fee={} vendorPayout={}",
                             order.getPublicOrderId(),
                             order.getTotalAmount(),
@@ -770,6 +814,19 @@ public class PaymentService {
                 return; // synchronous path already handled it — normal case
             }
             Order order = payment.getOrder();
+
+            // Do not resurrect a dead order. If SLA expiry cancelled this order while
+            // the customer was mid-3DS, the payment is already CANCELLED and the Stripe
+            // intent already cancelled — but a webhook still in flight would otherwise
+            // fall through the status check above, flip the payment back to AUTHORIZED
+            // and fire orderPlaced on a CANCELLED order. The hold is released either
+            // way, so there is nothing to reconcile here.
+            if (!isPayable(order.getStatus())) {
+                log.warn("payment.webhook.authorization_ignored_dead_order publicOrderId={} transactionId={} orderStatus={} paymentStatus={}",
+                        order.getPublicOrderId(), transactionId, order.getStatus(), payment.getStatus());
+                return;
+            }
+
             PaymentStatus previousStatus = payment.getStatus();
             try {
                 PaymentIntent intent = PaymentIntent.retrieve(transactionId);
@@ -803,17 +860,13 @@ public class PaymentService {
                     ? BigDecimal.valueOf(amountReceivedCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
                     : payment.getAmount();
 
-            long subtotalInCents = order.getSubtotal()
-                    .multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact();
-            long feeInCents = BigDecimal.valueOf(subtotalInCents)
-                    .multiply(BigDecimal.valueOf(platformFeePercent))
-                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP).longValueExact();
-
+            // Split from the webhook's own amount_received — this path exists precisely
+            // because our synchronous capture never reported back, so Stripe's figure is
+            // the authority on what was actually taken.
+            PaymentSplit split = computeSplit(order, capturedAmount);
             payment.setAmount(capturedAmount);
-            payment.setPlatformFeeAmount(
-                    BigDecimal.valueOf(feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
-            payment.setVendorPayout(
-                    BigDecimal.valueOf(subtotalInCents - feeInCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            payment.setPlatformFeeAmount(split.commission());
+            payment.setVendorPayout(split.vendorPayout());
             payment.completePayment(payment.getCardLast4(), payment.getCardBrand());
             paymentRepository.save(payment);
 
@@ -848,6 +901,80 @@ public class PaymentService {
                     order.getPublicOrderId(), transactionId, failureReason);
             failAndRecord(order, payment, failureReason);
         }, () -> log.debug("payment_intent.payment_failed — no matching Payment for transactionId={}", transactionId));
+    }
+
+    /**
+     * Reconciles payment_intent.canceled — the hold was released, either by our own
+     * SLA-expiry path or from the Stripe dashboard. Without this, a payment cancelled
+     * outside the synchronous flow sits AUTHORIZED indefinitely and reads to
+     * reconciliation as funds we are still holding.
+     */
+    @Transactional
+    public void reconcilePaymentIntentCanceled(String transactionId) {
+        paymentRepository.findByTransactionId(transactionId).ifPresentOrElse(payment -> {
+            if (payment.getStatus() != PaymentStatus.AUTHORIZED && payment.getStatus() != PaymentStatus.PENDING) {
+                return; // already CANCELLED/FAILED/REFUNDED, or captured — nothing to release
+            }
+            PaymentStatus previousStatus = payment.getStatus();
+            payment.cancelAuthorization();
+            paymentRepository.save(payment);
+            log.warn("payment.webhook.reconciled_cancellation publicOrderId={} transactionId={} previousStatus={}",
+                    payment.getOrder().getPublicOrderId(), transactionId, previousStatus);
+        }, () -> log.debug("payment_intent.canceled — no matching Payment for transactionId={}", transactionId));
+    }
+
+    /**
+     * Records a chargeback and alerts admins.
+     *
+     * <p>Deliberately does not attempt any automatic remediation. If the vendor has
+     * already been paid out, clawing that back is a judgement call about the vendor
+     * relationship, not something to automate — and Stripe has already taken the money
+     * from the platform balance either way. What matters here is that a human finds
+     * out in time to submit evidence, since an unanswered dispute is lost by default.
+     */
+    @Transactional
+    public void recordDisputeOpened(String transactionId, long amountCents, String reason) {
+        paymentRepository.findByTransactionId(transactionId).ifPresentOrElse(payment -> {
+            if (payment.getStatus() == PaymentStatus.DISPUTED) {
+                return; // redelivered event
+            }
+            BigDecimal disputedAmount = BigDecimal.valueOf(amountCents)
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            Order order = payment.getOrder();
+
+            payment.setStatus(PaymentStatus.DISPUTED);
+            payment.setNotes("Disputed by customer — reason: " + reason);
+            paymentRepository.save(payment);
+
+            log.error("payment.disputed publicOrderId={} transactionId={} amount={} reason={} vendorAlreadyPaid={}",
+                    order.getPublicOrderId(), transactionId, disputedAmount, reason,
+                    payment.getStripeTransferId() != null);
+
+            notificationService.notifyAdminsPaymentDisputed(
+                    order.getPublicOrderId(), disputedAmount, reason);
+        }, () -> log.error("charge.dispute.created — no matching Payment for transactionId={}", transactionId));
+    }
+
+    /**
+     * Records a dispute's final outcome. A won dispute returns the funds and the
+     * payment to COMPLETED; a lost one leaves it DISPUTED, since the money is gone.
+     */
+    @Transactional
+    public void recordDisputeClosed(String transactionId, String disputeStatus) {
+        paymentRepository.findByTransactionId(transactionId).ifPresentOrElse(payment -> {
+            if (payment.getStatus() != PaymentStatus.DISPUTED) {
+                return;
+            }
+            if ("won".equals(disputeStatus)) {
+                payment.setStatus(PaymentStatus.COMPLETED);
+                payment.setNotes("Dispute resolved in our favour — funds returned");
+            } else {
+                payment.setNotes("Dispute closed with status: " + disputeStatus);
+            }
+            paymentRepository.save(payment);
+            log.warn("payment.dispute.closed publicOrderId={} transactionId={} disputeStatus={} paymentStatus={}",
+                    payment.getOrder().getPublicOrderId(), transactionId, disputeStatus, payment.getStatus());
+        }, () -> log.warn("charge.dispute.closed — no matching Payment for transactionId={}", transactionId));
     }
 
     /**
@@ -959,6 +1086,18 @@ public class PaymentService {
             throw new IllegalStateException("Can only retry failed payments");
         }
 
+        // The payment status alone is not enough. A FAILED payment can outlive its
+        // order: SLA auto-expiry cancels the order and markPaymentCancelled() only
+        // transitions AUTHORIZED/PENDING payments, so a FAILED one stays FAILED — and
+        // therefore retryable — on an order that no longer exists to be fulfilled.
+        // Without this guard the customer's card is charged for a CANCELLED order and
+        // orderPlaced fires on it.
+        if (!isPayable(order.getStatus())) {
+            throw new IllegalStateException(
+                    "This order is no longer awaiting payment (status: " + order.getStatus()
+                            + "). Please place a new order.");
+        }
+
         // Clear the dead intent from the previous failed attempt before trying again.
         payment.setTransactionId(null);
         payment.setNotes(null);
@@ -1034,6 +1173,20 @@ public class PaymentService {
     }
 
     /**
+     * Captured payments whose vendor transfer never completed — money taken from the
+     * customer that is still sitting in the platform account (admin).
+     *
+     * <p>Every persistent transfer failure ends in the Kafka dead-letter topic, which
+     * nothing watches. This is the list that makes those visible; each entry is a
+     * vendor who has not been paid for a delivered order.
+     */
+    public List<PaymentResponseDto> getStrandedPayouts() {
+        return paymentRepository.findCompletedWithoutTransfer().stream()
+                .map(this::toResponseDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Refund payment via admin — calls real Stripe refund.
      *
      * <p>{@link #refundStripeCharge} is a shared helper also used by order-cancellation
@@ -1104,7 +1257,8 @@ public class PaymentService {
         long failed     = byStatus.getOrDefault(PaymentStatus.FAILED, 0L);
         long refunded   = byStatus.getOrDefault(PaymentStatus.REFUNDED, 0L);
         long cancelled  = byStatus.getOrDefault(PaymentStatus.CANCELLED, 0L);
-        long total      = pending + authorized + completed + failed + refunded + cancelled;
+        long disputed   = byStatus.getOrDefault(PaymentStatus.DISPUTED, 0L);
+        long total      = pending + authorized + completed + failed + refunded + cancelled + disputed;
 
         return PaymentStatsDto.builder()
                 .total(total)
@@ -1114,6 +1268,8 @@ public class PaymentService {
                 .failed(failed)
                 .refunded(refunded)
                 .cancelled(cancelled)
+                .disputed(disputed)
+                .strandedPayouts(paymentRepository.findCompletedWithoutTransfer().size())
                 .build();
     }
 

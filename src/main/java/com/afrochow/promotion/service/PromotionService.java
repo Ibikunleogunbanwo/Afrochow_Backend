@@ -395,6 +395,37 @@ public class PromotionService {
     public BigDecimal calculateDiscount(String code, BigDecimal subtotal,
                                         String userPublicId, String vendorPublicId,
                                         BigDecimal deliveryFee) {
+        return calculateDiscountBreakdown(code, subtotal, userPublicId, vendorPublicId, deliveryFee).total();
+    }
+
+    /**
+     * Which part of the order a discount reduces.
+     *
+     * <p>This allocation is not cosmetic — it decides the commission base and the
+     * vendor payout. Promos are vendor-funded, so the platform's commission is
+     * charged on the food the vendor actually got paid for: a PERCENTAGE or
+     * FIXED_AMOUNT promo reduces that base, while a FREE_DELIVERY promo waives the
+     * vendor's delivery fee and leaves the food base (and so the commission)
+     * untouched. Collapsing both into one {@code discount} number — as the order
+     * total alone does — makes those two cases indistinguishable downstream and
+     * pays the vendor a delivery fee they waived.
+     */
+    public record DiscountBreakdown(BigDecimal foodDiscount, BigDecimal deliveryDiscount) {
+        public BigDecimal total() {
+            return foodDiscount.add(deliveryDiscount);
+        }
+    }
+
+    /**
+     * Same validation and amount as {@link #calculateDiscount}, but reports which
+     * bucket the discount came out of. Callers that need to compute a payout split
+     * must use this; {@link #calculateDiscount} is kept for callers that only need
+     * the total to show a customer.
+     */
+    @Transactional
+    public DiscountBreakdown calculateDiscountBreakdown(String code, BigDecimal subtotal,
+                                                        String userPublicId, String vendorPublicId,
+                                                        BigDecimal deliveryFee) {
         // Lock the promotion row so concurrent requests are serialised through here.
         Promotion promotion = promotionRepository.findByCodeWithLock(code.toUpperCase().trim())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid promo code: " + code));
@@ -446,7 +477,10 @@ public class PromotionService {
             }
         }
 
-        return computeDiscountAmount(promotion, subtotal, deliveryFee);
+        BigDecimal amount = computeDiscountAmount(promotion, subtotal, deliveryFee);
+        return promotion.getType() == com.afrochow.common.enums.PromotionType.FREE_DELIVERY
+                ? new DiscountBreakdown(BigDecimal.ZERO, amount)
+                : new DiscountBreakdown(amount, BigDecimal.ZERO);
     }
 
     /**

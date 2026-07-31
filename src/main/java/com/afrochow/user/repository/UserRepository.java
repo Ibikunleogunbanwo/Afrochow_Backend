@@ -73,6 +73,18 @@ public interface UserRepository
     @Query("SELECT COUNT(u) FROM User u WHERE u.role = :role AND u.emailVerified = true")
     Long countByRoleAndEmailVerifiedTrue(@Param("role") Role role);
 
+    /**
+     * Counts genuinely registered accounts, excluding the demo/showroom data the app
+     * ships with. Total user count is misleading at launch because the seeded
+     * catalogue contributes hundreds of vendor and customer rows — this is the number
+     * that actually reflects sign-up activity.
+     */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isSeedData = false")
+    Long countRealUsers();
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isSeedData = false AND u.role = :role")
+    Long countRealUsersByRole(@Param("role") Role role);
+
     // ========== DATE-RANGE COUNTS (used by admin dashboard) ==========
 
     /**

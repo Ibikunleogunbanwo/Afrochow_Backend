@@ -89,7 +89,8 @@ public class AdminProductController {
                 p.getVendor() != null ? p.getVendor().getPublicVendorId() : null,
                 p.getCategory() != null ? p.getCategory().getName() : null,
                 p.getIsFeatured(),
-                p.getFeaturedAt()
+                p.getFeaturedAt(),
+                p.getIsSeedData()
         );
     }
 
@@ -237,7 +238,9 @@ public class AdminProductController {
             String publicVendorId,
             String categoryName,
             Boolean isFeatured,
-            LocalDateTime featuredAt
+            LocalDateTime featuredAt,
+            /** True for demo/showroom products, false for ones a real vendor created. */
+            Boolean isSeedData
     ) {}
 
     public record FeaturedProductSummary(

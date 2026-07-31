@@ -335,9 +335,12 @@ class OrderServiceTest {
         when(customerProfileRepository.findByUser_UserId(1L)).thenReturn(Optional.of(customer));
         when(vendorProfileRepository.findByUser_PublicUserId("VEN123")).thenReturn(Optional.of(vendor));
         when(productRepository.findByPublicProductId("PROD-1")).thenReturn(Optional.of(product));
-        when(promotionService.calculateDiscount(eq("save5"), any(BigDecimal.class),
+        // A PERCENTAGE/FIXED_AMOUNT promo lands entirely in the food bucket, which is
+        // what reduces the commission base — vendors fund their own promos.
+        when(promotionService.calculateDiscountBreakdown(eq("save5"), any(BigDecimal.class),
                 eq("CUS123"), eq("VEN123"), any(BigDecimal.class)))
-                .thenReturn(new BigDecimal("5.00"));
+                .thenReturn(new PromotionService.DiscountBreakdown(
+                        new BigDecimal("5.00"), BigDecimal.ZERO));
         when(paymentService.chargeOrder(any(Order.class), eq("pm_123")))
                 .thenReturn(new PaymentService.ChargeOutcome(PaymentStatus.AUTHORIZED, null, null));
 
