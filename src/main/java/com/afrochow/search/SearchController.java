@@ -142,13 +142,13 @@ public class SearchController {
     @GetMapping("/products/{publicProductId}/similar")
     @Operation(summary = "Get the same dish at other vendors",
             description = "Find this exact product (by name) sold by other active + verified vendors. " +
-                    "Pass ?lat=&lng= (optional) to have each result's distanceKm computed via the Redis " +
-                    "vendor geo index.")
+                    "Pass ?lat=&lng= to return only nearby vendors, or ?city= to return only vendors in that city.")
     public ResponseEntity<ApiResponse<List<ProductResponseDto>>> getSimilarProducts(
             @PathVariable String publicProductId,
+            @RequestParam(required = false) String city,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng) {
-        List<ProductResponseDto> products = searchService.getSimilarProducts(publicProductId, lat, lng);
+        List<ProductResponseDto> products = searchService.getSimilarProducts(publicProductId, city, lat, lng);
         return ResponseEntity.ok(ApiResponse.success(products));
     }
 

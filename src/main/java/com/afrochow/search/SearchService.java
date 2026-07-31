@@ -94,11 +94,13 @@ public class SearchService {
         /**
          * "Same dish elsewhere" — given a product, finds that exact dish (by name)
          * sold by other active + verified vendors. Backs the restaurant page's
-         * "Also available at" section. Pass lat/lng (optional) to have each result's
-         * distanceKm computed the same way getFeaturedProducts does.
+         * "Also available at" section. Location is a hard gate: pass lat/lng to
+         * keep only nearby vendors, or city to keep only vendors in that city. If
+         * the caller sends no location, fall back to the source product's vendor city
+         * so this section never becomes a nationwide product list.
          */
         @Transactional(readOnly = true)
-        public List<ProductResponseDto> getSimilarProducts(String publicProductId, Double lat, Double lng) {
+        public List<ProductResponseDto> getSimilarProducts(String publicProductId, String city, Double lat, Double lng) {
                 Product product = productRepository.findByPublicProductId(publicProductId)
                                 .orElseThrow(() -> new EntityNotFoundException("Product not found: " + publicProductId));
 
@@ -109,22 +111,50 @@ public class SearchService {
                 List<Product> matches = productRepository.findSameNameAtOtherVendors(
                                 product.getName(), product.getVendor().getId());
 
-                Map<String, Double> distancesByVendor = Map.of();
                 if (lat != null && lng != null && !matches.isEmpty()) {
-                        List<String> vendorIds = matches.stream()
-                                        .map(p -> p.getVendor().getPublicVendorId())
+                        List<VendorProfile> nearbyVendors = vendorGeoIndexService.findNearbyVendors(lat, lng, 25, 100);
+                        Set<String> nearbyVendorIds = nearbyVendors.stream()
+                                        .map(VendorProfile::getPublicVendorId)
                                         .filter(java.util.Objects::nonNull)
+                                        .collect(Collectors.toSet());
+
+                        if (nearbyVendorIds.isEmpty()) {
+                                return List.of();
+                        }
+
+                        List<Product> localMatches = matches.stream()
+                                        .filter(p -> p.getVendor() != null)
+                                        .filter(p -> nearbyVendorIds.contains(p.getVendor().getPublicVendorId()))
+                                        .toList();
+
+                        List<String> vendorIds = localMatches.stream()
+                                        .map(p -> p.getVendor().getPublicVendorId())
                                         .distinct()
                                         .toList();
-                        distancesByVendor = vendorGeoIndexService.getDistancesKm(lat, lng, vendorIds);
+
+                        Map<String, Double> distances = vendorGeoIndexService.getDistancesKm(lat, lng, vendorIds);
+
+                        return localMatches.stream()
+                                        .limit(8)
+                                        .map(p -> toProductResponseDto(p, distances.get(p.getVendor().getPublicVendorId())))
+                                        .toList();
                 }
 
-                final Map<String, Double> distances = distancesByVendor;
+                String cityGate = normalizeCity(city);
+                if (cityGate == null) {
+                        cityGate = product.getVendor().getAddress() != null
+                                        ? normalizeCity(product.getVendor().getAddress().getCity())
+                                        : null;
+                }
+                if (cityGate == null) {
+                        return List.of();
+                }
+
+                final String localCity = cityGate;
                 return matches.stream()
+                                .filter(p -> vendorCityMatches(p, localCity))
                                 .limit(8)
-                                .map(p -> toProductResponseDto(p, p.getVendor() != null
-                                                ? distances.get(p.getVendor().getPublicVendorId())
-                                                : null))
+                                .map(this::toProductResponseDto)
                                 .toList();
         }
 
@@ -574,6 +604,17 @@ public class SearchService {
 
         private ProductResponseDto toProductResponseDto(Product product) {
                 return toProductResponseDto(product, null);
+        }
+
+        private boolean vendorCityMatches(Product product, String city) {
+                if (product.getVendor() == null || product.getVendor().getAddress() == null) {
+                        return false;
+                }
+                return city.equals(normalizeCity(product.getVendor().getAddress().getCity()));
+        }
+
+        private String normalizeCity(String city) {
+                return city == null || city.isBlank() ? null : city.trim().toLowerCase();
         }
 
         private ProductResponseDto toProductResponseDto(Product product, Double distanceKm) {
