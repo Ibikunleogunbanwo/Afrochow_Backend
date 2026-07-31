@@ -166,9 +166,10 @@ class SearchControllerTest extends AbstractControllerTest {
 
     @Test
     void getSimilarProducts_returns200() throws Exception {
-        when(searchService.getSimilarProducts("prod-1", null, null)).thenReturn(List.of(sampleProduct()));
+        when(searchService.getSimilarProducts("prod-1", "Calgary", null, null)).thenReturn(List.of(sampleProduct()));
 
-        mockMvc.perform(get("/search/products/{publicProductId}/similar", "prod-1"))
+        mockMvc.perform(get("/search/products/{publicProductId}/similar", "prod-1")
+                        .param("city", "Calgary"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1));
     }
