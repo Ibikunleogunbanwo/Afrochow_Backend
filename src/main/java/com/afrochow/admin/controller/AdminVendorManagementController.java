@@ -418,7 +418,10 @@ public class AdminVendorManagementController {
                 .isActive(vendor.getIsActive())
                 .verifiedAt(vendor.getVerifiedAt())
                 .createdAt(vendor.getCreatedAt())
+                .stripeAccountId(vendor.getStripeAccountId())
                 .stripeOnboardingComplete(vendor.getStripeOnboardingComplete())
+                .payoutReady(vendor.isPayoutReady())
+                .isSeedData(vendor.getIsSeedData())
                 .hasFoodHandlingCert(vendor.hasFoodHandlingCert())
                 .certVerifiedAt(vendor.getCertVerifiedAt())
                 .build();
@@ -477,6 +480,8 @@ public class AdminVendorManagementController {
                 // Stripe
                 .stripeAccountId(v.getStripeAccountId())
                 .stripeOnboardingComplete(v.getStripeOnboardingComplete())
+                .payoutReady(v.isPayoutReady())
+                .isSeedData(v.getIsSeedData())
                 .build();
     }
 
@@ -495,7 +500,17 @@ public class AdminVendorManagementController {
         @Deprecated private Boolean isActive;
         private LocalDateTime verifiedAt;
         private LocalDateTime createdAt;
+        private String stripeAccountId;
         private Boolean stripeOnboardingComplete;
+        /**
+         * Whether this vendor can be paid, and so whether customers can order from them.
+         * Requires BOTH a Stripe account and completed onboarding — see
+         * {@link com.afrochow.vendor.model.VendorProfile#isPayoutReady()}. This is the
+         * field to check when a restaurant can't accept orders.
+         */
+        private Boolean payoutReady;
+        /** True for demo/showroom vendors, false for real registrations. */
+        private Boolean isSeedData;
         private Boolean hasFoodHandlingCert;
         private LocalDateTime certVerifiedAt;
     }
@@ -553,5 +568,9 @@ public class AdminVendorManagementController {
         // Stripe
         private String stripeAccountId;
         private Boolean stripeOnboardingComplete;
+        /** See {@link VendorSummaryDto#payoutReady}. */
+        private Boolean payoutReady;
+        /** True for demo/showroom vendors, false for real registrations. */
+        private Boolean isSeedData;
     }
 }

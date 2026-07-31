@@ -117,79 +117,146 @@ public class StripeWebhookController {
         }
 
         log.info("Stripe webhook received: {}", eventType);
-        switch (eventType) {
-            case "account.updated"                          -> handleAccountUpdated(event);
-            case "v2.core.account_link.returned"            -> handleAccountLinkReturned(payload);
-            case "payment_intent.amount_capturable_updated" -> handlePaymentIntentAuthorized(event);
-            case "payment_intent.succeeded"                 -> handlePaymentIntentSucceeded(event);
-            case "payment_intent.payment_failed"            -> handlePaymentIntentFailed(event);
-            case "charge.refunded"                          -> handleChargeRefunded(event);
-            default -> log.debug("Unhandled Stripe event type: {}", eventType);
+        try {
+            switch (eventType) {
+                case "account.updated"                          -> handleAccountUpdated(event);
+                case "v2.core.account_link.returned"            -> handleAccountLinkReturned(payload);
+                case "payment_intent.amount_capturable_updated" -> handlePaymentIntentAuthorized(event);
+                case "payment_intent.succeeded"                 -> handlePaymentIntentSucceeded(event);
+                case "payment_intent.payment_failed"            -> handlePaymentIntentFailed(event);
+                case "payment_intent.canceled"                  -> handlePaymentIntentCanceled(event);
+                case "charge.refunded"                          -> handleChargeRefunded(event);
+                case "charge.dispute.created"                   -> handleDisputeCreated(event);
+                case "charge.dispute.closed"                    -> handleDisputeClosed(event);
+                default -> log.debug("Unhandled Stripe event type: {}", eventType);
+            }
+        } catch (RuntimeException e) {
+            // Return 500 so Stripe redelivers. These handlers ARE the safety net for
+            // state our synchronous call chain missed, so swallowing a failure here and
+            // reporting 200 told Stripe "handled" and permanently dropped the only
+            // remaining chance to reconcile that payment.
+            log.error("Stripe webhook handler failed for {} — returning 500 so Stripe retries", eventType, e);
+            return ResponseEntity.status(500).body("Handler failed");
         }
 
         return ResponseEntity.ok("received");
     }
 
-    private void handlePaymentIntentAuthorized(Event event) {
+    /**
+     * Parses the event's data.object, or returns null if it cannot be read.
+     *
+     * <p>A malformed payload is a PERMANENT failure — retrying it will fail
+     * identically forever — so it is logged and swallowed rather than being turned
+     * into a 500 that makes Stripe redeliver on a schedule for days. Failures from
+     * the reconciliation calls themselves are the opposite: those are usually
+     * transient (DB unavailable, Stripe API hiccup) and must propagate so Stripe
+     * retries. That's why the service calls below sit OUTSIDE any catch.
+     */
+    private JsonNode parseDataObject(Event event, String eventType) {
         try {
-            String rawJson = event.getDataObjectDeserializer().getRawJson();
-            JsonNode root = MAPPER.readTree(rawJson);
-            String paymentIntentId = root.path("id").asText(null);
-            if (paymentIntentId == null || paymentIntentId.isBlank()) {
-                log.warn("payment_intent.amount_capturable_updated missing id");
-                return;
-            }
-            paymentService.reconcilePaymentIntentAuthorized(paymentIntentId);
+            return MAPPER.readTree(event.getDataObjectDeserializer().getRawJson());
         } catch (Exception e) {
-            log.error("Error processing payment_intent.amount_capturable_updated event", e);
+            log.error("Could not parse data object for {} — dropping event", eventType, e);
+            return null;
         }
+    }
+
+    private void handlePaymentIntentAuthorized(Event event) {
+        JsonNode root = parseDataObject(event, "payment_intent.amount_capturable_updated");
+        if (root == null) return;
+        String paymentIntentId = root.path("id").asText(null);
+        if (paymentIntentId == null || paymentIntentId.isBlank()) {
+            log.warn("payment_intent.amount_capturable_updated missing id");
+            return;
+        }
+        paymentService.reconcilePaymentIntentAuthorized(paymentIntentId);
     }
 
     private void handlePaymentIntentSucceeded(Event event) {
-        try {
-            String rawJson = event.getDataObjectDeserializer().getRawJson();
-            JsonNode root = MAPPER.readTree(rawJson);
-            String paymentIntentId = root.path("id").asText(null);
-            if (paymentIntentId == null || paymentIntentId.isBlank()) {
-                log.warn("payment_intent.succeeded missing id");
-                return;
-            }
-            long amountReceived = root.path("amount_received").asLong(0);
-            paymentService.reconcilePaymentIntentCompleted(paymentIntentId, amountReceived > 0 ? amountReceived : null);
-        } catch (Exception e) {
-            log.error("Error processing payment_intent.succeeded event", e);
+        JsonNode root = parseDataObject(event, "payment_intent.succeeded");
+        if (root == null) return;
+        String paymentIntentId = root.path("id").asText(null);
+        if (paymentIntentId == null || paymentIntentId.isBlank()) {
+            log.warn("payment_intent.succeeded missing id");
+            return;
         }
+        long amountReceived = root.path("amount_received").asLong(0);
+        paymentService.reconcilePaymentIntentCompleted(paymentIntentId, amountReceived > 0 ? amountReceived : null);
     }
 
     private void handlePaymentIntentFailed(Event event) {
-        try {
-            String rawJson = event.getDataObjectDeserializer().getRawJson();
-            JsonNode root = MAPPER.readTree(rawJson);
-            String paymentIntentId = root.path("id").asText(null);
-            if (paymentIntentId == null || paymentIntentId.isBlank()) {
-                log.warn("payment_intent.payment_failed missing id");
-                return;
-            }
-            String failureMessage = root.path("last_payment_error").path("message").asText("Payment failed");
-            paymentService.reconcilePaymentIntentFailed(paymentIntentId, failureMessage);
-        } catch (Exception e) {
-            log.error("Error processing payment_intent.payment_failed event", e);
+        JsonNode root = parseDataObject(event, "payment_intent.payment_failed");
+        if (root == null) return;
+        String paymentIntentId = root.path("id").asText(null);
+        if (paymentIntentId == null || paymentIntentId.isBlank()) {
+            log.warn("payment_intent.payment_failed missing id");
+            return;
         }
+        String failureMessage = root.path("last_payment_error").path("message").asText("Payment failed");
+        paymentService.reconcilePaymentIntentFailed(paymentIntentId, failureMessage);
+    }
+
+    /**
+     * A PaymentIntent was cancelled — either by our own SLA-expiry path releasing the
+     * hold, or from the Stripe dashboard. Reconciles the local record so a payment
+     * cancelled outside our synchronous flow doesn't sit AUTHORIZED forever, looking
+     * to reconciliation reports like money we are still holding.
+     */
+    private void handlePaymentIntentCanceled(Event event) {
+        JsonNode root = parseDataObject(event, "payment_intent.canceled");
+        if (root == null) return;
+        String paymentIntentId = root.path("id").asText(null);
+        if (paymentIntentId == null || paymentIntentId.isBlank()) {
+            log.warn("payment_intent.canceled missing id");
+            return;
+        }
+        paymentService.reconcilePaymentIntentCanceled(paymentIntentId);
     }
 
     private void handleChargeRefunded(Event event) {
-        try {
-            String rawJson = event.getDataObjectDeserializer().getRawJson();
-            JsonNode root = MAPPER.readTree(rawJson);
-            String paymentIntentId = root.path("payment_intent").asText(null);
-            if (paymentIntentId == null || paymentIntentId.isBlank()) {
-                log.warn("charge.refunded missing payment_intent");
-                return;
-            }
-            paymentService.reconcileChargeRefunded(paymentIntentId);
-        } catch (Exception e) {
-            log.error("Error processing charge.refunded event", e);
+        JsonNode root = parseDataObject(event, "charge.refunded");
+        if (root == null) return;
+        String paymentIntentId = root.path("payment_intent").asText(null);
+        if (paymentIntentId == null || paymentIntentId.isBlank()) {
+            log.warn("charge.refunded missing payment_intent");
+            return;
         }
+        paymentService.reconcileChargeRefunded(paymentIntentId);
+    }
+
+    /**
+     * A customer disputed a charge (chargeback). Stripe debits the disputed amount
+     * from the platform balance immediately, so this needs to be visible in-app
+     * rather than only in the Stripe dashboard — especially when the vendor has
+     * already been paid out for the order.
+     */
+    private void handleDisputeCreated(Event event) {
+        JsonNode root = parseDataObject(event, "charge.dispute.created");
+        if (root == null) return;
+        String paymentIntentId = root.path("payment_intent").asText(null);
+        if (paymentIntentId == null || paymentIntentId.isBlank()) {
+            log.warn("charge.dispute.created missing payment_intent");
+            return;
+        }
+        long amountCents = root.path("amount").asLong(0);
+        String reason = root.path("reason").asText("unknown");
+        paymentService.recordDisputeOpened(paymentIntentId, amountCents, reason);
+    }
+
+    /**
+     * A dispute reached a final state. {@code status} is won/lost/warning_closed —
+     * only "lost" means the funds are gone for good.
+     */
+    private void handleDisputeClosed(Event event) {
+        JsonNode root = parseDataObject(event, "charge.dispute.closed");
+        if (root == null) return;
+        String paymentIntentId = root.path("payment_intent").asText(null);
+        if (paymentIntentId == null || paymentIntentId.isBlank()) {
+            log.warn("charge.dispute.closed missing payment_intent");
+            return;
+        }
+        String status = root.path("status").asText("unknown");
+        paymentService.recordDisputeClosed(paymentIntentId, status);
     }
 
     /**
@@ -212,7 +279,11 @@ public class StripeWebhookController {
                 log.info("account_link.returned for account {} — details_submitted still false", accountId);
             }
         } catch (StripeException e) {
+            // Transient Stripe-side failure — propagate so the caller returns 500 and
+            // Stripe redelivers. Swallowing this left the vendor stuck in "onboarding
+            // incomplete" with no further event coming to fix it.
             log.error("Failed to retrieve Stripe account for account_link.returned: {}", e.getMessage());
+            throw new IllegalStateException("Could not retrieve Stripe account", e);
         } catch (Exception e) {
             log.error("Error processing v2.core.account_link.returned event", e);
         }

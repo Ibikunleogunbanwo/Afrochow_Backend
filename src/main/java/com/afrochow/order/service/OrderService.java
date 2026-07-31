@@ -298,13 +298,18 @@ public class OrderService {
 
         BigDecimal promoDiscount = BigDecimal.ZERO;
         if (request.getPromoCode() != null && !request.getPromoCode().isBlank()) {
-            promoDiscount = promotionService.calculateDiscount(
+            // Breakdown rather than the bare total: which bucket the discount comes
+            // out of decides the commission base and therefore the vendor's payout.
+            PromotionService.DiscountBreakdown breakdown = promotionService.calculateDiscountBreakdown(
                     request.getPromoCode(),
                     order.calculateSubtotal(),
                     customer.getUser().getPublicUserId(),
                     request.getVendorPublicId(),
                     order.getDeliveryFee()   // BigDecimal.ZERO for pickup; used by FREE_DELIVERY check
             );
+            promoDiscount = breakdown.total();
+            order.setFoodDiscount(breakdown.foodDiscount());
+            order.setDeliveryDiscount(breakdown.deliveryDiscount());
             order.setDiscount(promoDiscount);
             order.setAppliedPromoCode(request.getPromoCode().toUpperCase().trim());
         }
@@ -1169,6 +1174,8 @@ public class OrderService {
                 .canBeCancelled(order.canBeCancelled(cancellationWindowHours))
                 .itemCount(itemNames.size())
                 .itemNames(itemNames)
+                .vendorIsSeedData(order.getVendor() != null
+                        && Boolean.TRUE.equals(order.getVendor().getIsSeedData()))
                 .build();
     }
 

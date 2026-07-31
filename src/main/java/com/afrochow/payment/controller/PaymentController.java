@@ -137,6 +137,15 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(payments));
     }
 
+    @GetMapping("/admin/payments/stranded-payouts")
+    @PreAuthorize("@deptAccess.can('PAYMENTS')") // PAYMENTS area = FINANCE department (or SUPERADMIN)
+    @Operation(summary = "Get stranded payouts",
+               description = "Captured payments whose vendor transfer never completed — money still held by the platform")
+    public ResponseEntity<ApiResponse<List<PaymentResponseDto>>> getStrandedPayouts() {
+        List<PaymentResponseDto> payments = paymentService.getStrandedPayouts();
+        return ResponseEntity.ok(ApiResponse.success(payments));
+    }
+
     @PostMapping("/admin/payments/order/{publicOrderId}/refund")
     @PreAuthorize("@deptAccess.can('PAYMENTS')") // PAYMENTS area = FINANCE department (or SUPERADMIN)
     @Operation(summary = "Refund payment", description = "Process a refund for a completed payment")

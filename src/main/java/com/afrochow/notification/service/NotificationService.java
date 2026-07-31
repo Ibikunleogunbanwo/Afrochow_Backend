@@ -1048,6 +1048,38 @@ public class NotificationService {
                 publicVendorId, admins.size(), certificateUrl != null && !certificateUrl.isBlank());
     }
 
+    /**
+     * Alerts admins that a charge has been disputed (chargeback).
+     *
+     * <p>Stripe debits the disputed amount from the platform balance the moment the
+     * dispute opens, and the vendor may already have been paid out for the order, so
+     * this needs a human looking at it promptly — evidence is due on a Stripe-imposed
+     * deadline and an unanswered dispute is lost by default.
+     */
+    @Transactional
+    public void notifyAdminsPaymentDisputed(String publicOrderId, BigDecimal amount, String reason) {
+        List<User> admins = new ArrayList<>(userRepository.findByRoleAndIsActive(Role.ADMIN, true));
+        admins.addAll(userRepository.findByRoleAndIsActive(Role.SUPERADMIN, true));
+
+        String message = String.format(
+                "A customer disputed the payment for order #%s (CA$%.2f, reason: %s). " +
+                        "Respond in the Stripe dashboard before the evidence deadline — " +
+                        "unanswered disputes are lost automatically.",
+                publicOrderId, amount, reason);
+
+        for (User admin : admins) {
+            createInAppNotification(admin,
+                    NotificationType.SYSTEM_ALERT,
+                    "Payment Disputed",
+                    message,
+                    RelatedEntityType.ORDER,
+                    publicOrderId);
+        }
+
+        log.warn("payment.dispute.admins_notified publicOrderId={} amount={} reason={} adminCount={}",
+                publicOrderId, amount, reason, admins.size());
+    }
+
     public void notifyVendorApproved(String email, String firstName, String restaurantName) {
         try {
             emailService.sendVendorApprovalEmail(email, firstName, restaurantName);

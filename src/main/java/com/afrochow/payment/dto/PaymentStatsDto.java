@@ -30,4 +30,11 @@ public class PaymentStatsDto {
     private long failed;
     private long refunded;
     private long cancelled;
+    private long disputed;
+
+    /**
+     * Captured payments with no vendor transfer — money owed to vendors that is still
+     * sitting in the platform account. Anything above zero needs investigating.
+     */
+    private long strandedPayouts;
 }

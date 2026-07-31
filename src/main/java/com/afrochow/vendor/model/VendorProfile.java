@@ -80,6 +80,26 @@ public class VendorProfile {
     @Builder.Default
     private Boolean isSeedData = false;
 
+    /**
+     * Whether this vendor can actually be paid, and therefore whether customers can
+     * order from them at all.
+     *
+     * <p>Both halves are required: a Stripe account ID with unfinished onboarding is
+     * not payable — Stripe rejects transfers to it — so a vendor in that state would
+     * take an order, have the customer's funds captured, and then fail at payout with
+     * the money stranded in the platform account. {@code PaymentService} refuses the
+     * charge up front for exactly this reason, which makes this flag the single thing
+     * an admin needs to look at to know why a restaurant can't accept orders.
+     *
+     * <p>Only enforced when {@code stripe.connect.required=true}.
+     */
+    @Transient
+    public boolean isPayoutReady() {
+        return stripeAccountId != null
+                && !stripeAccountId.isBlank()
+                && Boolean.TRUE.equals(stripeOnboardingComplete);
+    }
+
     // ========== VENDOR STATUS (STATE MACHINE) ==========
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

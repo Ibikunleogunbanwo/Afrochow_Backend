@@ -60,4 +60,18 @@ public final class UserSpecifications {
         if (end == null) return null;
         return (root, query, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), end);
     }
+
+    /**
+     * Restricts to demo/seed accounts ({@code true}) or genuine registrations
+     * ({@code false}). No-op when null.
+     *
+     * <p>Applied server-side rather than in the browser on purpose: the user list is
+     * paginated, so filtering client-side would only hide seeded rows on the page that
+     * happened to be loaded and would leave the total count and page numbers reporting
+     * the unfiltered set — exactly wrong for judging how many real sign-ups there are.
+     */
+    public static Specification<User> isSeedData(Boolean seedData) {
+        if (seedData == null) return null;
+        return (root, query, cb) -> cb.equal(root.get("isSeedData"), seedData);
+    }
 }
