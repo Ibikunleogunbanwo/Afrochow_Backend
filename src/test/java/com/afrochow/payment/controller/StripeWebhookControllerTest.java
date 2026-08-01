@@ -1,6 +1,7 @@
 package com.afrochow.payment.controller;
 
 import com.afrochow.payment.service.PaymentService;
+import com.afrochow.payment.service.StripeWebhookEventService;
 import com.afrochow.testsupport.AbstractControllerTest;
 import com.afrochow.testsupport.ControllerSliceTest;
 import com.afrochow.vendor.service.StripeConnectService;
@@ -39,6 +40,11 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
 
     @MockitoBean private StripeConnectService stripeConnectService;
     @MockitoBean private PaymentService paymentService;
+    @MockitoBean private StripeWebhookEventService stripeWebhookEventService;
+
+    void allowWebhookClaim() {
+        when(stripeWebhookEventService.claim(anyString(), anyString())).thenReturn(true);
+    }
 
     private Event accountUpdatedEvent(String accountId, boolean detailsSubmitted) {
         String json = """
@@ -53,9 +59,11 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
                   "data": {
                     "object": {
                       "id": "%s",
-                      "object": "account",
-                      "details_submitted": %s,
-                      "charges_enabled": true
+	                      "object": "account",
+	                      "details_submitted": %s,
+	                      "charges_enabled": true,
+	                      "payouts_enabled": true,
+	                      "requirements": { "disabled_reason": null }
                     }
                   },
                   "request": { "id": null, "idempotency_key": null }
@@ -83,6 +91,7 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
 
     @Test
     void handleWebhook_accountUpdated_detailsSubmitted_marksOnboardingComplete() throws Exception {
+        allowWebhookClaim();
         try (MockedStatic<Webhook> webhook = mockStatic(Webhook.class)) {
             webhook.when(() -> Webhook.constructEvent(anyString(), anyString(), anyString()))
                     .thenReturn(accountUpdatedEvent("acct_test123", true));
@@ -94,11 +103,13 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
                     .andExpect(content().string("received"));
         }
 
-        verify(stripeConnectService).markOnboardingComplete("acct_test123");
+        verify(stripeConnectService).updateAccountReadiness("acct_test123", true, true, true, null);
+        verify(stripeWebhookEventService).markProcessed("evt_test123");
     }
 
     @Test
     void handleWebhook_accountUpdated_detailsNotSubmitted_doesNotMarkComplete() throws Exception {
+        allowWebhookClaim();
         try (MockedStatic<Webhook> webhook = mockStatic(Webhook.class)) {
             webhook.when(() -> Webhook.constructEvent(anyString(), anyString(), anyString()))
                     .thenReturn(accountUpdatedEvent("acct_test456", false));
@@ -110,11 +121,12 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
                     .andExpect(content().string("received"));
         }
 
-        verify(stripeConnectService, never()).markOnboardingComplete(any());
+        verify(stripeConnectService).updateAccountReadiness("acct_test456", false, true, true, null);
     }
 
     @Test
     void handleWebhook_unhandledEventType_returns200() throws Exception {
+        allowWebhookClaim();
         try (MockedStatic<Webhook> webhook = mockStatic(Webhook.class)) {
             webhook.when(() -> Webhook.constructEvent(anyString(), anyString(), anyString()))
                     .thenReturn(unhandledTypeEvent());
@@ -177,6 +189,7 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
 
     @Test
     void handleWebhook_paymentIntentAmountCapturableUpdated_reconciles() throws Exception {
+        allowWebhookClaim();
         try (MockedStatic<Webhook> webhook = mockStatic(Webhook.class)) {
             webhook.when(() -> Webhook.constructEvent(anyString(), anyString(), anyString()))
                     .thenReturn(paymentIntentEvent("payment_intent.amount_capturable_updated", "pi_test123", ""));
@@ -193,6 +206,7 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
 
     @Test
     void handleWebhook_paymentIntentSucceeded_reconciles() throws Exception {
+        allowWebhookClaim();
         try (MockedStatic<Webhook> webhook = mockStatic(Webhook.class)) {
             webhook.when(() -> Webhook.constructEvent(anyString(), anyString(), anyString()))
                     .thenReturn(paymentIntentEvent("payment_intent.succeeded", "pi_test456", ", \"amount_received\": 2599"));
@@ -209,6 +223,7 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
 
     @Test
     void handleWebhook_paymentIntentFailed_reconciles() throws Exception {
+        allowWebhookClaim();
         try (MockedStatic<Webhook> webhook = mockStatic(Webhook.class)) {
             webhook.when(() -> Webhook.constructEvent(anyString(), anyString(), anyString()))
                     .thenReturn(paymentIntentEvent("payment_intent.payment_failed", "pi_test789",
@@ -226,6 +241,7 @@ class StripeWebhookControllerTest extends AbstractControllerTest {
 
     @Test
     void handleWebhook_chargeRefunded_reconciles() throws Exception {
+        allowWebhookClaim();
         try (MockedStatic<Webhook> webhook = mockStatic(Webhook.class)) {
             webhook.when(() -> Webhook.constructEvent(anyString(), anyString(), anyString()))
                     .thenReturn(chargeRefundedEvent("ch_test123", "pi_test999"));

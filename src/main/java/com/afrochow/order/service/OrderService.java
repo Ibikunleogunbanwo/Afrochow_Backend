@@ -121,11 +121,27 @@ public class OrderService {
 
     @Transactional
     public OrderResponseDto createOrder(Long customerUserId, OrderRequestDto request) {
+        return createOrder(customerUserId, request, null);
+    }
+
+    @Transactional
+    public OrderResponseDto createOrder(Long customerUserId, OrderRequestDto request, String idempotencyKey) {
 
         // ── Load and validate entities ────────────────────────────────────────
 
         CustomerProfile customer = customerProfileRepository.findByUser_UserId(customerUserId)
                 .orElseThrow(() -> new EntityNotFoundException("Customer profile not found"));
+
+        String normalizedIdempotencyKey = normalizeCheckoutIdempotencyKey(idempotencyKey);
+        if (normalizedIdempotencyKey != null) {
+            var existingOrder = orderRepository.findByCustomerUserIdAndCheckoutIdempotencyKey(
+                    customerUserId, normalizedIdempotencyKey);
+            if (existingOrder.isPresent()) {
+                log.info("order.create.idempotent_replay customerUserId={} publicOrderId={}",
+                        customerUserId, existingOrder.get().getPublicOrderId());
+                return toResponseDto(existingOrder.get());
+            }
+        }
 
         VendorProfile vendor = vendorProfileRepository.findByUser_PublicUserId(request.getVendorPublicId())
                 .orElseThrow(() -> new EntityNotFoundException("Vendor not found"));
@@ -224,6 +240,7 @@ public class OrderService {
         order.setTaxLabel(provincialTax.getTaxLabel());
         order.setTaxProvince(taxProvinceCode);
         order.setRequestedFulfillmentTime(request.getRequestedFulfillmentTime());
+        order.setCheckoutIdempotencyKey(normalizedIdempotencyKey);
 
         // ── Build order lines ─────────────────────────────────────────────────
 
@@ -389,6 +406,20 @@ public class OrderService {
         outboxEventService.customerOrderReceived(savedOrder.getPublicOrderId());
 
         return toResponseDto(savedOrder);
+    }
+
+    private String normalizeCheckoutIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return null;
+        }
+        String key = idempotencyKey.trim();
+        if (key.length() > 80) {
+            throw new IllegalArgumentException("Idempotency-Key must be 80 characters or fewer");
+        }
+        if (!key.matches("[A-Za-z0-9._:-]+")) {
+            throw new IllegalArgumentException("Idempotency-Key contains unsupported characters");
+        }
+        return key;
     }
 
     @Transactional(readOnly = true)

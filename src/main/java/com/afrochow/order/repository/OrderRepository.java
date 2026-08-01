@@ -22,6 +22,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByPublicOrderId(String publicOrderId);
 
+    @Query("SELECT o FROM Order o WHERE o.customer.user.userId = :customerUserId AND o.checkoutIdempotencyKey = :checkoutIdempotencyKey")
+    Optional<Order> findByCustomerUserIdAndCheckoutIdempotencyKey(
+            @Param("customerUserId") Long customerUserId,
+            @Param("checkoutIdempotencyKey") String checkoutIdempotencyKey);
+
     /**
      * Fetch an order by its public ID with a database-level write lock.
      * Use this in any service method that transitions order status to prevent

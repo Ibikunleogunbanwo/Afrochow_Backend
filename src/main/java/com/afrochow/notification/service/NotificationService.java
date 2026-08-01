@@ -1080,6 +1080,29 @@ public class NotificationService {
                 publicOrderId, amount, reason, admins.size());
     }
 
+    @Transactional
+    public void notifyAdminsStrandedPayout(String publicOrderId, BigDecimal vendorPayout) {
+        List<User> admins = new ArrayList<>(userRepository.findByRoleAndIsActive(Role.ADMIN, true));
+        admins.addAll(userRepository.findByRoleAndIsActive(Role.SUPERADMIN, true));
+
+        String message = String.format(
+                "Order #%s is delivered and captured, but the vendor payout has not completed. " +
+                        "Expected payout: CA$%.2f. Check the payment transfer DLQ and Stripe dashboard.",
+                publicOrderId, vendorPayout);
+
+        for (User admin : admins) {
+            createInAppNotification(admin,
+                    NotificationType.SYSTEM_ALERT,
+                    "Stranded Vendor Payout",
+                    message,
+                    RelatedEntityType.PAYMENT,
+                    publicOrderId);
+        }
+
+        log.error("payment.stranded_payout.admins_notified publicOrderId={} vendorPayout={} adminCount={}",
+                publicOrderId, vendorPayout, admins.size());
+    }
+
     public void notifyVendorApproved(String email, String firstName, String restaurantName) {
         try {
             emailService.sendVendorApprovalEmail(email, firstName, restaurantName);

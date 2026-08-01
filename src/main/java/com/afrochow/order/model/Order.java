@@ -50,6 +50,9 @@ public class Order {
     @Column(unique = true, nullable = false)
     private String publicOrderId;
 
+    @Column(name = "checkout_idempotency_key", unique = true, length = 80)
+    private String checkoutIdempotencyKey;
+
     // ========== FINANCIALS ==========
 
     @Column(nullable = false, precision = 10, scale = 2)

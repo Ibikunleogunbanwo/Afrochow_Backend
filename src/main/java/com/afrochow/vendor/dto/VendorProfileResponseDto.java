@@ -28,6 +28,10 @@ public class VendorProfileResponseDto {
     // Stripe Connect
     private String stripeAccountId;
     private Boolean stripeOnboardingComplete;
+    private Boolean stripeChargesEnabled;
+    private Boolean stripePayoutsEnabled;
+    private Boolean payoutReady;
+    private String stripeRequirementsDisabledReason;
 
     // ── Status (new state machine) ──
     private VendorStatus vendorStatus;
