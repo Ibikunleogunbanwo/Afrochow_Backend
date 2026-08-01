@@ -420,6 +420,9 @@ public class AdminVendorManagementController {
                 .createdAt(vendor.getCreatedAt())
                 .stripeAccountId(vendor.getStripeAccountId())
                 .stripeOnboardingComplete(vendor.getStripeOnboardingComplete())
+                .stripeChargesEnabled(vendor.getStripeChargesEnabled())
+                .stripePayoutsEnabled(vendor.getStripePayoutsEnabled())
+                .stripeRequirementsDisabledReason(vendor.getStripeRequirementsDisabledReason())
                 .payoutReady(vendor.isPayoutReady())
                 .isSeedData(vendor.getIsSeedData())
                 .hasFoodHandlingCert(vendor.hasFoodHandlingCert())
@@ -480,6 +483,9 @@ public class AdminVendorManagementController {
                 // Stripe
                 .stripeAccountId(v.getStripeAccountId())
                 .stripeOnboardingComplete(v.getStripeOnboardingComplete())
+                .stripeChargesEnabled(v.getStripeChargesEnabled())
+                .stripePayoutsEnabled(v.getStripePayoutsEnabled())
+                .stripeRequirementsDisabledReason(v.getStripeRequirementsDisabledReason())
                 .payoutReady(v.isPayoutReady())
                 .isSeedData(v.getIsSeedData())
                 .build();
@@ -502,6 +508,9 @@ public class AdminVendorManagementController {
         private LocalDateTime createdAt;
         private String stripeAccountId;
         private Boolean stripeOnboardingComplete;
+        private Boolean stripeChargesEnabled;
+        private Boolean stripePayoutsEnabled;
+        private String stripeRequirementsDisabledReason;
         /**
          * Whether this vendor can be paid, and so whether customers can order from them.
          * Requires BOTH a Stripe account and completed onboarding — see
@@ -568,6 +577,9 @@ public class AdminVendorManagementController {
         // Stripe
         private String stripeAccountId;
         private Boolean stripeOnboardingComplete;
+        private Boolean stripeChargesEnabled;
+        private Boolean stripePayoutsEnabled;
+        private String stripeRequirementsDisabledReason;
         /** See {@link VendorSummaryDto#payoutReady}. */
         private Boolean payoutReady;
         /** True for demo/showroom vendors, false for real registrations. */

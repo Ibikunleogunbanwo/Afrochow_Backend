@@ -22,7 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 1. POST /vendor/stripe/connect     → createConnectAccount() creates a Stripe Express account,
  *                                       saves stripeAccountId, returns onboarding URL.
  * 2. Vendor completes Stripe-hosted onboarding form.
- * 3. Stripe fires account.updated webhook → StripeWebhookController marks stripeOnboardingComplete=true.
+     * 3. Stripe fires account.updated webhook → StripeWebhookController records the
+     *    current charges/payouts capability state.
  * 4. GET /vendor/stripe/connect/dashboard → generateDashboardLink() for ongoing payouts access.
  */
 @Service
@@ -79,6 +80,11 @@ public class StripeConnectService {
                         .setEmail(user.getEmail())
                         .setBusinessType(AccountCreateParams.BusinessType.INDIVIDUAL)
                         .setIndividual(individual.build())
+                        .setCapabilities(AccountCreateParams.Capabilities.builder()
+                                .setTransfers(AccountCreateParams.Capabilities.Transfers.builder()
+                                        .setRequested(true)
+                                        .build())
+                                .build())
                         .putMetadata("vendorId", String.valueOf(vendor.getId()))
                         .putMetadata("publicVendorId", vendor.getPublicVendorId())
                         .setBusinessProfile(AccountCreateParams.BusinessProfile.builder()
@@ -141,15 +147,30 @@ public class StripeConnectService {
     }
 
     /**
-     * Called by StripeWebhookController when account.updated is received and
-     * the account has completed requirements (details_submitted = true).
+     * Called by StripeWebhookController when account.updated is received.
+     */
+    @Transactional
+    public void updateAccountReadiness(String stripeAccountId,
+                                       boolean detailsSubmitted,
+                                       boolean chargesEnabled,
+                                       boolean payoutsEnabled,
+                                       String disabledReason) {
+        vendorProfileRepository.findByStripeAccountId(stripeAccountId)
+                .ifPresent(vendor -> {
+                    vendor.setStripeOnboardingComplete(detailsSubmitted);
+                    vendor.setStripeChargesEnabled(chargesEnabled);
+                    vendor.setStripePayoutsEnabled(payoutsEnabled);
+                    vendor.setStripeRequirementsDisabledReason(disabledReason);
+                    vendorProfileRepository.save(vendor);
+                });
+    }
+
+    /**
+     * Backward-compatible helper for tests/admin flows that only know the old
+     * onboarding-complete signal.
      */
     @Transactional
     public void markOnboardingComplete(String stripeAccountId) {
-        vendorProfileRepository.findByStripeAccountId(stripeAccountId)
-                .ifPresent(vendor -> {
-                    vendor.setStripeOnboardingComplete(true);
-                    vendorProfileRepository.save(vendor);
-                });
+        updateAccountReadiness(stripeAccountId, true, true, true, null);
     }
 }

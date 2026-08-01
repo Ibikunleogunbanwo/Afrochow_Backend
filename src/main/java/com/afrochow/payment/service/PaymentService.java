@@ -12,6 +12,7 @@ import com.afrochow.payment.dto.PaymentStatsDto;
 import com.afrochow.payment.model.Payment;
 import com.afrochow.payment.repository.PaymentRepository;
 import com.stripe.exception.StripeException;
+import com.stripe.model.Account;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.Transfer;
 import com.stripe.net.RequestOptions;
@@ -56,6 +57,9 @@ public class PaymentService {
 
     @Value("${stripe.connect.required:true}")
     private boolean connectRequired;
+
+    @Value("${stripe.connect.refresh-account-before-charge:true}")
+    private boolean refreshConnectAccountBeforeCharge;
 
     /**
      * Self-reference via Spring proxy — allows calling @Transactional(REQUIRES_NEW)
@@ -205,6 +209,9 @@ public class PaymentService {
      */
     private ChargeOutcome attemptAuthorization(Order order, Payment payment, String paymentMethodId, String attemptTag) {
         String vendorStripeAccountId = order.getVendor().getStripeAccountId();
+        if (connectRequired && refreshConnectAccountBeforeCharge) {
+            refreshVendorStripeReadiness(order);
+        }
         // An account ID alone is not enough to be payable — Stripe rejects transfers to
         // an account that has not finished onboarding, so a vendor with an ID but
         // details_submitted=false would still take the order, have funds captured, and
@@ -276,6 +283,24 @@ public class PaymentService {
 
         } catch (StripeException e) {
             return failAndRecord(order, payment, cleanStripeMessage(e));
+        }
+    }
+
+    private void refreshVendorStripeReadiness(Order order) {
+        String stripeAccountId = order.getVendor().getStripeAccountId();
+        if (stripeAccountId == null || stripeAccountId.isBlank()) {
+            return;
+        }
+        try {
+            Account account = Account.retrieve(stripeAccountId);
+            order.getVendor().setStripeOnboardingComplete(Boolean.TRUE.equals(account.getDetailsSubmitted()));
+            order.getVendor().setStripeChargesEnabled(Boolean.TRUE.equals(account.getChargesEnabled()));
+            order.getVendor().setStripePayoutsEnabled(Boolean.TRUE.equals(account.getPayoutsEnabled()));
+            order.getVendor().setStripeRequirementsDisabledReason(
+                    account.getRequirements() != null ? account.getRequirements().getDisabledReason() : null);
+        } catch (StripeException e) {
+            log.warn("payment.vendor_readiness_refresh.failed publicOrderId={} stripeAccountId={} message={}",
+                    order.getPublicOrderId(), stripeAccountId, e.getMessage());
         }
     }
 

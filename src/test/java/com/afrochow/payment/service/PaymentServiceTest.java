@@ -78,6 +78,7 @@ class PaymentServiceTest {
         ReflectionTestUtils.setField(paymentService, "self", paymentService);
         ReflectionTestUtils.setField(paymentService, "platformFeePercent", 10);
         ReflectionTestUtils.setField(paymentService, "connectRequired", true);
+        ReflectionTestUtils.setField(paymentService, "refreshConnectAccountBeforeCharge", false);
 
         User vendorUser = User.builder().publicUserId("VEND123").build();
         VendorProfile vendor = VendorProfile.builder()
@@ -86,6 +87,8 @@ class PaymentServiceTest {
                 // An account ID alone no longer makes a vendor payable — onboarding must
                 // be complete, or Stripe would reject the payout after we took the money.
                 .stripeOnboardingComplete(true)
+                .stripeChargesEnabled(true)
+                .stripePayoutsEnabled(true)
                 .build();
 
         User customerUser = User.builder().userId(42L).publicUserId("CUST123").build();

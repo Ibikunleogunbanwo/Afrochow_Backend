@@ -1,6 +1,7 @@
 package com.afrochow.payment.controller;
 
 import com.afrochow.payment.service.PaymentService;
+import com.afrochow.payment.service.StripeWebhookEventService;
 import com.afrochow.vendor.service.StripeConnectService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -55,14 +56,19 @@ public class StripeWebhookController {
 
     private final StripeConnectService stripeConnectService;
     private final PaymentService paymentService;
+    private final StripeWebhookEventService stripeWebhookEventService;
     private final Environment environment;
 
     @Value("${stripe.webhook.secret:}")
     private String webhookSecret;
 
-    public StripeWebhookController(StripeConnectService stripeConnectService, PaymentService paymentService, Environment environment) {
+    public StripeWebhookController(StripeConnectService stripeConnectService,
+                                   PaymentService paymentService,
+                                   StripeWebhookEventService stripeWebhookEventService,
+                                   Environment environment) {
         this.stripeConnectService = stripeConnectService;
         this.paymentService = paymentService;
+        this.stripeWebhookEventService = stripeWebhookEventService;
         this.environment = environment;
     }
 
@@ -115,8 +121,18 @@ public class StripeWebhookController {
             log.warn("Stripe webhook payload missing event type");
             return ResponseEntity.badRequest().body("Invalid payload");
         }
+        String eventId = event.getId();
+        if (eventId == null || eventId.isBlank()) {
+            log.warn("Stripe webhook payload missing event id");
+            return ResponseEntity.badRequest().body("Invalid payload");
+        }
 
-        log.info("Stripe webhook received: {}", eventType);
+        if (!stripeWebhookEventService.claim(eventId, eventType)) {
+            log.info("Stripe webhook duplicate skipped: id={} type={}", eventId, eventType);
+            return ResponseEntity.ok("duplicate");
+        }
+
+        log.info("Stripe webhook received: id={} type={}", eventId, eventType);
         try {
             switch (eventType) {
                 case "account.updated"                          -> handleAccountUpdated(event);
@@ -130,12 +146,14 @@ public class StripeWebhookController {
                 case "charge.dispute.closed"                    -> handleDisputeClosed(event);
                 default -> log.debug("Unhandled Stripe event type: {}", eventType);
             }
+            stripeWebhookEventService.markProcessed(eventId);
         } catch (RuntimeException e) {
             // Return 500 so Stripe redelivers. These handlers ARE the safety net for
             // state our synchronous call chain missed, so swallowing a failure here and
             // reporting 200 told Stripe "handled" and permanently dropped the only
             // remaining chance to reconcile that payment.
             log.error("Stripe webhook handler failed for {} — returning 500 so Stripe retries", eventType, e);
+            stripeWebhookEventService.releaseClaim(eventId, e.getMessage());
             return ResponseEntity.status(500).body("Handler failed");
         }
 
@@ -273,7 +291,13 @@ public class StripeWebhookController {
             }
             Account account = Account.retrieve(accountId);
             if (Boolean.TRUE.equals(account.getDetailsSubmitted())) {
-                stripeConnectService.markOnboardingComplete(accountId);
+                stripeConnectService.updateAccountReadiness(
+                        accountId,
+                        Boolean.TRUE.equals(account.getDetailsSubmitted()),
+                        Boolean.TRUE.equals(account.getChargesEnabled()),
+                        Boolean.TRUE.equals(account.getPayoutsEnabled()),
+                        account.getRequirements() != null ? account.getRequirements().getDisabledReason() : null
+                );
                 log.info("Stripe Connect onboarding complete (account_link.returned) for account: {}", accountId);
             } else {
                 log.info("account_link.returned for account {} — details_submitted still false", accountId);
@@ -300,13 +324,18 @@ public class StripeWebhookController {
             String accountId       = root.path("id").asText(null);
             boolean detailsSubmitted = root.path("details_submitted").asBoolean(false);
             boolean chargesEnabled   = root.path("charges_enabled").asBoolean(false);
+            boolean payoutsEnabled   = root.path("payouts_enabled").asBoolean(false);
+            String disabledReason = root.path("requirements").path("disabled_reason").asText(null);
 
-            log.info("account.updated — id={} details_submitted={} charges_enabled={}",
-                    accountId, detailsSubmitted, chargesEnabled);
+            log.info("account.updated — id={} details_submitted={} charges_enabled={} payouts_enabled={} disabled_reason={}",
+                    accountId, detailsSubmitted, chargesEnabled, payoutsEnabled, disabledReason);
 
-            if (detailsSubmitted && accountId != null && !accountId.isBlank()) {
-                stripeConnectService.markOnboardingComplete(accountId);
-                log.info("Stripe Connect onboarding complete for account: {}", accountId);
+            if (accountId != null && !accountId.isBlank()) {
+                stripeConnectService.updateAccountReadiness(
+                        accountId, detailsSubmitted, chargesEnabled, payoutsEnabled, disabledReason);
+                if (detailsSubmitted && chargesEnabled && payoutsEnabled) {
+                    log.info("Stripe Connect account payout-ready: {}", accountId);
+                }
             }
         } catch (Exception e) {
             log.error("Error processing account.updated event", e);

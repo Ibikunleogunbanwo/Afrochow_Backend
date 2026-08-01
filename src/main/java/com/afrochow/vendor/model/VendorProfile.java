@@ -74,6 +74,17 @@ public class VendorProfile {
     @Builder.Default
     private Boolean stripeOnboardingComplete = false;
 
+    @Column(name = "stripe_charges_enabled", nullable = false)
+    @Builder.Default
+    private Boolean stripeChargesEnabled = false;
+
+    @Column(name = "stripe_payouts_enabled", nullable = false)
+    @Builder.Default
+    private Boolean stripePayoutsEnabled = false;
+
+    @Column(name = "stripe_requirements_disabled_reason", length = 255)
+    private String stripeRequirementsDisabledReason;
+
     // Distinguishes demo/seed vendors (see CompleteFinalSeeder) from real registered
     // ones. Real registration never sets this true — see VendorProfileService.
     @Column(nullable = false)
@@ -97,7 +108,9 @@ public class VendorProfile {
     public boolean isPayoutReady() {
         return stripeAccountId != null
                 && !stripeAccountId.isBlank()
-                && Boolean.TRUE.equals(stripeOnboardingComplete);
+                && Boolean.TRUE.equals(stripeOnboardingComplete)
+                && Boolean.TRUE.equals(stripeChargesEnabled)
+                && Boolean.TRUE.equals(stripePayoutsEnabled);
     }
 
     // ========== VENDOR STATUS (STATE MACHINE) ==========

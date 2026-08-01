@@ -62,10 +62,11 @@ public class CustomerOrderController {
     })
     public ResponseEntity<ApiResponse<OrderResponseDto>> createOrder(
             @Valid @RequestBody OrderRequestDto request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         Long userId = getUserId(userDetails);
-        OrderResponseDto order = orderService.createOrder(userId, request);
+        OrderResponseDto order = orderService.createOrder(userId, request, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Order placed successfully", order));
     }
 
