@@ -72,7 +72,7 @@ class CustomerOrderControllerTest extends AbstractControllerTest {
 
     @Test
     void createOrder_valid_returns201() throws Exception {
-        when(orderService.createOrder(eq(USER_ID), any(OrderRequestDto.class)))
+        when(orderService.createOrder(eq(USER_ID), any(OrderRequestDto.class), nullable(String.class)))
                 .thenReturn(sampleOrder("order-1", OrderStatus.PENDING));
 
         mockMvc.perform(post("/customer/orders")
@@ -94,7 +94,7 @@ class CustomerOrderControllerTest extends AbstractControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
 
-        verify(orderService, never()).createOrder(any(), any());
+        verify(orderService, never()).createOrder(any(), any(), any());
     }
 
     @Test
