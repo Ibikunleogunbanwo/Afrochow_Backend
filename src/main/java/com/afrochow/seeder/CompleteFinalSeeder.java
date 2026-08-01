@@ -24,7 +24,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -47,16 +47,16 @@ import java.util.*;
  * - Products created via vendor.addProduct() (not direct productRepository.save()) to maintain
  *   the bidirectional relationship consistently with the service layer.
  *
- * - @Profile("!prod") added once real vendors started registering: its only previous
- *   safeguard was "skip if vendor_profile/customer_profile already have rows", which is a
- *   one-shot gate, not an environment gate. If production's tables were ever emptied (a bad
- *   migration, a restore, an incident), this would have silently reseeded 20 fake vendors and
+ * - Runtime seeding is opt-in via app.seed.enabled. Its original safeguard was
+ *   "skip if vendor_profile/customer_profile already have rows", which is a one-shot gate,
+ *   not an environment gate. If production's tables were ever emptied (a bad migration,
+ *   a restore, an incident), this would have silently reseeded 20 fake vendors and
  *   10 fake customers straight into prod. Every row it creates is also explicitly flagged
  *   isSeedData=true so it stays identifiable even if this class runs again in dev/test.
  */
 @Component
 @Order(100)
-@Profile("!prod")
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 public class CompleteFinalSeeder implements CommandLineRunner {
