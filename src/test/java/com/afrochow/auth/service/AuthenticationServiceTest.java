@@ -1,6 +1,7 @@
 package com.afrochow.auth.service;
 
 import com.afrochow.address.dto.AddressRequestDto;
+import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.admin.repository.AdminProfileRepository;
 import com.afrochow.auth.dto.ForgotPasswordRequestDto;
@@ -11,6 +12,7 @@ import com.afrochow.auth.dto.ResetPasswordRequestDto;
 import com.afrochow.common.enums.AuthProvider;
 import com.afrochow.common.enums.Province;
 import com.afrochow.common.enums.Role;
+import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.common.exceptions.AccountLockedException;
 import com.afrochow.common.exceptions.CustomerWaitlistModeException;
 import com.afrochow.common.exceptions.EmailAlreadyExistsException;
@@ -36,6 +38,7 @@ import com.afrochow.security.model.RefreshToken;
 import com.afrochow.security.repository.PasswordResetTokenRepository;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
+import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -55,6 +58,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -399,6 +403,48 @@ class AuthenticationServiceTest {
         assertThat(user.getEmailVerified()).isTrue();
         assertThat(token.getIsUsed()).isTrue();
         verify(outboxEventService).userRegistered("CUS123", "customer@example.com", "Ade", "CUSTOMER");
+    }
+
+    @Test
+    void verifyEmail_vendorWithCompleteProfile_advancesToPendingReview() {
+        User vendorUser = User.builder()
+                .userId(7L)
+                .publicUserId("VEN123")
+                .email("vendor@example.com")
+                .firstName("Vendor")
+                .role(Role.VENDOR)
+                .emailVerified(false)
+                .build();
+        VendorProfile vendorProfile = VendorProfile.builder()
+                .user(vendorUser)
+                .restaurantName("Vendor Kitchen")
+                .storeCategory("West African")
+                .logoUrl("https://cdn.example.com/logo.png")
+                .offersPickup(true)
+                .address(Address.builder()
+                        .addressLine("123 Main St")
+                        .city("Calgary")
+                        .province(Province.AB)
+                        .postalCode("T2P1J9")
+                        .build())
+                .vendorStatus(VendorStatus.PENDING_PROFILE)
+                .build();
+        vendorProfile.setOperatingHours(Map.of(
+                "monday", new VendorProfile.DayHours(true, "09:00", "17:00")));
+        vendorUser.setVendorProfile(vendorProfile);
+
+        EmailVerificationToken token = EmailVerificationToken.builder()
+                .tokenId(1L).token("123456").user(vendorUser)
+                .expiresAt(Instant.now().plusSeconds(3600)).isUsed(false).build();
+        when(emailVerificationTokenRepository.findValidToken(eq("123456"), eq("vendor@example.com"), any(Instant.class)))
+                .thenReturn(Optional.of(token));
+
+        authenticationService.verifyEmail("vendor@example.com", "123456");
+
+        assertThat(vendorUser.getEmailVerified()).isTrue();
+        assertThat(vendorProfile.getVendorStatus()).isEqualTo(VendorStatus.PENDING_REVIEW);
+        verify(vendorProfileRepository).save(vendorProfile);
+        verify(outboxEventService).userRegistered("VEN123", "vendor@example.com", "Vendor", "VENDOR");
     }
 
     @Test

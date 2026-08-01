@@ -47,6 +47,7 @@ class AdminVendorManagementControllerTest extends AbstractControllerTest {
                 .email("owner@afrochow.com")
                 .firstName("Ada")
                 .isActive(true)
+                .emailVerified(true)
                 .build();
     }
 
@@ -71,12 +72,17 @@ class AdminVendorManagementControllerTest extends AbstractControllerTest {
 
     @Test
     void getPendingVendors_returns200() throws Exception {
+        VendorProfile verifiedOwnerVendor = sampleVendor(VendorStatus.PENDING_REVIEW);
+        VendorProfile unverifiedOwnerVendor = sampleVendor(VendorStatus.PENDING_REVIEW);
+        unverifiedOwnerVendor.getUser().setEmailVerified(false);
+
         when(vendorProfileRepository.findByVendorStatus(VendorStatus.PENDING_REVIEW))
-                .thenReturn(List.of(sampleVendor(VendorStatus.PENDING_REVIEW)));
+                .thenReturn(List.of(verifiedOwnerVendor, unverifiedOwnerVendor));
 
         mockMvc.perform(get("/admin/vendors/pending"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(1));
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].publicVendorId").value("vendor-1"));
     }
 
     @Test
@@ -159,6 +165,19 @@ class AdminVendorManagementControllerTest extends AbstractControllerTest {
     }
 
     @Test
+    void approveProvisional_unverifiedOwnerEmail_returns400() throws Exception {
+        VendorProfile vendor = sampleVendor(VendorStatus.PENDING_REVIEW);
+        vendor.getUser().setEmailVerified(false);
+        when(vendorProfileRepository.findByPublicVendorId("vendor-1")).thenReturn(Optional.of(vendor));
+
+        mockMvc.perform(patch("/admin/vendors/{publicVendorId}/approve-provisional", "vendor-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Vendor owner must verify their email before admin approval."));
+
+        verify(vendorProfileRepository, never()).save(any());
+    }
+
+    @Test
     void verifyCertAndPromote_returns200() throws Exception {
         VendorProfile vendor = sampleVendor(VendorStatus.PROVISIONAL);
         vendor.setFoodHandlingCertUrl("https://certs.afrochow.com/cert.pdf");
@@ -197,6 +216,20 @@ class AdminVendorManagementControllerTest extends AbstractControllerTest {
                         .with(authenticatedAsPrincipal(User.builder().publicUserId("admin-1").build(), "ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.vendorStatus").value("VERIFIED"));
+    }
+
+    @Test
+    void verifyVendor_unverifiedOwnerEmail_returns400() throws Exception {
+        VendorProfile vendor = sampleVendor(VendorStatus.PENDING_REVIEW);
+        vendor.getUser().setEmailVerified(false);
+        when(vendorProfileRepository.findByPublicVendorId("vendor-1")).thenReturn(Optional.of(vendor));
+
+        mockMvc.perform(patch("/admin/vendors/{publicVendorId}/verify", "vendor-1")
+                        .with(authenticatedAsPrincipal(User.builder().publicUserId("admin-1").build(), "ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Vendor owner must verify their email before admin approval."));
+
+        verify(vendorProfileRepository, never()).save(any());
     }
 
     @Test

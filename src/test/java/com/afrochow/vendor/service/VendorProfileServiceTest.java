@@ -58,7 +58,7 @@ class VendorProfileServiceTest {
     @BeforeEach
     void setUp() {
         vendorUser = User.builder().userId(10L).username("jollofhouse")
-                .publicUserId("USR10").role(Role.VENDOR).build();
+                .publicUserId("USR10").role(Role.VENDOR).emailVerified(true).build();
         address = Address.builder().publicAddressId("ADDR1")
                 .addressLine("123 Main St").city("Calgary").province(Province.AB)
                 .postalCode("T2P1J9").build();
@@ -243,6 +243,23 @@ class VendorProfileServiceTest {
         assertThat(vendorProfile.getVendorStatus()).isEqualTo(VendorStatus.PENDING_PROFILE);
     }
 
+    @Test
+    void updateProfile_completeButEmailUnverified_staysPendingProfile() {
+        vendorUser.setEmailVerified(false);
+        vendorProfile.setStoreCategory("West African");
+        vendorProfile.setLogoUrl("https://cdn.example.com/logo.png");
+        vendorProfile.setOffersPickup(true);
+        vendorProfile.setOperatingHours(oneOpenDay());
+        when(userRepository.findById(10L)).thenReturn(Optional.of(vendorUser));
+
+        vendorProfileService.updateProfile(10L, VendorProfileUpdateRequestDto.builder()
+                .description("Complete, waiting for email").build());
+
+        assertThat(vendorProfile.getVendorStatus()).isEqualTo(VendorStatus.PENDING_PROFILE);
+        assertThat(vendorProfile.getIsActive()).isFalse();
+        assertThat(vendorProfile.getIsVerified()).isFalse();
+    }
+
     // ========== updateAddress ==========
 
     @Test
@@ -410,6 +427,20 @@ class VendorProfileServiceTest {
         vendorProfileService.resubmitForReview(10L);
 
         assertThat(vendorProfile.getVendorStatus()).isEqualTo(VendorStatus.PENDING_REVIEW);
+    }
+
+    @Test
+    void resubmitForReview_unverifiedEmail_throwsIllegalState() {
+        vendorUser.setEmailVerified(false);
+        vendorProfile.setStoreCategory("West African");
+        vendorProfile.setLogoUrl("https://cdn.example.com/logo.png");
+        vendorProfile.setOffersDelivery(true);
+        vendorProfile.setOperatingHours(oneOpenDay());
+        when(userRepository.findById(10L)).thenReturn(Optional.of(vendorUser));
+
+        assertThatThrownBy(() -> vendorProfileService.resubmitForReview(10L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("verify your email");
     }
 
     @Test
