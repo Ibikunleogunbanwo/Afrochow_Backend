@@ -55,6 +55,7 @@ public class AdminVendorManagementController {
         List<VendorSummaryDto> vendors = vendorProfileRepository
                 .findByVendorStatus(VendorStatus.PENDING_REVIEW)
                 .stream()
+                .filter(this::hasVerifiedOwnerEmail)
                 .map(this::toSummary)
                 .toList();
         return ResponseEntity.ok(ApiResponse.success("Pending vendors retrieved", vendors));
@@ -121,6 +122,11 @@ public class AdminVendorManagementController {
                     .message("Vendor must be in PENDING_REVIEW to approve provisionally. Current: "
                              + vendor.getVendorStatus())
                     .build());
+        }
+
+        ResponseEntity<ApiResponse<VendorSummaryDto>> emailGuard = requireVerifiedOwnerEmail(vendor);
+        if (emailGuard != null) {
+            return emailGuard;
         }
 
         vendor.setVendorStatus(VendorStatus.PROVISIONAL);
@@ -207,6 +213,12 @@ public class AdminVendorManagementController {
             @AuthenticationPrincipal CustomUserDetails adminDetails) {
 
         VendorProfile vendor = getVendor(publicVendorId);
+
+        ResponseEntity<ApiResponse<VendorSummaryDto>> emailGuard = requireVerifiedOwnerEmail(vendor);
+        if (emailGuard != null) {
+            return emailGuard;
+        }
+
         vendor.setVendorStatus(VendorStatus.VERIFIED);
         vendor.setVerifiedAt(LocalDateTime.now());
         vendor.setIsVerified(true);
@@ -406,6 +418,21 @@ public class AdminVendorManagementController {
         return vendorProfileRepository.findByPublicVendorId(publicVendorId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Vendor not found with ID: " + publicVendorId));
+    }
+
+    private boolean hasVerifiedOwnerEmail(VendorProfile vendor) {
+        return vendor.getUser() != null && Boolean.TRUE.equals(vendor.getUser().getEmailVerified());
+    }
+
+    private ResponseEntity<ApiResponse<VendorSummaryDto>> requireVerifiedOwnerEmail(VendorProfile vendor) {
+        if (hasVerifiedOwnerEmail(vendor)) {
+            return null;
+        }
+
+        return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                .success(false)
+                .message("Vendor owner must verify their email before admin approval.")
+                .build());
     }
 
     private VendorSummaryDto toSummary(VendorProfile vendor) {

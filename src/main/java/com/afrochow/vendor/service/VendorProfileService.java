@@ -131,12 +131,18 @@ public class VendorProfileService {
         updateIfNotNull(request.getEstimatedDeliveryMinutes(), vendorProfile::setEstimatedDeliveryMinutes);
         updateIfNotNull(request.getMaxDeliveryDistanceKm(), vendorProfile::setMaxDeliveryDistanceKm);
 
-        // Auto-advance: PENDING_PROFILE → PENDING_REVIEW when profile is complete
+        // Auto-advance only after email verification. Admin review should never
+        // contain vendors whose owner email is still unverified.
         if (status == VendorStatus.PENDING_PROFILE && isProfileComplete(vendorProfile)) {
-            vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);
-            // Keep deprecated booleans in sync
-            vendorProfile.setIsActive(true);
-            vendorProfile.setIsVerified(false);
+            if (Boolean.TRUE.equals(vendorProfile.getUser().getEmailVerified())) {
+                vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);
+                // Keep deprecated booleans in sync
+                vendorProfile.setIsActive(true);
+                vendorProfile.setIsVerified(false);
+            } else {
+                vendorProfile.setIsActive(false);
+                vendorProfile.setIsVerified(false);
+            }
         }
 
         vendorProfileRepository.save(vendorProfile);
@@ -285,6 +291,11 @@ public class VendorProfileService {
             throw new IllegalStateException(
                     "Profile is incomplete. Please fill in your restaurant name, store category, " +
                     "logo, service options, address, and operating hours before submitting.");
+        }
+
+        if (!Boolean.TRUE.equals(vendorProfile.getUser().getEmailVerified())) {
+            throw new IllegalStateException(
+                    "Please verify your email before submitting your vendor profile for review.");
         }
 
         vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);

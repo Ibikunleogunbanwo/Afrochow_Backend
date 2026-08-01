@@ -558,6 +558,7 @@ public class AuthenticationService {
 
         User user = verificationToken.getUser();
         user.setEmailVerified(true);
+        advanceVerifiedVendorProfileToReview(user);
 
         outboxEventService.userRegistered(
                 user.getPublicUserId(), user.getEmail(),
@@ -571,6 +572,21 @@ public class AuthenticationService {
 
         log.info("Email verified for user: {}", user.getPublicUserId());
         return "Email verified successfully. You can now login to your account.";
+    }
+
+    private void advanceVerifiedVendorProfileToReview(User user) {
+        if (!user.isVendor() || user.getVendorProfile() == null) {
+            return;
+        }
+
+        VendorProfile vendorProfile = user.getVendorProfile();
+        if (vendorProfile.getVendorStatus() == VendorStatus.PENDING_PROFILE
+                && isVendorProfileComplete(vendorProfile)) {
+            vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);
+            vendorProfile.setIsActive(true);
+            vendorProfile.setIsVerified(false);
+            vendorProfileRepository.save(vendorProfile);
+        }
     }
 
     /**
@@ -734,7 +750,7 @@ public class AuthenticationService {
                 .businessLicenseUrl(request.getBusinessLicenseUrl())
                 .taxId(request.getTaxId())
                 .isVerified(false)
-                .isActive(true)
+                .isActive(false)
                 .offersDelivery(request.getOffersDelivery())
                 .offersPickup(request.getOffersPickup())
                 .preparationTime(request.getPreparationTime())
@@ -748,13 +764,8 @@ public class AuthenticationService {
 
         vendorProfile.setOperatingHours(operatingHours);
 
-        // Auto-advance: if all required profile fields were submitted during
-        // registration, move straight to PENDING_REVIEW so the vendor appears
-        // in the admin approval queue immediately — no dashboard visit required.
-        // This mirrors the same check in VendorProfileService.updateProfile().
-        if (isVendorProfileComplete(vendorProfile)) {
-            vendorProfile.setVendorStatus(VendorStatus.PENDING_REVIEW);
-        }
+        // Email verification gates admin review. A complete registration stays
+        // PENDING_PROFILE until verifyEmail() marks the owner email as verified.
         // Otherwise the @Builder.Default leaves it at PENDING_PROFILE.
 
         user.setVendorProfile(vendorProfile);
