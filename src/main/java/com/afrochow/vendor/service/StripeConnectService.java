@@ -9,6 +9,7 @@ import com.stripe.param.LoginLinkCreateOnAccountParams;
 import com.stripe.model.AccountLink;
 import com.stripe.param.AccountCreateParams;
 import com.stripe.param.AccountLinkCreateParams;
+import com.stripe.param.AccountUpdateParams;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,8 +33,8 @@ public class StripeConnectService {
 
     private final VendorProfileRepository vendorProfileRepository;
 
-    @Value("${app.base-url:http://localhost:3000}")
-    private String appBaseUrl;
+    @Value("${app.frontend.url:http://localhost:3000}")
+    private String frontendUrl;
 
     /**
      * Creates a Stripe Express account for the vendor (if they don't already have one)
@@ -81,6 +82,9 @@ public class StripeConnectService {
                         .setBusinessType(AccountCreateParams.BusinessType.INDIVIDUAL)
                         .setIndividual(individual.build())
                         .setCapabilities(AccountCreateParams.Capabilities.builder()
+                                .setCardPayments(AccountCreateParams.Capabilities.CardPayments.builder()
+                                        .setRequested(true)
+                                        .build())
                                 .setTransfers(AccountCreateParams.Capabilities.Transfers.builder()
                                         .setRequested(true)
                                         .build())
@@ -89,7 +93,7 @@ public class StripeConnectService {
                         .putMetadata("publicVendorId", vendor.getPublicVendorId())
                         .setBusinessProfile(AccountCreateParams.BusinessProfile.builder()
                                 .setName(vendor.getRestaurantName())
-                                .setUrl(appBaseUrl + "/restaurant/" + vendor.getPublicVendorId())
+                                .setUrl(frontendUrl + "/restaurant/" + vendor.getPublicVendorId())
                                 .build())
                         .build();
 
@@ -97,11 +101,13 @@ public class StripeConnectService {
                 stripeAccountId = account.getId();
                 vendor.setStripeAccountId(stripeAccountId);
                 vendorProfileRepository.save(vendor);
+            } else {
+                ensureRequiredCapabilities(stripeAccountId);
             }
 
             return generateOnboardingLink(stripeAccountId);
         } catch (StripeException e) {
-            throw new RuntimeException("Failed to create Stripe Connect account: " + e.getMessage(), e);
+            throw new IllegalStateException("Could not start Stripe onboarding: " + stripeMessage(e), e);
         }
     }
 
@@ -112,13 +118,28 @@ public class StripeConnectService {
     public String generateOnboardingLink(String stripeAccountId) throws StripeException {
         AccountLinkCreateParams params = AccountLinkCreateParams.builder()
                 .setAccount(stripeAccountId)
-                .setRefreshUrl(appBaseUrl + "/vendor/profile?stripe=refresh")
-                .setReturnUrl(appBaseUrl + "/vendor/profile?stripe=return")
+                .setRefreshUrl(frontendUrl + "/vendor/profile?stripe=refresh")
+                .setReturnUrl(frontendUrl + "/vendor/profile?stripe=return")
                 .setType(AccountLinkCreateParams.Type.ACCOUNT_ONBOARDING)
                 .build();
 
         AccountLink link = AccountLink.create(params);
         return link.getUrl();
+    }
+
+    private void ensureRequiredCapabilities(String stripeAccountId) throws StripeException {
+        Account account = Account.retrieve(stripeAccountId);
+        AccountUpdateParams params = AccountUpdateParams.builder()
+                .setCapabilities(AccountUpdateParams.Capabilities.builder()
+                        .setCardPayments(AccountUpdateParams.Capabilities.CardPayments.builder()
+                                .setRequested(true)
+                                .build())
+                        .setTransfers(AccountUpdateParams.Capabilities.Transfers.builder()
+                                .setRequested(true)
+                                .build())
+                        .build())
+                .build();
+        account.update(params);
     }
 
     /**
@@ -142,8 +163,16 @@ public class StripeConnectService {
             );
             return link.getUrl();
         } catch (StripeException e) {
-            throw new RuntimeException("Failed to generate Stripe dashboard link: " + e.getMessage(), e);
+            throw new IllegalStateException("Could not open Stripe dashboard: " + stripeMessage(e), e);
         }
+    }
+
+    private String stripeMessage(StripeException e) {
+        String message = e.getMessage();
+        if (message == null || message.isBlank()) {
+            return "Stripe could not process this request. Please try again.";
+        }
+        return message.length() <= 220 ? message : message.substring(0, 217) + "...";
     }
 
     /**
