@@ -9,9 +9,9 @@ package com.afrochow.common.enums;
  *       │  (vendor completes profile + address)
  *       ▼
  *   PENDING_REVIEW
- *       │  (admin approves provisionally — cert not yet uploaded)
+ *       │  (admin approves provisionally — Stripe Connect is payout-ready)
  *       ▼
- *   PROVISIONAL ◄─── (cert upload pending; limited order cap applies)
+ *   PROVISIONAL ◄─── (live while compliance documents are collected)
  *       │  (food handling cert uploaded + admin marks cert verified)
  *       ▼
  *   VERIFIED
@@ -39,15 +39,13 @@ public enum VendorStatus {
     PENDING_REVIEW,
 
     /**
-     * Vendor has been provisionally approved by an admin and can receive orders,
-     * but has not yet uploaded or had their food handling certificate verified.
-     * A daily order cap may be applied at this stage.
+     * Vendor has been provisionally approved by an admin and can receive orders.
+     * Compliance documents can still be collected after launch.
      */
     PROVISIONAL,
 
     /**
      * Vendor is fully verified — profile approved and food handling certificate confirmed.
-     * Full platform access with no order caps.
      */
     VERIFIED,
 

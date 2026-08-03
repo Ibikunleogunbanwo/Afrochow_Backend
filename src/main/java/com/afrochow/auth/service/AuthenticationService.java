@@ -786,8 +786,16 @@ public class AuthenticationService {
                 && profile.getLogoUrl()        != null && !profile.getLogoUrl().isBlank()
                 && (Boolean.TRUE.equals(profile.getOffersDelivery())
                         || Boolean.TRUE.equals(profile.getOffersPickup()))
-                && profile.getAddress()  != null
+                && hasCompleteAddress(profile.getAddress())
                 && profile.hasOperatingDays();
+    }
+
+    private boolean hasCompleteAddress(Address address) {
+        return address != null
+                && address.getAddressLine() != null && !address.getAddressLine().isBlank()
+                && address.getCity() != null && !address.getCity().isBlank()
+                && address.getProvince() != null
+                && address.getPostalCode() != null && !address.getPostalCode().isBlank();
     }
 
     /**

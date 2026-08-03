@@ -470,7 +470,6 @@ public class VendorProfile {
 
     /**
      * Returns true if the vendor is in a provisional state — live but cert not yet verified.
-     * A daily order cap should be enforced for provisional vendors.
      */
     @Transient
     public boolean isProvisional() {
