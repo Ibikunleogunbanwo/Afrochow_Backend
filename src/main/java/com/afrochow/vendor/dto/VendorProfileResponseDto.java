@@ -50,7 +50,6 @@ public class VendorProfileResponseDto {
 
     /**
      * True if the vendor is live but food handling cert is not yet verified.
-     * When true, a daily order cap applies.
      */
     private Boolean isProvisional;
 

@@ -58,6 +58,10 @@ class AdminVendorManagementControllerTest extends AbstractControllerTest {
                 .storeCategory("Nigerian")
                 .vendorStatus(status)
                 .isActive(status == VendorStatus.VERIFIED || status == VendorStatus.PROVISIONAL)
+                .stripeAccountId("acct_123")
+                .stripeOnboardingComplete(true)
+                .stripeChargesEnabled(true)
+                .stripePayoutsEnabled(true)
                 .build();
     }
 
@@ -173,6 +177,19 @@ class AdminVendorManagementControllerTest extends AbstractControllerTest {
         mockMvc.perform(patch("/admin/vendors/{publicVendorId}/approve-provisional", "vendor-1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Vendor owner must verify their email before admin approval."));
+
+        verify(vendorProfileRepository, never()).save(any());
+    }
+
+    @Test
+    void approveProvisional_stripeNotReady_returns400() throws Exception {
+        VendorProfile vendor = sampleVendor(VendorStatus.PENDING_REVIEW);
+        vendor.setStripeAccountId(null);
+        when(vendorProfileRepository.findByPublicVendorId("vendor-1")).thenReturn(Optional.of(vendor));
+
+        mockMvc.perform(patch("/admin/vendors/{publicVendorId}/approve-provisional", "vendor-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Vendor must complete Stripe Connect onboarding before admin approval."));
 
         verify(vendorProfileRepository, never()).save(any());
     }

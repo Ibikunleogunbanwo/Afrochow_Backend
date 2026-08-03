@@ -512,7 +512,7 @@ public class EmailService {
 
     /**
      * Send provisional approval email — vendor is now live but must upload
-     * their food handling certificate for full verification.
+     * compliance documents for full verification.
      */
     public void sendVendorProvisionalApprovalEmail(String toEmail, String firstName, String restaurantName) {
         if (!emailEnabled) {

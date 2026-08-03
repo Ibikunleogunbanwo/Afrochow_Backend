@@ -110,7 +110,7 @@ public class AdminVendorManagementController {
     @PatchMapping("/{publicVendorId}/approve-provisional")
     @Operation(summary = "Approve vendor provisionally",
                description = "Move a PENDING_REVIEW vendor to PROVISIONAL. " +
-                             "Vendor goes live; cert upload still required for full verification.")
+                             "Vendor goes live once Stripe Connect is payout-ready; documents can follow.")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> approveProvisional(
             @PathVariable String publicVendorId) {
 
@@ -129,6 +129,11 @@ public class AdminVendorManagementController {
             return emailGuard;
         }
 
+        ResponseEntity<ApiResponse<VendorSummaryDto>> payoutGuard = requireStripePayoutReady(vendor);
+        if (payoutGuard != null) {
+            return payoutGuard;
+        }
+
         vendor.setVendorStatus(VendorStatus.PROVISIONAL);
         vendor.setIsActive(true);
         vendor.setIsVerified(false);
@@ -136,7 +141,7 @@ public class AdminVendorManagementController {
         vendorProfileRepository.save(vendor);
 
         if (vendor.getUser() != null) {
-            // Fire the provisional event — sends the provisional email (cert upload required)
+            // Fire the provisional event — sends the provisional email (documents still required)
             outboxEventService.vendorProvisional(
                     vendor.getUser().getPublicUserId(),
                     vendor.getUser().getEmail(),
@@ -207,7 +212,8 @@ public class AdminVendorManagementController {
     @PatchMapping("/{publicVendorId}/verify")
     @Operation(summary = "Fully verify vendor (bypass cert)",
                description = "Directly promote a vendor to VERIFIED without requiring cert upload. " +
-                             "Use only in exceptional circumstances (e.g. manual offline verification).")
+                             "Use only in exceptional circumstances (e.g. manual offline verification). " +
+                             "Stripe Connect must still be payout-ready before activation.")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> verifyVendor(
             @PathVariable String publicVendorId,
             @AuthenticationPrincipal CustomUserDetails adminDetails) {
@@ -217,6 +223,11 @@ public class AdminVendorManagementController {
         ResponseEntity<ApiResponse<VendorSummaryDto>> emailGuard = requireVerifiedOwnerEmail(vendor);
         if (emailGuard != null) {
             return emailGuard;
+        }
+
+        ResponseEntity<ApiResponse<VendorSummaryDto>> payoutGuard = requireStripePayoutReady(vendor);
+        if (payoutGuard != null) {
+            return payoutGuard;
         }
 
         vendor.setVendorStatus(VendorStatus.VERIFIED);
@@ -400,15 +411,23 @@ public class AdminVendorManagementController {
         }
 
         boolean onboardingComplete = Boolean.TRUE.equals(stripeAccount.getDetailsSubmitted());
+        boolean chargesEnabled = Boolean.TRUE.equals(stripeAccount.getChargesEnabled());
+        boolean payoutsEnabled = Boolean.TRUE.equals(stripeAccount.getPayoutsEnabled());
+        String disabledReason = stripeAccount.getRequirements() != null
+                ? stripeAccount.getRequirements().getDisabledReason()
+                : null;
 
         VendorProfile vendor = getVendor(publicVendorId);
         vendor.setStripeAccountId(accountId.trim());
         vendor.setStripeOnboardingComplete(onboardingComplete);
+        vendor.setStripeChargesEnabled(chargesEnabled);
+        vendor.setStripePayoutsEnabled(payoutsEnabled);
+        vendor.setStripeRequirementsDisabledReason(disabledReason);
         vendorProfileRepository.save(vendor);
 
-        String msg = onboardingComplete
-                ? "Stripe account linked and marked as fully onboarded"
-                : "Stripe account linked — onboarding not yet complete on Stripe";
+        String msg = vendor.isPayoutReady()
+                ? "Stripe account linked and payout-ready"
+                : "Stripe account linked — Stripe still requires setup before the vendor can take paid orders";
         return ResponseEntity.ok(ApiResponse.success(msg, toSummary(vendor)));
     }
 
@@ -435,9 +454,25 @@ public class AdminVendorManagementController {
                 .build());
     }
 
+    private ResponseEntity<ApiResponse<VendorSummaryDto>> requireStripePayoutReady(VendorProfile vendor) {
+        if (vendor.isPayoutReady()) {
+            return null;
+        }
+
+        return ResponseEntity.badRequest().body(ApiResponse.<VendorSummaryDto>builder()
+                .success(false)
+                .message("Vendor must complete Stripe Connect onboarding before admin approval.")
+                .build());
+    }
+
     private VendorSummaryDto toSummary(VendorProfile vendor) {
+        com.afrochow.user.model.User owner = vendor.getUser();
         return VendorSummaryDto.builder()
-                .publicVendorId(vendor.getUser() != null ? vendor.getUser().getPublicUserId() : null)
+                .publicVendorId(owner != null ? owner.getPublicUserId() : null)
+                .firstName(owner != null ? owner.getFirstName() : null)
+                .lastName(owner != null ? owner.getLastName() : null)
+                .email(owner != null ? owner.getEmail() : null)
+                .phone(owner != null ? owner.getPhone() : null)
                 .restaurantName(vendor.getRestaurantName())
                 .storeCategory(vendor.getStoreCategory())
                 .vendorStatus(vendor.getVendorStatus())
@@ -524,6 +559,10 @@ public class AdminVendorManagementController {
     @lombok.Builder
     public static class VendorSummaryDto {
         private String publicVendorId;
+        private String firstName;
+        private String lastName;
+        private String email;
+        private String phone;
         private String restaurantName;
         private String storeCategory;
         private VendorStatus vendorStatus;
