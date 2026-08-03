@@ -172,6 +172,9 @@ public class StripeConnectService {
         if (message == null || message.isBlank()) {
             return "Stripe could not process this request. Please try again.";
         }
+        if (message.contains("signed up for Connect")) {
+            return "Afrochow's Stripe Connect setup is not enabled yet. Please contact support.";
+        }
         return message.length() <= 220 ? message : message.substring(0, 217) + "...";
     }
 
