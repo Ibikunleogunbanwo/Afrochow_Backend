@@ -378,7 +378,7 @@ class VendorProfileServiceTest {
                 .certNumber("FS-123").issuingBody("FoodSafe BC")
                 .certExpiry(LocalDateTime.now().plusYears(2)).build();
         when(userRepository.findById(10L)).thenReturn(Optional.of(vendorUser));
-        when(imageUploadService.uploadImageForRegistrationAndGetUrl(file, "vendors/certifications"))
+        when(imageUploadService.uploadCertificateForRegistrationAndGetUrl(file, "vendors/certifications"))
                 .thenReturn("https://cdn.example.com/cert.pdf");
         when(vendorProfileRepository.save(any(VendorProfile.class))).thenAnswer(inv -> inv.getArgument(0));
 

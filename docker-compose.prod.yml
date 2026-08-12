@@ -163,7 +163,15 @@ services:
       KAFKA_SECURITY_PROTOCOL: PLAINTEXT
       SERVER_PORT: 8081
       APP_UPLOAD_DIR: /opt/afrochow/uploads
-      JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1536m}
+      # Heap capped well below mem_limit (2g default) to leave headroom for metaspace,
+      # direct memory (Kafka/Netty NIO buffers, JDBC driver), thread stacks, and JIT
+      # code cache — none of which count against -Xmx. Without these caps, non-heap
+      # growth can push total RSS past the cgroup limit and get the container
+      # SIGKILLed by the OOM killer, which looks like a random crash/leak rather
+      # than a clear OutOfMemoryError in the logs. ExitOnOutOfMemoryError makes an
+      # actual OOM fail fast and cleanly instead of limping along in a bad state —
+      # `restart: unless-stopped` above then brings it back up.
+      JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=256m -XX:ReservedCodeCacheSize=128m -XX:+ExitOnOutOfMemoryError}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}

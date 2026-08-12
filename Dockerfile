@@ -20,5 +20,5 @@ RUN mkdir -p /opt/afrochow/uploads && chown -R afrochow:afrochow /opt/afrochow
 USER afrochow
 EXPOSE 8081
 
-ENV JAVA_OPTS="-Xms256m -Xmx768m"
+ENV JAVA_OPTS="-Xms256m -Xmx768m -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=256m -XX:ReservedCodeCacheSize=128m -XX:+ExitOnOutOfMemoryError"
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /opt/afrochow/afrochow.jar"]

@@ -53,12 +53,24 @@ public class ImageUploadService {
             ".jpg", ".jpeg", ".png", ".gif", ".webp"
     );
 
+    // Certificate/document uploads (e.g. vendor food handling certificates) accept
+    // everything a regular image upload does, plus PDF, since compliance documents
+    // are commonly scanned or exported as PDF rather than a photo.
+    private static final Set<String> CERT_ALLOWED_MIME = Set.of(
+            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "application/pdf"
+    );
+
+    private static final Set<String> CERT_ALLOWED_EXTENSIONS = Set.of(
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"
+    );
+
     private static final Map<String, String> EXTENSION_TO_MIME = Map.of(
             ".jpg",  "image/jpeg",
             ".jpeg", "image/jpeg",
             ".png",  "image/png",
             ".gif",  "image/gif",
-            ".webp", "image/webp"
+            ".webp", "image/webp",
+            ".pdf",  "application/pdf"
     );
 
     private static final int  MAX_WIDTH        = 10000;
@@ -94,6 +106,28 @@ public class ImageUploadService {
 
     public String uploadImageForRegistrationAndGetUrl(MultipartFile file, String category) throws IOException {
         return uploadImageForRegistration(file, category);
+    }
+
+    /**
+     * Upload a compliance document (e.g. a vendor food handling certificate) with UUID filename.
+     * Accepts JPEG/PNG/GIF/WebP like a regular image upload, plus PDF, since certificates are
+     * commonly scanned or exported as PDF. Prod → Cloudinary. Dev → local filesystem.
+     */
+    public String uploadCertificateForRegistrationAndGetUrl(MultipartFile file, String category) throws IOException {
+        validateCategory(category);
+        byte[] fileBytes = validateCertificateFileAndGetBytes(file);
+        String uuid      = UUID.randomUUID().toString();
+
+        if (cloudinary != null) {
+            return uploadToCloudinary(fileBytes, category, uuid, false);
+        }
+
+        String extension = getValidatedExtension(file.getOriginalFilename(), CERT_ALLOWED_EXTENSIONS);
+        Path   uploadPath = prepareUploadPath(category);
+        String filename   = uuid + extension;
+        saveFile(uploadPath, filename, fileBytes);
+        log.info("Local certificate saved: {}/{}", category, filename);
+        return getImageUrl(category + "/" + filename);
     }
 
     /**
@@ -338,6 +372,55 @@ public class ImageUploadService {
         }
     }
 
+    /**
+     * Same checks as {@link #validateFileAndGetBytes}, but also accepts PDF for
+     * compliance-document uploads (food handling certificates). The actual file bytes,
+     * not just the declared content type or extension, decide whether a file is treated
+     * as a PDF or an image: dimension validation only applies to genuine raster images.
+     */
+    private byte[] validateCertificateFileAndGetBytes(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new ImageValidationException("File is empty");
+        }
+        if (file.getSize() > maxFileSize) {
+            throw new ImageValidationException("File size exceeds limit of " + (maxFileSize / 1024 / 1024) + "MB");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !CERT_ALLOWED_MIME.contains(contentType.toLowerCase())) {
+            throw new ImageValidationException("Invalid file type. Allowed types: JPEG, PNG, GIF, WebP, PDF");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename == null || originalFilename.isBlank()) {
+            throw new ImageValidationException("Invalid filename");
+        }
+
+        String extension = getExtension(originalFilename).toLowerCase();
+        if (!CERT_ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new ImageValidationException("Invalid file extension");
+        }
+
+        byte[] fileBytes = file.getBytes();
+        if (fileBytes.length < 5) {
+            throw new ImageValidationException("Invalid file");
+        }
+        if (isPDF(fileBytes)) {
+            // Valid PDF signature — no raster dimension check applies.
+            return fileBytes;
+        }
+        // Not a PDF: fall back to the same minimum-length guard the image-only path uses
+        // before touching any further signature bytes (isPNG/isWebP read up to index 11).
+        if (fileBytes.length < 12) {
+            throw new ImageValidationException("Invalid file");
+        }
+        if (isJPEG(fileBytes) || isPNG(fileBytes) || isGIF(fileBytes) || isWebP(fileBytes)) {
+            validateDimensions(fileBytes);
+            return fileBytes;
+        }
+        throw new ImageValidationException("Invalid file format. Allowed types: JPEG, PNG, GIF, WebP, PDF");
+    }
+
     private void validateDimensions(byte[] fileBytes) throws IOException {
         try (ByteArrayInputStream bais = new ByteArrayInputStream(fileBytes);
              ImageInputStream iis = ImageIO.createImageInputStream(bais)) {
@@ -380,6 +463,11 @@ public class ImageUploadService {
                 && h[8] == 0x57 && h[9] == 0x45 && h[10] == 0x42 && h[11] == 0x50;
     }
 
+    // PDF signature: "%PDF-" (0x25 0x50 0x44 0x46 0x2D)
+    private boolean isPDF(byte[] h) {
+        return h.length >= 5 && h[0] == 0x25 && h[1] == 0x50 && h[2] == 0x44 && h[3] == 0x46 && h[4] == 0x2D;
+    }
+
     private String getExtension(String filename) {
         if (filename == null) return "";
         int lastDot = filename.lastIndexOf('.');
@@ -387,8 +475,12 @@ public class ImageUploadService {
     }
 
     private String getValidatedExtension(String filename) {
+        return getValidatedExtension(filename, ALLOWED_EXTENSIONS);
+    }
+
+    private String getValidatedExtension(String filename, Set<String> allowedExtensions) {
         String ext = getExtension(filename);
-        if (!ALLOWED_EXTENSIONS.contains(ext)) throw new ImageValidationException("Invalid file extension");
+        if (!allowedExtensions.contains(ext)) throw new ImageValidationException("Invalid file extension");
         return ext;
     }
 
