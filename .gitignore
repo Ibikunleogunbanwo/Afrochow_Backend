@@ -64,6 +64,12 @@ uploads/
 
 # ===== LOCAL DOCS =====
 *.docx
+*.doc
+*.pptx
+
+# Personal job-application materials (resumes, cover letters, rendered
+# PDFs/screenshots) — unrelated to the app, never committed.
+job_applications/
 
 # ===== NODE / NEXT.JS =====
 node_modules/

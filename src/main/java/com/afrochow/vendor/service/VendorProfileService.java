@@ -241,7 +241,7 @@ public class VendorProfileService {
 
         String oldCertUrl = vendorProfile.getFoodHandlingCertUrl();
 
-        String certUrl = imageUploadService.uploadImageForRegistrationAndGetUrl(
+        String certUrl = imageUploadService.uploadCertificateForRegistrationAndGetUrl(
                 certFile, "vendors/certifications");
 
         vendorProfile.setFoodHandlingCertUrl(certUrl);
