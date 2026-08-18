@@ -1,6 +1,9 @@
 package com.afrochow.user.model;
 
 import com.afrochow.admin.model.AdminProfile;
+import com.afrochow.common.enums.AuthProvider;
+import com.afrochow.common.enums.Role;
+import com.afrochow.common.validation.PhoneUtils;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.notification.model.Notification;
 import com.afrochow.promotion.model.PromotionUsage;
@@ -9,20 +12,37 @@ import com.afrochow.security.model.EmailVerificationToken;
 import com.afrochow.security.model.PasswordResetToken;
 import com.afrochow.security.model.RefreshToken;
 import com.afrochow.vendor.model.VendorProfile;
-import com.afrochow.common.enums.AuthProvider;
-import com.afrochow.common.enums.Role;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.security.SecureRandom;
 
 @Entity
 @Table(name = "users", indexes = {
@@ -38,6 +58,15 @@ import java.security.SecureRandom;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString(exclude = {"customerProfile", "vendorProfile", "adminProfile", "reviews"})
 public class User {
+
+    /**
+     * Safe alphabet for generated IDs; excludes visually ambiguous characters
+     * such as 0/O and I/1.
+     */
+    private static final String ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int ID_LENGTH = 8;
+    private static final int USERNAME_BASE_MAX_LENGTH = 16;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @EqualsAndHashCode.Include
     @Id
@@ -96,6 +125,7 @@ public class User {
 
     // Distinguishes demo/seed accounts (see CompleteFinalSeeder) from real
     // registered users. Real registration never sets this true.
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean isSeedData = false;
@@ -109,7 +139,8 @@ public class User {
 
     private LocalDateTime lastLoginAt;
 
-    // ===== PROFILE RELATIONSHIPS =====
+    // Profile relationships
+
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private CustomerProfile customerProfile;
 
@@ -143,35 +174,27 @@ public class User {
     @Builder.Default
     private List<PromotionUsage> promotionUsages = new ArrayList<>();
 
-    // ===== ID GENERATION =====
-
-    /**
-     * Safe alphabet for generated IDs — excludes visually ambiguous characters (0, O, I, 1).
-     * 32 characters → 32^8 ≈ 1 trillion unique combinations per role prefix.
-     */
-    private static final String ID_ALPHABET  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    private static final int    ID_LENGTH    = 8;
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-
-    private static String generateShortId() {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < ID_LENGTH; i++) {
-            sb.append(ID_ALPHABET.charAt(SECURE_RANDOM.nextInt(ID_ALPHABET.length())));
-        }
-        return sb.toString();
-    }
-
-    // ===== AUTO-GENERATE PUBLIC ID & USERNAME =====
     @PrePersist
     public void onPrePersist() {
         if (publicUserId == null) {
-            // e.g. CUS-X7MK2P4N, VEN-X7MK2P4N
             publicUserId = role.getPrefix() + "-" + generateShortId();
         }
 
         if (username == null || username.isBlank()) {
             username = generateUniqueUsername();
         }
+    }
+
+    // Domain state transitions
+
+    public void scheduleForDeletion() {
+        isActive = false;
+        scheduledForDeletionAt = LocalDateTime.now();
+    }
+
+    public void reactivate() {
+        isActive = true;
+        scheduledForDeletionAt = null;
     }
 
     private String generateUniqueUsername() {
@@ -183,27 +206,25 @@ public class User {
             base = base + "user";
         }
 
-        // Truncate base to 16 chars, then append 4 random digits (1000–9999).
-        // Total max length = 20 chars. Always exactly 4 digit suffix for readability.
-        String truncatedBase = base.substring(0, Math.min(base.length(), 16));
+        String truncatedBase = base.substring(0, Math.min(base.length(), USERNAME_BASE_MAX_LENGTH));
         int suffix = SECURE_RANDOM.nextInt(9000) + 1000;
         return truncatedBase + suffix;
     }
 
-    // ===== PHONE NORMALIZATION =====
-    public void setPhone(String phone) {
-        if (phone == null) {
-            this.phone = null;
-            return;
+    private static String generateShortId() {
+        StringBuilder id = new StringBuilder(ID_LENGTH);
+        for (int i = 0; i < ID_LENGTH; i++) {
+            id.append(ID_ALPHABET.charAt(SECURE_RANDOM.nextInt(ID_ALPHABET.length())));
         }
-        String digits = phone.replaceAll("[^0-9]", "");
-        if (digits.length() == 11 && digits.startsWith("1")) {
-            digits = digits.substring(1);
-        }
-        this.phone = digits;
+        return id.toString();
     }
 
-    // ===== HELPER METHODS =====
+    public void setPhone(String phone) {
+        this.phone = PhoneUtils.normalize(phone);
+    }
+
+    // Derived helpers
+
     @Transient
     public String getFullName() {
         return firstName + " " + lastName;
@@ -222,19 +243,5 @@ public class User {
     @Transient
     public boolean isAdmin() {
         return role == Role.ADMIN || role == Role.SUPERADMIN;
-    }
-
-    @Transient
-    public boolean isSuperAdmin() {
-        return role == Role.SUPERADMIN;
-    }
-
-    @Transient
-    public Object getActiveProfile() {
-        return switch (role) {
-            case CUSTOMER -> customerProfile;
-            case VENDOR -> vendorProfile;
-            case ADMIN, SUPERADMIN -> adminProfile;
-        };
     }
 }

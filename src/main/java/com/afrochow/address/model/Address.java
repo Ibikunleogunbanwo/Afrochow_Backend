@@ -1,14 +1,33 @@
 package com.afrochow.address.model;
 
-import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.common.enums.Province;
+import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.vendor.model.VendorProfile;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.UUID;
 
 @Entity
@@ -20,6 +39,9 @@ import java.util.UUID;
 @AllArgsConstructor
 @ToString(exclude = {"customerProfile", "vendor"})
 public class Address {
+
+    private static final String PUBLIC_ID_PREFIX = "ADDR-";
+    private static final String DEFAULT_COUNTRY = "Canada";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,13 +64,12 @@ public class Address {
 
     @Column(nullable = false, length = 50)
     @Builder.Default
-    private String country = "Canada";
+    private String country = DEFAULT_COUNTRY;
 
-    @Column
     private Double latitude;
 
-    @Column
     private Double longitude;
+
     @Builder.Default
     private Boolean defaultAddress = false;
 
@@ -58,20 +79,25 @@ public class Address {
     @Builder.Default
     private Boolean isSeedData = false;
 
-    // =================================================
-    // RELATIONSHIPS
-    // =================================================
+    // Relationships
+
+    /**
+     * Customer addresses are owned by the address table through
+     * address.customer_profile_id. A customer can have many addresses.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_profile_id")
     private CustomerProfile customerProfile;
 
-    @OneToOne(mappedBy = "address",
-            fetch = FetchType.LAZY)
+    /**
+     * Vendor addresses are owned from VendorProfile through vendor_profile.address_id.
+     * This side is read through mappedBy and does not create a vendor_id column here.
+     */
+    @OneToOne(mappedBy = "address", fetch = FetchType.LAZY)
     private VendorProfile vendor;
 
-    // =================================================
-    // TIMESTAMPS
-    // =================================================
+    // Timestamps
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -79,53 +105,59 @@ public class Address {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    // =================================================
-    // LIFECYCLE METHODS
-    // =================================================
+    // Lifecycle
+
     @PrePersist
     public void generatePublicId() {
-        if (this.publicAddressId == null) {
-            this.publicAddressId = "ADDR-" + UUID.randomUUID();
+        if (publicAddressId == null) {
+            publicAddressId = PUBLIC_ID_PREFIX + UUID.randomUUID();
         }
     }
 
-    // =================================================
-    // DERIVED PROPERTIES
-    // =================================================
+    // Derived properties
+
     @Transient
     public String getFullAddress() {
         return String.format(
                 "%s, %s, %s, %s",
-                addressLine != null ? addressLine : "",
-                city != null ? city : "",
-                postalCode != null ? postalCode : "",
-                country != null ? country : ""
+                valueOrEmpty(addressLine),
+                valueOrEmpty(city),
+                valueOrEmpty(postalCode),
+                valueOrEmpty(country)
         );
     }
 
     @Transient
     public String getFormattedAddress() {
         StringBuilder sb = new StringBuilder();
-        sb.append(addressLine).append(", ").append(city);
+        sb.append(valueOrEmpty(addressLine)).append(", ").append(valueOrEmpty(city));
         if (province != null) {
             sb.append(", ").append(province);
         }
-        sb.append(" ").append(postalCode).append(", ").append(country);
+        sb.append(" ").append(valueOrEmpty(postalCode)).append(", ").append(valueOrEmpty(country));
         return sb.toString();
     }
 
-    // =================================================
-    // CUSTOM SETTERS / BUILDER NORMALIZATION
-    // =================================================
+    // Normalization
+
     public void setPostalCode(String postalCode) {
-        this.postalCode = postalCode == null ? null : postalCode.toUpperCase().replace(" ", "");
+        this.postalCode = normalizePostalCode(postalCode);
     }
 
-    // Normalize postal code when using builder
     public static class AddressBuilder {
         public AddressBuilder postalCode(String postalCode) {
-            this.postalCode = postalCode == null ? null : postalCode.toUpperCase().replace(" ", "");
+            this.postalCode = normalizePostalCode(postalCode);
             return this;
         }
+    }
+
+    private static String normalizePostalCode(String postalCode) {
+        return postalCode == null
+                ? null
+                : postalCode.toUpperCase(Locale.ROOT).replace(" ", "");
+    }
+
+    private static String valueOrEmpty(String value) {
+        return value == null ? "" : value;
     }
 }

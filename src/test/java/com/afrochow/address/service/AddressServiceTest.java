@@ -2,6 +2,7 @@ package com.afrochow.address.service;
 
 import com.afrochow.address.dto.AddressRequestDto;
 import com.afrochow.address.dto.AddressResponseDto;
+import com.afrochow.address.mapper.AddressMapper;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.common.enums.Province;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -37,6 +39,7 @@ class AddressServiceTest {
     @Mock private GeocodingService geocodingService;
     @Mock private OutboxEventService outboxEventService;
     @Mock private VendorGeoIndexService vendorGeoIndexService;
+    @Spy private AddressMapper addressMapper;
 
     @InjectMocks private AddressService addressService;
 
@@ -166,7 +169,6 @@ class AddressServiceTest {
     @Test
     void updateAddress_addressLineChanged_firesGeocodeEvent() {
         when(addressRepository.findByPublicAddressId("ADDR1")).thenReturn(Optional.of(address));
-        when(addressRepository.findByCustomerProfileAndDefaultAddress(profile, true)).thenReturn(Optional.of(address));
         when(addressRepository.save(any(Address.class))).thenAnswer(inv -> inv.getArgument(0));
         AddressRequestDto request = AddressRequestDto.builder()
                 .addressLine("789 Changed Ave").city("Calgary").province(Province.AB)
@@ -180,7 +182,6 @@ class AddressServiceTest {
     @Test
     void updateAddress_noGeoRelevantChange_doesNotFireGeocodeEvent() {
         when(addressRepository.findByPublicAddressId("ADDR1")).thenReturn(Optional.of(address));
-        when(addressRepository.findByCustomerProfileAndDefaultAddress(profile, true)).thenReturn(Optional.of(address));
         when(addressRepository.save(any(Address.class))).thenAnswer(inv -> inv.getArgument(0));
         AddressRequestDto request = AddressRequestDto.builder()
                 .addressLine("123 Main St").city("Calgary").province(Province.AB)
@@ -189,6 +190,19 @@ class AddressServiceTest {
         addressService.updateAddress("CUS1", "ADDR1", request);
 
         verify(outboxEventService, never()).addressGeocodingRequested(any());
+    }
+
+    @Test
+    void updateAddress_unsetDefault_staysNonDefault() {
+        when(addressRepository.findByPublicAddressId("ADDR1")).thenReturn(Optional.of(address));
+        when(addressRepository.save(any(Address.class))).thenAnswer(inv -> inv.getArgument(0));
+        AddressRequestDto request = AddressRequestDto.builder()
+                .addressLine("123 Main St").city("Calgary").province(Province.AB)
+                .postalCode("T2P1J9").defaultAddress(false).build();
+
+        AddressResponseDto result = addressService.updateAddress("CUS1", "ADDR1", request);
+
+        assertThat(result.getDefaultAddress()).isFalse();
     }
 
     @Test

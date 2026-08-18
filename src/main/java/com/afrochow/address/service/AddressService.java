@@ -2,6 +2,7 @@ package com.afrochow.address.service;
 
 import com.afrochow.address.dto.AddressRequestDto;
 import com.afrochow.address.dto.AddressResponseDto;
+import com.afrochow.address.mapper.AddressMapper;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.customer.model.CustomerProfile;
@@ -17,56 +18,53 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Objects;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AddressService {
 
-    private final AddressRepository  addressRepository;
-    private final UserRepository     userRepository;
+    private final AddressRepository addressRepository;
+    private final UserRepository userRepository;
     private final GeocodingService geocodingService;
     private final OutboxEventService outboxEventService;
     private final VendorGeoIndexService vendorGeoIndexService;
+    private final AddressMapper addressMapper;
 
-    // ── Public methods ────────────────────────────────────────────────────────
+    // Customer address use cases
 
+    /**
+     * Returns every saved delivery address for the authenticated customer.
+     */
+    @Transactional(readOnly = true)
     public List<AddressResponseDto> getCustomerAddresses(String publicUserId) {
-        User user = getCustomerUser(publicUserId);
-        CustomerProfile profile = getCustomerProfile(user);
+        CustomerProfile profile = getCustomerProfile(getCustomerUser(publicUserId));
 
         return addressRepository.findByCustomerProfile(profile).stream()
-                .map(this::toResponseDto)
-                .collect(Collectors.toList());
+                .map(addressMapper::toResponseDto)
+                .toList();
     }
 
+    /**
+     * Returns one address after confirming it belongs to the authenticated customer.
+     */
+    @Transactional(readOnly = true)
     public AddressResponseDto getAddress(String publicUserId, String publicAddressId) {
         Address address = getAddressEntity(publicAddressId);
         assertAddressBelongsToUser(address, publicUserId);
-        return toResponseDto(address);
+        return addressMapper.toResponseDto(address);
     }
 
     @Transactional
     public AddressResponseDto addAddress(String publicUserId, AddressRequestDto request) {
-        User user = getCustomerUser(publicUserId);
-        CustomerProfile profile = getCustomerProfile(user);
+        CustomerProfile profile = getCustomerProfile(getCustomerUser(publicUserId));
+        Address address = buildAddress(request, profile);
 
-        Address address = Address.builder()
-                .addressLine(request.getAddressLine())
-                .city(request.getCity())
-                .province(request.getProvince())
-                .postalCode(request.getPostalCode())
-                .country(request.getCountry())
-                .defaultAddress(request.getDefaultAddress() != null
-                        ? request.getDefaultAddress() : false)
-                .customerProfile(profile)
-                .build();
-
-        handleDefaultAddress(profile, address);
+        handleDefaultAddress(profile, address, true);
         address = addressRepository.save(address);
         outboxEventService.addressGeocodingRequested(address.getPublicAddressId());
-        return toResponseDto(address);
+        return addressMapper.toResponseDto(address);
     }
 
     @Transactional
@@ -77,26 +75,20 @@ public class AddressService {
 
         Address address = getAddressEntity(publicAddressId);
         assertAddressBelongsToUser(address, publicUserId);
-        CustomerProfile profile = getCustomerProfile(
-                address.getCustomerProfile().getUser());
-
-        boolean addressLineChanged = request.getAddressLine() != null
-                && !request.getAddressLine().equals(address.getAddressLine());
-        boolean cityChanged = request.getCity() != null
-                && !request.getCity().equals(address.getCity());
-        boolean postalCodeChanged = request.getPostalCode() != null
-                && !request.getPostalCode().equals(address.getPostalCode());
-        boolean provinceChanged = request.getProvince() != null
-                && !request.getProvince().equals(address.getProvince());
+        CustomerProfile profile = getCustomerProfile(address);
+        boolean needsGeocoding = shouldRequestGeocoding(address, request);
 
         updateEntityFromDto(request, address);
+        // Do not auto-promote on update: a caller may intentionally unset the
+        // default flag, which must not be silently undone.
+        handleDefaultAddress(profile, address, false);
 
-        handleDefaultAddress(profile, address);
         address = addressRepository.save(address);
-        if (addressLineChanged || cityChanged || postalCodeChanged || provinceChanged) {
+        if (needsGeocoding) {
             outboxEventService.addressGeocodingRequested(address.getPublicAddressId());
         }
-        return toResponseDto(address);
+
+        return addressMapper.toResponseDto(address);
     }
 
     @Transactional
@@ -104,8 +96,8 @@ public class AddressService {
         Address address = getAddressEntity(publicAddressId);
         assertAddressBelongsToUser(address, publicUserId);
 
-        CustomerProfile profile   = address.getCustomerProfile();
-        boolean         wasDefault = address.getDefaultAddress();
+        CustomerProfile profile = getCustomerProfile(address);
+        boolean wasDefault = Boolean.TRUE.equals(address.getDefaultAddress());
 
         addressRepository.delete(address);
         if (wasDefault) {
@@ -117,21 +109,21 @@ public class AddressService {
     public AddressResponseDto setDefaultAddress(String publicUserId, String publicAddressId) {
         Address address = getAddressEntity(publicAddressId);
         assertAddressBelongsToUser(address, publicUserId);
-
-        CustomerProfile profile = getCustomerProfile(
-                address.getCustomerProfile().getUser());
+        CustomerProfile profile = getCustomerProfile(address);
 
         addressRepository.unsetDefaultForCustomer(profile.getCustomerProfileId());
 
         address.setDefaultAddress(true);
         address = addressRepository.save(address);
-        return toResponseDto(address);
+        return addressMapper.toResponseDto(address);
     }
 
     @Transactional
     public void setFirstAddressAsDefault(CustomerProfile profile) {
         List<Address> remaining = addressRepository.findByCustomerProfile(profile);
-        if (remaining.isEmpty()) return;
+        if (remaining.isEmpty()) {
+            return;
+        }
 
         addressRepository.unsetDefaultForCustomer(profile.getCustomerProfileId());
         Address first = remaining.getFirst();
@@ -139,50 +131,58 @@ public class AddressService {
         addressRepository.save(first);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    // Geocoding use cases
 
     /**
      * Geocode the address and attach lat/lng.
      * Logs a warning but never throws — geocoding failure
      * should not block address creation.
      */
-    private void geocodeAndAttach(Address address) {
-        try {
-            String formatted = address.getFormattedAddress();
-            double[] coords  = geocodingService.geocode(formatted);
-            if (coords != null) {
-                address.setLatitude(coords[0]);
-                address.setLongitude(coords[1]);
-                log.debug("Geocoded address '{}' → lat={}, lng={}",
-                        formatted, coords[0], coords[1]);
-            } else {
-                log.warn("Geocoding returned no result for address: {}", formatted);
-            }
-        } catch (Exception e) {
-            log.warn("Geocoding failed, address saved without coordinates", e);
-        }
-    }
-
     @Transactional
     public void geocodeAddress(String publicAddressId) {
         Address address = getAddressEntity(publicAddressId);
         geocodeAndAttach(address);
         addressRepository.save(address);
+
         if (address.getVendor() != null) {
             vendorGeoIndexService.indexVendor(address.getVendor());
         }
     }
 
+    // Private helpers
+
+    private Address buildAddress(AddressRequestDto request, CustomerProfile profile) {
+        return Address.builder()
+                .addressLine(request.getAddressLine())
+                .city(request.getCity())
+                .province(request.getProvince())
+                .postalCode(request.getPostalCode())
+                .country(request.getCountry())
+                .defaultAddress(Boolean.TRUE.equals(request.getDefaultAddress()))
+                .customerProfile(profile)
+                .build();
+    }
+
     private User getCustomerUser(String publicUserId) {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
-        if (!user.isCustomer()) throw new IllegalStateException("User is not a customer");
+        if (!user.isCustomer()) {
+            throw new IllegalStateException("User is not a customer");
+        }
         return user;
     }
 
     private CustomerProfile getCustomerProfile(User user) {
         CustomerProfile profile = user.getCustomerProfile();
         if (profile == null) throw new EntityNotFoundException("Customer profile not found");
+        return profile;
+    }
+
+    private CustomerProfile getCustomerProfile(Address address) {
+        CustomerProfile profile = address.getCustomerProfile();
+        if (profile == null) {
+            throw new EntityNotFoundException("Customer profile not found");
+        }
         return profile;
     }
 
@@ -199,22 +199,14 @@ public class AddressService {
         }
     }
 
-    private void handleDefaultAddress(CustomerProfile profile, Address address) {
+    private void handleDefaultAddress(CustomerProfile profile, Address address, boolean promoteIfMissing) {
         if (Boolean.TRUE.equals(address.getDefaultAddress())) {
-            addressRepository.findByCustomerProfileAndDefaultAddress(profile, true)
-                    .ifPresent(existing -> {
-                        if (!existing.getAddressId().equals(address.getAddressId())) {
-                            existing.setDefaultAddress(false);
-                            addressRepository.save(existing);
-                        }
-                    });
-        } else {
-            boolean hasDefault = addressRepository
-                    .findByCustomerProfileAndDefaultAddress(profile, true)
-                    .isPresent();
-            if (!hasDefault) {
-                address.setDefaultAddress(true);
-            }
+            unsetExistingDefaultAddress(profile, address);
+            return;
+        }
+
+        if (promoteIfMissing && !hasDefaultAddress(profile)) {
+            address.setDefaultAddress(true);
         }
     }
 
@@ -227,18 +219,45 @@ public class AddressService {
         if (dto.getDefaultAddress() != null) address.setDefaultAddress(dto.getDefaultAddress());
     }
 
-    private AddressResponseDto toResponseDto(Address address) {
-        return AddressResponseDto.builder()
-                .publicAddressId(address.getPublicAddressId())
-                .addressLine(address.getAddressLine())
-                .city(address.getCity())
-                .province(address.getProvince())
-                .postalCode(address.getPostalCode())
-                .country(address.getCountry())
-                .defaultAddress(address.getDefaultAddress())
-                .formattedAddress(address.getFormattedAddress())
-                .createdAt(address.getCreatedAt())
-                .updatedAt(address.getUpdatedAt())
-                .build();
+    private boolean shouldRequestGeocoding(Address address, AddressRequestDto request) {
+        return hasChanged(request.getAddressLine(), address.getAddressLine())
+                || hasChanged(request.getCity(), address.getCity())
+                || hasChanged(request.getPostalCode(), address.getPostalCode())
+                || hasChanged(request.getProvince(), address.getProvince());
+    }
+
+    private boolean hasChanged(Object nextValue, Object currentValue) {
+        return nextValue != null && !Objects.equals(nextValue, currentValue);
+    }
+
+    private boolean hasDefaultAddress(CustomerProfile profile) {
+        return addressRepository.findByCustomerProfileAndDefaultAddress(profile, true).isPresent();
+    }
+
+    private void unsetExistingDefaultAddress(CustomerProfile profile, Address address) {
+        addressRepository.findByCustomerProfileAndDefaultAddress(profile, true)
+                .filter(existing -> !Objects.equals(existing.getAddressId(), address.getAddressId()))
+                .ifPresent(existing -> {
+                    existing.setDefaultAddress(false);
+                    addressRepository.save(existing);
+                });
+    }
+
+    private void geocodeAndAttach(Address address) {
+        try {
+            String formatted = address.getFormattedAddress();
+            double[] coords = geocodingService.geocode(formatted);
+
+            if (coords == null) {
+                log.warn("Geocoding returned no result for address: {}", formatted);
+                return;
+            }
+
+            address.setLatitude(coords[0]);
+            address.setLongitude(coords[1]);
+            log.debug("Geocoded address '{}' to lat={}, lng={}", formatted, coords[0], coords[1]);
+        } catch (Exception e) {
+            log.warn("Geocoding failed, address saved without coordinates", e);
+        }
     }
 }
