@@ -10,7 +10,7 @@ import com.afrochow.common.enums.UserStatus;
 import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.security.Services.LoginAttemptService;
 import com.afrochow.user.repository.UserRepository;
-import com.afrochow.user.repository.UserSpecifications;
+import com.afrochow.user.repository.specification.UserFilterSpecifications;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.persistence.EntityNotFoundException;
@@ -88,7 +88,7 @@ public class AdminUserManagementController {
         size = Math.min(size, 100); // hard cap — never return more than 100 at once
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
-        // Compose every filter as a Specification. UserSpecifications' factories
+        // Compose every filter as a Specification. UserFilterSpecifications' factories
         // return null for unset filters. Neither Specification.where(...).and(...)
         // NOR Specification.allOf(...) are null-safe on this Spring Data JPA
         // version — both eventually call Specification.and(other), which asserts
@@ -103,12 +103,12 @@ public class AdminUserManagementController {
         // not be null"). So when no filters are set, we fall back to an
         // always-true Specification instead of null.
         Specification<User> spec = Stream.of(
-                        UserSpecifications.hasRole(role),
-                        UserSpecifications.isActive(active),
-                        UserSpecifications.nameContains(q),
-                        UserSpecifications.isSeedData(seedData),
-                        UserSpecifications.createdAtAfter(createdAfter),
-                        UserSpecifications.createdAtBefore(createdBefore))
+                        UserFilterSpecifications.hasRole(role),
+                        UserFilterSpecifications.isActive(active),
+                        UserFilterSpecifications.nameContains(q),
+                        UserFilterSpecifications.isSeedData(seedData),
+                        UserFilterSpecifications.createdAtAfter(createdAfter),
+                        UserFilterSpecifications.createdAtBefore(createdBefore))
                 .filter(Objects::nonNull)
                 .reduce(Specification::and)
                 .orElseGet(() -> (root, query, cb) -> cb.conjunction());

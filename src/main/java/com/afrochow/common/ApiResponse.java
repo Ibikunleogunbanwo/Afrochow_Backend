@@ -45,29 +45,23 @@ public class ApiResponse<T> {
     // ==================== SUCCESS RESPONSES ====================
 
     public static <T> ApiResponse<T> success(T data) {
-        return ApiResponse.<T>builder()
-                .success(true)
-                .message("Operation successful")
-                .data(data)
-                .errorCode(null)
-                .validationErrors(null)
-                .build();
+        return successResponse("Operation successful", data);
     }
 
     public static <T> ApiResponse<T> success(String message, T data) {
+        return successResponse(message, data);
+    }
+
+    public static <T> ApiResponse<T> success(String message) {
+        return successResponse(message, null);
+    }
+
+
+    private static <T> ApiResponse<T> successResponse(String message, T data) {
         return ApiResponse.<T>builder()
                 .success(true)
                 .message(message)
                 .data(data)
-                .errorCode(null)
-                .validationErrors(null)
-                .build();
-    }
-
-    public static <T> ApiResponse<T> success(String message) {
-        return ApiResponse.<T>builder()
-                .success(true)
-                .message(message)
                 .errorCode(null)
                 .validationErrors(null)
                 .build();
