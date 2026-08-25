@@ -63,6 +63,9 @@ uploads/
 *.class
 
 # ===== AI / CLAUDE =====
+.agents/
+.freebuff/
+skills-lock.json
 .ai/**
 .claude/**
 .continue/
