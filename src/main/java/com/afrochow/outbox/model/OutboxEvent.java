@@ -47,7 +47,7 @@ public class OutboxEvent {
 
     /**
      * JSON payload — contains only public IDs and primitive values.
-     * Deserialized by OutboxPoller into a Map<String, String> for dispatch.
+     * Deserialized by OutboxJob into a Map<String, String> for dispatch.
      */
     @Column(columnDefinition = "JSON", nullable = false)
     private String payload;

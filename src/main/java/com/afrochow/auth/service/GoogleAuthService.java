@@ -1,6 +1,6 @@
 package com.afrochow.auth.service;
 
-import com.afrochow.auth.dto.LoginResponse;
+import com.afrochow.auth.dto.LoginResponseDto;
 import com.afrochow.common.enums.AuthProvider;
 import com.afrochow.common.enums.Role;
 import com.afrochow.common.exceptions.CustomerWaitlistModeException;
@@ -8,9 +8,10 @@ import com.afrochow.common.exceptions.ResourceNotFoundException;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.security.JwtTokenProvider;
-import com.afrochow.security.Services.RefreshTokenService;
-import com.afrochow.security.Utils.CookieConstants;
-import com.afrochow.security.Utils.CookieUtils;
+import com.afrochow.security.service.RefreshTokenService;
+import com.afrochow.security.util.CookieConstants;
+import com.afrochow.security.util.CookieUtils;
+import com.afrochow.user.mapper.UserMapper;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
@@ -23,6 +24,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +49,7 @@ public class GoogleAuthService {
     private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
     private final UserRepository userRepository;
+    private final UserMapper userMapper;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
     private final OutboxEventService outboxEventService;
@@ -59,8 +62,10 @@ public class GoogleAuthService {
 
     private GoogleIdTokenVerifier verifier;
 
+    @Autowired
     public GoogleAuthService(
             UserRepository userRepository,
+            UserMapper userMapper,
             JwtTokenProvider jwtTokenProvider,
             RefreshTokenService refreshTokenService,
             OutboxEventService outboxEventService,
@@ -70,7 +75,26 @@ public class GoogleAuthService {
             @Value("${app.cookie.domain:}")   String cookieDomain,
             @Value("${app.customer-waitlist-mode:true}") boolean customerWaitlistMode
     ) {
+        this(userRepository, userMapper, jwtTokenProvider, refreshTokenService, outboxEventService,
+                googleClientId, googleClientSecret, googleRedirectUri, cookieDomain, customerWaitlistMode,
+                HttpClient.newHttpClient());
+    }
+
+    public GoogleAuthService(
+            UserRepository userRepository,
+            UserMapper userMapper,
+            JwtTokenProvider jwtTokenProvider,
+            RefreshTokenService refreshTokenService,
+            OutboxEventService outboxEventService,
+            String googleClientId,
+            String googleClientSecret,
+            String googleRedirectUri,
+            String cookieDomain,
+            boolean customerWaitlistMode,
+            HttpClient httpClient
+    ) {
         this.userRepository      = userRepository;
+        this.userMapper          = userMapper;
         this.jwtTokenProvider    = jwtTokenProvider;
         this.refreshTokenService = refreshTokenService;
         this.outboxEventService  = outboxEventService;
@@ -78,7 +102,7 @@ public class GoogleAuthService {
         this.googleClientSecret  = googleClientSecret;
         this.googleRedirectUri   = googleRedirectUri;
         this.cookieDomain        = cookieDomain;
-        this.httpClient          = HttpClient.newHttpClient();
+        this.httpClient          = httpClient;
         this.customerWaitlistMode = customerWaitlistMode;
     }
 
@@ -95,7 +119,7 @@ public class GoogleAuthService {
     // -------------------------------------------------------------------------
 
     @Transactional
-    public LoginResponse authenticateWithGoogle(
+    public LoginResponseDto authenticateWithGoogle(
             String code,
             String context,
             HttpServletRequest httpRequest,
@@ -268,17 +292,8 @@ public class GoogleAuthService {
         return savedUser;
     }
 
-    private LoginResponse buildLoginResponse(User user) {
-        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
-        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : "GOOGLE";
-        return LoginResponse.builder()
-                .publicUserId(user.getPublicUserId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .role(user.getRole().name())
-                .isProfileComplete(profileComplete)
-                .authProvider(authProvider)
-                .build();
+    private LoginResponseDto buildLoginResponse(User user) {
+        return userMapper.toLoginResponse(user);
     }
 
     private static String encode(String value) {

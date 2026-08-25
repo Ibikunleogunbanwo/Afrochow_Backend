@@ -1,6 +1,6 @@
 package com.afrochow.order.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.order.dto.MarkDeliveredRequestDto;
 import com.afrochow.order.dto.OrderResponseDto;
 import com.afrochow.order.dto.OrderSummaryResponseDto;
@@ -263,7 +263,7 @@ public class VendorOrderController {
     })
     public ResponseEntity<ApiResponse<OrderResponseDto>> markDelivered(
             @PathVariable @NotBlank(message = "Order ID cannot be blank") String publicOrderId,
-            @RequestBody(required = false) MarkDeliveredRequestDto request,
+            @jakarta.validation.Valid @RequestBody(required = false) MarkDeliveredRequestDto request,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         String username = getUsername(userDetails);

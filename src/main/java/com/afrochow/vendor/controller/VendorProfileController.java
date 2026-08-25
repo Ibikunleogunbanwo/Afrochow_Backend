@@ -2,7 +2,7 @@ package com.afrochow.vendor.controller;
 
 import com.afrochow.address.dto.AddressRequestDto;
 import com.afrochow.address.dto.AddressResponseDto;
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.model.User;
 import com.afrochow.vendor.dto.FoodHandlingCertUploadRequestDto;

@@ -1,6 +1,6 @@
 package com.afrochow.config;
 
-import com.afrochow.security.Services.CustomUserDetailsService;
+import com.afrochow.security.service.CustomUserDetailsService;
 import com.afrochow.security.JwtAuthenticationFilter;
 import com.afrochow.security.JwtAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
@@ -167,6 +167,7 @@ public class SecurityConfig {
                                 "/auth/reset-password",
                                 "/auth/verify-email",
                                 "/auth/resend-verification",
+                                "/auth/change-verification-email",
                                 "/v1/public/**",
                                 "/public/**"
                         ).permitAll()

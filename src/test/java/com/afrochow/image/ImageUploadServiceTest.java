@@ -1,4 +1,5 @@
 package com.afrochow.image;
+import com.afrochow.image.service.ImageUploadService;
 
 import com.afrochow.common.exceptions.ImageValidationException;
 import org.junit.jupiter.api.BeforeEach;

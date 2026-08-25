@@ -1,7 +1,7 @@
 package com.afrochow.customer.controller;
 
 import com.afrochow.customer.dto.CompleteProfileRequestDto;
-import com.afrochow.customer.dto.CustomerPasswordUpdate;
+import com.afrochow.customer.dto.CustomerPasswordUpdateDto;
 import com.afrochow.customer.dto.CustomerProfileResponseDto;
 import com.afrochow.customer.dto.CustomerUpdateRequestDto;
 import com.afrochow.customer.service.CustomerProfileService;
@@ -120,9 +120,9 @@ class CustomerProfileControllerTest extends AbstractControllerTest {
 
     @Test
     void updatePassword_valid_returns200() throws Exception {
-        doNothing().when(customerProfileService).updatePassword(eq(PUBLIC_USER_ID), any(CustomerPasswordUpdate.class));
+        doNothing().when(customerProfileService).updatePassword(eq(PUBLIC_USER_ID), any(CustomerPasswordUpdateDto.class));
 
-        CustomerPasswordUpdate request = CustomerPasswordUpdate.builder()
+        CustomerPasswordUpdateDto request = CustomerPasswordUpdateDto.builder()
                 .oldPassword("OldPass1!")
                 .newPassword("NewPass1!")
                 .confirmNewPassword("NewPass1!")
@@ -138,7 +138,7 @@ class CustomerProfileControllerTest extends AbstractControllerTest {
 
     @Test
     void updatePassword_weakPassword_returns400WithValidationErrors() throws Exception {
-        CustomerPasswordUpdate request = CustomerPasswordUpdate.builder()
+        CustomerPasswordUpdateDto request = CustomerPasswordUpdateDto.builder()
                 .oldPassword("OldPass1!")
                 .newPassword("weak")
                 .confirmNewPassword("weak")

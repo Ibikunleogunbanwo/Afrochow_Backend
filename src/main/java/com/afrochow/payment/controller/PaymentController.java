@@ -1,6 +1,6 @@
 package com.afrochow.payment.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.payment.dto.PaymentResponseDto;
 import com.afrochow.payment.dto.PaymentStatsDto;
 import com.afrochow.payment.dto.RetryPaymentRequestDto;
@@ -9,6 +9,7 @@ import com.afrochow.common.enums.PaymentStatus;
 import com.afrochow.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -74,7 +75,7 @@ public class PaymentController {
     @Operation(summary = "Retry payment", description = "Retry a failed payment with a new card")
     public ResponseEntity<ApiResponse<PaymentResponseDto>> retryPayment(
             @PathVariable String publicOrderId,
-            @RequestBody RetryPaymentRequestDto request,
+            @Valid @RequestBody RetryPaymentRequestDto request,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         Long userId = userDetails.getUserId();

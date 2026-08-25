@@ -1,6 +1,6 @@
 package com.afrochow.admin.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.security.model.CustomUserDetails;
@@ -317,6 +317,7 @@ public class AdminVendorManagementController {
 
     @lombok.Data
     public static class RejectRequestDto {
+        @jakarta.validation.constraints.Size(max = 500, message = "Rejection reason must not exceed 500 characters")
         private String reason;
     }
 
@@ -326,7 +327,7 @@ public class AdminVendorManagementController {
                description = "Reject a vendor at PENDING_REVIEW or PROVISIONAL stage. Sends rejection email with reason.")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> rejectVendor(
             @PathVariable String publicVendorId,
-            @RequestBody(required = false) RejectRequestDto body) {
+            @jakarta.validation.Valid @RequestBody(required = false) RejectRequestDto body) {
 
         VendorProfile vendor = getVendor(publicVendorId);
 
@@ -368,6 +369,8 @@ public class AdminVendorManagementController {
 
     @lombok.Data
     public static class LinkStripeAccountDto {
+        @jakarta.validation.constraints.NotBlank(message = "Stripe account ID is required")
+        @jakarta.validation.constraints.Pattern(regexp = "^acct_.+", message = "Invalid Stripe account ID — must start with 'acct_'")
         private String stripeAccountId;
     }
 
@@ -381,7 +384,7 @@ public class AdminVendorManagementController {
     @Operation(summary = "Link Stripe account", description = "Link or replace a vendor's Stripe Connect account ID — SUPERADMIN only")
     public ResponseEntity<ApiResponse<VendorSummaryDto>> linkStripeAccount(
             @PathVariable String publicVendorId,
-            @RequestBody LinkStripeAccountDto body) {
+            @jakarta.validation.Valid @RequestBody LinkStripeAccountDto body) {
 
         String accountId = body.getStripeAccountId();
         if (accountId == null || accountId.isBlank() || !accountId.trim().startsWith("acct_")) {

@@ -5,7 +5,7 @@ import com.afrochow.category.repository.CategoryRepository;
 import com.afrochow.common.enums.ScheduleType;
 import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.favorite.repository.FavoriteRepository;
-import com.afrochow.image.ImageUploadService;
+import com.afrochow.image.service.ImageUploadService;
 import com.afrochow.image.service.ImageCleanupService;
 import com.afrochow.product.dto.ProductRequestDto;
 import com.afrochow.product.dto.ProductResponseDto;

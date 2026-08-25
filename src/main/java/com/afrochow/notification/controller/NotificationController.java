@@ -1,6 +1,6 @@
 package com.afrochow.notification.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.notification.dto.BroadcastLogDto;
 import com.afrochow.notification.dto.BroadcastNotificationRequestDto;
 import com.afrochow.notification.dto.NotificationDto;

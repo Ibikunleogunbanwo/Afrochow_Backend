@@ -94,7 +94,7 @@ public class OutboxEventService {
     }
 
     /**
-     * Fired by {@link com.afrochow.order.service.OrderFulfillmentOverdueScheduler}
+     * Fired by {@link com.afrochow.order.service.OrderFulfillmentOverdueJob}
      * the first time a CONFIRMED/PREPARING order is found past its fulfillmentDeadline.
      * Notifies the vendor (to update status or explain) and admins (to keep an eye
      * on it) — it does NOT cancel or refund anything on its own.

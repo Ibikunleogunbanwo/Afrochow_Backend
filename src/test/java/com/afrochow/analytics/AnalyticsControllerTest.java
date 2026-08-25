@@ -1,4 +1,6 @@
 package com.afrochow.analytics;
+import com.afrochow.analytics.controller.AnalyticsController;
+import com.afrochow.analytics.service.AnalyticsService;
 
 import com.afrochow.testsupport.AbstractControllerTest;
 import com.afrochow.testsupport.ControllerSliceTest;
@@ -32,7 +34,7 @@ class AnalyticsControllerTest extends AbstractControllerTest {
 
     @Test
     void getVendorAnalytics_returns200() throws Exception {
-        AnalyticsService.VendorAnalytics analytics = AnalyticsService.VendorAnalytics.builder()
+        AnalyticsService.VendorAnalyticsDto analytics = AnalyticsService.VendorAnalyticsDto.builder()
                 .totalOrders(50L)
                 .totalRevenue(new BigDecimal("2500.00"))
                 .averageRating(4.5)

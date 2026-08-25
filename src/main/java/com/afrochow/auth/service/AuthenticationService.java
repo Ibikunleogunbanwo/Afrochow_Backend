@@ -6,11 +6,11 @@ import com.afrochow.admin.dto.AdminProfileRequestDto;
 import com.afrochow.admin.dto.AdminProfileResponseDto;
 import com.afrochow.admin.model.AdminProfile;
 import com.afrochow.admin.repository.AdminProfileRepository;
-import com.afrochow.auth.dto.BaseRegistrationRequest;
+import com.afrochow.auth.dto.BaseRegistrationRequestDto;
 import com.afrochow.auth.dto.ForgotPasswordRequestDto;
-import com.afrochow.auth.dto.LoginRequest;
-import com.afrochow.auth.dto.LoginResponse;
-import com.afrochow.auth.dto.RegistrationResponse;
+import com.afrochow.auth.dto.LoginRequestDto;
+import com.afrochow.auth.dto.LoginResponseDto;
+import com.afrochow.auth.dto.RegistrationResponseDto;
 import com.afrochow.auth.dto.ResetPasswordRequestDto;
 import com.afrochow.common.enums.AdminAccessLevel;
 import com.afrochow.common.enums.AuthProvider;
@@ -19,21 +19,22 @@ import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.common.exceptions.*;
 import com.afrochow.customer.dto.CustomerProfileRequestDto;
 import com.afrochow.customer.model.CustomerProfile;
-import com.afrochow.email.EmailVerificationTokenRepository;
+import com.afrochow.email.repository.EmailVerificationTokenRepository;
 import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.security.JwtTokenProvider;
-import com.afrochow.security.Services.*;
-import com.afrochow.security.Utils.CookieConstants;
-import com.afrochow.security.Utils.CookieUtils;
-import com.afrochow.security.Utils.GeocodingService;
-import com.afrochow.security.Utils.SecurityUtils;
+import com.afrochow.security.service.*;
+import com.afrochow.security.util.CookieConstants;
+import com.afrochow.security.util.CookieUtils;
+import com.afrochow.security.service.GeocodingService;
+import com.afrochow.security.util.SecurityUtils;
 import com.afrochow.security.dto.TokenRefreshResponseDto;
 import com.afrochow.security.model.CustomUserDetails;
-import com.afrochow.security.model.EmailVerificationToken;
+import com.afrochow.email.model.EmailVerificationToken;
 import com.afrochow.security.model.PasswordResetToken;
 import com.afrochow.security.model.RefreshToken;
 import com.afrochow.security.repository.PasswordResetTokenRepository;
 import com.afrochow.user.dto.UserCustomerSummaryDto;
+import com.afrochow.user.mapper.UserMapper;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
 import com.afrochow.vendor.dto.VendorProfileRequestDto;
@@ -45,6 +46,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -75,6 +77,7 @@ public class AuthenticationService {
     private final RateLimitService              rateLimitService;
     private final PasswordPolicyService         passwordPolicyService;
     private final UserRepository                userRepository;
+    private final UserMapper                    userMapper;
     private final PasswordResetTokenRepository  passwordResetTokenRepository;
     private final VendorProfileRepository       vendorProfileRepository;
     private final AdminProfileRepository        adminProfileRepository;
@@ -147,8 +150,8 @@ public class AuthenticationService {
      * - Failed attempt tracking and audit logging
      */
     @Transactional
-    public LoginResponse login(
-            LoginRequest loginRequest,
+    public LoginResponseDto login(
+            LoginRequestDto loginRequest,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
@@ -347,7 +350,7 @@ public class AuthenticationService {
      * Register a new customer. Sends email verification — login blocked until verified.
      */
     @Transactional
-    public RegistrationResponse registerCustomer(
+    public RegistrationResponseDto registerCustomer(
             CustomerProfileRequestDto request,
             HttpServletRequest httpRequest
     ) {
@@ -360,12 +363,15 @@ public class AuthenticationService {
         rateLimitService.verifyRegistrationLimit(clientIp);
         validateRegistrationData(request.getEmail(), request.getUsername(), request.getPhone());
 
-        User savedUser = userRepository.save(createUser(request, Role.CUSTOMER));
-        createCustomerProfile(savedUser, request);
-        createAndSendEmailVerificationToken(savedUser);
-        securityEventService.logRegistration(savedUser.getEmail(), httpRequest);
-
-        return registrationResponse(savedUser);
+        try {
+            User savedUser = userRepository.save(createUser(request, Role.CUSTOMER));
+            createCustomerProfile(savedUser, request);
+            createAndSendEmailVerificationToken(savedUser);
+            securityEventService.logRegistration(savedUser.getEmail(), httpRequest);
+            return registrationResponse(savedUser);
+        } catch (DataIntegrityViolationException ex) {
+            throw translateRegistrationDuplicate(ex);
+        }
     }
 
     /**
@@ -373,7 +379,7 @@ public class AuthenticationService {
      * Sends email verification — login blocked until verified.
      */
     @Transactional
-    public RegistrationResponse registerVendor(
+    public RegistrationResponseDto registerVendor(
             VendorProfileRequestDto request,
             HttpServletRequest httpRequest
     ) {
@@ -382,12 +388,15 @@ public class AuthenticationService {
         validateRegistrationData(request.getEmail(), request.getUsername(), request.getPhone());
         validateVendorRequest(request);
 
-        User savedUser = userRepository.save(createUser(request, Role.VENDOR));
-        createVendorProfile(savedUser, request);
-        createAndSendEmailVerificationToken(savedUser);
-        securityEventService.logRegistration(savedUser.getEmail(), httpRequest);
-
-        return registrationResponse(savedUser);
+        try {
+            User savedUser = userRepository.save(createUser(request, Role.VENDOR));
+            createVendorProfile(savedUser, request);
+            createAndSendEmailVerificationToken(savedUser);
+            securityEventService.logRegistration(savedUser.getEmail(), httpRequest);
+            return registrationResponse(savedUser);
+        } catch (DataIntegrityViolationException ex) {
+            throw translateRegistrationDuplicate(ex);
+        }
     }
 
     /**
@@ -419,14 +428,17 @@ public class AuthenticationService {
 
         validateRegistrationData(request.getEmail(), request.getUsername(), request.getPhone());
 
-        User savedUser = userRepository.save(createUser(request, Role.ADMIN));
-        createAdminProfile(savedUser, request);
+        try {
+            User savedUser = userRepository.save(createUser(request, Role.ADMIN));
+            createAdminProfile(savedUser, request);
 
-        log.info("Admin account created by SUPER_ADMIN: {} (userId: {})",
-                requestingAdmin.getEmail(), requestingAdminId);
-        securityEventService.logRegistration(savedUser.getEmail(), httpRequest);
-
-        return adminProfileResponseDto(savedUser);
+            log.info("Admin account created by SUPER_ADMIN: {} (userId: {})",
+                    requestingAdmin.getEmail(), requestingAdminId);
+            securityEventService.logRegistration(savedUser.getEmail(), httpRequest);
+            return adminProfileResponseDto(savedUser);
+        } catch (DataIntegrityViolationException ex) {
+            throw translateRegistrationDuplicate(ex);
+        }
     }
 
 
@@ -605,6 +617,40 @@ public class AuthenticationService {
         createAndSendEmailVerificationToken(user);
     }
 
+    /**
+     * Correct an email typo for an account that has not completed verification.
+     * Verified accounts must use the authenticated account-settings flow so that
+     * a signed-in user proves ownership of the account before changing identity.
+     */
+    @Transactional
+    public void changeVerificationEmail(String currentEmail, String newEmail) {
+        String canonicalCurrentEmail = getCanonicalIdentifier(currentEmail.trim());
+        String canonicalNewEmail = getCanonicalIdentifier(newEmail.trim());
+
+        if (canonicalCurrentEmail.equals(canonicalNewEmail)) {
+            return;
+        }
+
+        User user = userRepository.findByEmail(canonicalCurrentEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + canonicalCurrentEmail));
+
+        if (user.getEmailVerified()) {
+            throw new IllegalStateException("Email is already verified. Please change it from account settings.");
+        }
+
+        if (userRepository.existsByEmail(canonicalNewEmail)) {
+            throw new EmailAlreadyExistsException("Email already exists");
+        }
+
+        emailVerificationTokenRepository.revokeAllUserTokens(user.getUserId());
+        user.setEmail(canonicalNewEmail);
+        userRepository.save(user);
+        createAndSendEmailVerificationToken(user);
+
+        rateLimitService.resetLimit("email-verify", canonicalCurrentEmail);
+        rateLimitService.resetLimit("email-verify", canonicalNewEmail);
+    }
+
 
     /* ==========================================================
        PRIVATE HELPERS
@@ -635,6 +681,27 @@ public class AuthenticationService {
         }
     }
 
+    /**
+     * Translates a DB unique-constraint violation into the proper 409 business
+     * exception. The existsBy pre-checks above are a fast-path convenience — they
+     * do not close the race window between two concurrent registrations for the
+     * same email/phone/username. The DB's unique constraints are the real guard;
+     * when they trip, surface a clean 409 instead of the generic 500 that
+     * GlobalExceptionHandler would otherwise produce. Mirrors the race-window
+     * handling in FavoriteService.
+     */
+    private RuntimeException translateRegistrationDuplicate(DataIntegrityViolationException ex) {
+        String cause = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : "";
+        String lower = cause.toLowerCase();
+        if (lower.contains("phone")) {
+            return new PhoneNumberAlreadyExistsException("Phone number already registered");
+        }
+        if (lower.contains("username")) {
+            return new UserNameAlreadyExistsException("Username already exists");
+        }
+        return new EmailAlreadyExistsException("Email already exists");
+    }
+
     private void validateVendorRequest(VendorProfileRequestDto request) {
         if (request.getDeliveryFee() != null &&
                 request.getDeliveryFee().compareTo(BigDecimal.ZERO) < 0) {
@@ -655,7 +722,7 @@ public class AuthenticationService {
         }
     }
 
-    private User createUser(BaseRegistrationRequest request, Role role) {
+    private User createUser(BaseRegistrationRequestDto request, Role role) {
         passwordPolicyService.validatePassword(request.getPassword());
         return User.builder()
                 .username(request.getUsername())
@@ -869,27 +936,8 @@ public class AuthenticationService {
         CookieUtils.addHttpOnlyCookie(httpResponse, CookieConstants.REFRESH_TOKEN_COOKIE, "", 0, true, "None", cookieDomain);
     }
 
-    private LoginResponse buildLoginResponse(User user) {
-        boolean profileComplete = user.getPhone() != null && !user.getPhone().isBlank();
-        String authProvider = user.getAuthProvider() != null ? user.getAuthProvider().name() : AuthProvider.EMAIL.name();
-
-        LoginResponse.LoginResponseBuilder builder = LoginResponse.builder()
-                .publicUserId(user.getPublicUserId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .role(user.getRole().name())
-                .isProfileComplete(profileComplete)
-                .authProvider(authProvider);
-
-        // Attach vendor-specific status so the frontend can show appropriate
-        // banners for pending-approval or deactivated vendor accounts.
-        if (user.getRole() == Role.VENDOR && user.getVendorProfile() != null) {
-            VendorProfile vp = user.getVendorProfile();
-            builder.vendorIsActive(vp.getIsActive())
-                   .vendorIsVerified(vp.getIsVerified());
-        }
-
-        return builder.build();
+    private LoginResponseDto buildLoginResponse(User user) {
+        return userMapper.toLoginResponse(user);
     }
 
     private AdminProfileResponseDto adminProfileResponseDto(User user) {
@@ -916,8 +964,8 @@ public class AuthenticationService {
                 .build();
     }
 
-    private RegistrationResponse registrationResponse(User user) {
-        return RegistrationResponse.builder()
+    private RegistrationResponseDto registrationResponse(User user) {
+        return RegistrationResponseDto.builder()
                 .message("Registration successful!")
                 .email(user.getEmail())
                 .publicUserId(user.getPublicUserId())

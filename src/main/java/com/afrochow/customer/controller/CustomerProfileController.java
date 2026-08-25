@@ -1,7 +1,7 @@
 package com.afrochow.customer.controller;
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.customer.dto.CompleteProfileRequestDto;
-import com.afrochow.customer.dto.CustomerPasswordUpdate;
+import com.afrochow.customer.dto.CustomerPasswordUpdateDto;
 import com.afrochow.customer.dto.CustomerUpdateRequestDto;
 import com.afrochow.customer.dto.CustomerProfileResponseDto;
 import com.afrochow.customer.service.CustomerProfileService;
@@ -136,7 +136,7 @@ public class CustomerProfileController {
     )
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<ApiResponse<Void>> updatePassword(
-            @Valid @RequestBody CustomerPasswordUpdate request,
+            @Valid @RequestBody CustomerPasswordUpdateDto request,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         customerProfileService.updatePassword(userDetails.getPublicUserId(), request);

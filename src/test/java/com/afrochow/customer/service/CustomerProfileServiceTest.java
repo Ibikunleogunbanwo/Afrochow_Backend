@@ -1,19 +1,20 @@
 package com.afrochow.customer.service;
 
+import com.afrochow.address.mapper.AddressMapper;
 import com.afrochow.address.dto.AddressRequestDto;
 import com.afrochow.common.enums.PaymentMethod;
 import com.afrochow.common.enums.Province;
 import com.afrochow.common.enums.Role;
 import com.afrochow.common.exceptions.PasswordPolicyViolationException;
 import com.afrochow.customer.dto.CompleteProfileRequestDto;
-import com.afrochow.customer.dto.CustomerPasswordUpdate;
+import com.afrochow.customer.dto.CustomerPasswordUpdateDto;
 import com.afrochow.customer.dto.CustomerProfileResponseDto;
 import com.afrochow.customer.dto.CustomerUpdateRequestDto;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
-import com.afrochow.image.ImageUploadService;
+import com.afrochow.image.service.ImageUploadService;
 import com.afrochow.image.service.ImageCleanupService;
-import com.afrochow.security.Services.PasswordPolicyService;
+import com.afrochow.security.service.PasswordPolicyService;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
@@ -39,6 +40,7 @@ import static org.mockito.Mockito.*;
 class CustomerProfileServiceTest {
 
     @Mock private CustomerProfileRepository customerProfileRepository;
+    @Mock private AddressMapper addressMapper;
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private ImageUploadService imageUploadService;
@@ -192,7 +194,7 @@ class CustomerProfileServiceTest {
         when(passwordEncoder.matches("OldPass1!", "encoded-old-pass")).thenReturn(true);
         when(passwordEncoder.matches("NewPass1!", "encoded-old-pass")).thenReturn(false);
         when(passwordEncoder.encode("NewPass1!")).thenReturn("encoded-new-pass");
-        CustomerPasswordUpdate dto = CustomerPasswordUpdate.builder()
+        CustomerPasswordUpdateDto dto = CustomerPasswordUpdateDto.builder()
                 .oldPassword("OldPass1!").newPassword("NewPass1!").confirmNewPassword("NewPass1!").build();
 
         customerProfileService.updatePassword("CUS1", dto);
@@ -206,7 +208,7 @@ class CustomerProfileServiceTest {
     void updatePassword_wrongOldPassword_throwsIllegalArgument() {
         when(userRepository.findByPublicUserId("CUS1")).thenReturn(Optional.of(customer));
         when(passwordEncoder.matches("WrongPass", "encoded-old-pass")).thenReturn(false);
-        CustomerPasswordUpdate dto = CustomerPasswordUpdate.builder()
+        CustomerPasswordUpdateDto dto = CustomerPasswordUpdateDto.builder()
                 .oldPassword("WrongPass").newPassword("NewPass1!").confirmNewPassword("NewPass1!").build();
 
         assertThatThrownBy(() -> customerProfileService.updatePassword("CUS1", dto))
@@ -218,7 +220,7 @@ class CustomerProfileServiceTest {
     void updatePassword_mismatchedConfirmation_throwsIllegalArgument() {
         when(userRepository.findByPublicUserId("CUS1")).thenReturn(Optional.of(customer));
         when(passwordEncoder.matches("OldPass1!", "encoded-old-pass")).thenReturn(true);
-        CustomerPasswordUpdate dto = CustomerPasswordUpdate.builder()
+        CustomerPasswordUpdateDto dto = CustomerPasswordUpdateDto.builder()
                 .oldPassword("OldPass1!").newPassword("NewPass1!").confirmNewPassword("Different1!").build();
 
         assertThatThrownBy(() -> customerProfileService.updatePassword("CUS1", dto))
@@ -232,7 +234,7 @@ class CustomerProfileServiceTest {
         when(passwordEncoder.matches("OldPass1!", "encoded-old-pass")).thenReturn(true);
         doThrow(new PasswordPolicyViolationException(List.of("too weak")))
                 .when(passwordPolicyService).validatePassword("weak");
-        CustomerPasswordUpdate dto = CustomerPasswordUpdate.builder()
+        CustomerPasswordUpdateDto dto = CustomerPasswordUpdateDto.builder()
                 .oldPassword("OldPass1!").newPassword("weak").confirmNewPassword("weak").build();
 
         assertThatThrownBy(() -> customerProfileService.updatePassword("CUS1", dto))
@@ -243,7 +245,7 @@ class CustomerProfileServiceTest {
     void updatePassword_sameAsCurrentPassword_throwsIllegalArgument() {
         when(userRepository.findByPublicUserId("CUS1")).thenReturn(Optional.of(customer));
         when(passwordEncoder.matches("OldPass1!", "encoded-old-pass")).thenReturn(true);
-        CustomerPasswordUpdate dto = CustomerPasswordUpdate.builder()
+        CustomerPasswordUpdateDto dto = CustomerPasswordUpdateDto.builder()
                 .oldPassword("OldPass1!").newPassword("OldPass1!").confirmNewPassword("OldPass1!").build();
 
         assertThatThrownBy(() -> customerProfileService.updatePassword("CUS1", dto))

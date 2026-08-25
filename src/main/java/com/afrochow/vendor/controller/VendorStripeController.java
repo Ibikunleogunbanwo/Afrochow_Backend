@@ -1,6 +1,6 @@
 package com.afrochow.vendor.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.vendor.dto.VendorProfileResponseDto;
 import com.afrochow.vendor.service.StripeConnectService;

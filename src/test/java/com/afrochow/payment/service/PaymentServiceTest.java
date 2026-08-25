@@ -328,7 +328,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void confirmAfter3ds_requiresCapture_authorizesAndFiresOrderPlacedEvents() {
+    void confirmAfter3ds_requiresCapture_authorizesAndWritesOutboxEvents() {
         payment.setStatus(PaymentStatus.PENDING);
         payment.setTransactionId("pi_123");
         PaymentIntent intent = mockIntent("requires_capture");
@@ -616,7 +616,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void retryPayment_success_reAuthorizesAndFiresOrderPlacedEvents() {
+    void retryPayment_success_reAuthorizesAndWritesOutboxEvents() {
         payment.setStatus(PaymentStatus.FAILED);
         payment.setTransactionId("pi_dead");
         when(orderRepository.findByPublicOrderId("ORD123")).thenReturn(Optional.of(order));

@@ -4,7 +4,7 @@ import com.afrochow.admin.model.AdminProfile;
 import com.afrochow.common.enums.AdminArea;
 import com.afrochow.common.enums.Department;
 import com.afrochow.common.enums.Role;
-import com.afrochow.security.Utils.SecurityUtils;
+import com.afrochow.security.util.SecurityUtils;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

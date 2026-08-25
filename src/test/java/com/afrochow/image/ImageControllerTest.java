@@ -1,4 +1,7 @@
 package com.afrochow.image;
+import com.afrochow.image.controller.ImageController;
+import com.afrochow.image.service.ImageOwnershipService;
+import com.afrochow.image.service.ImageUploadService;
 
 import com.afrochow.common.enums.Role;
 import com.afrochow.common.exceptions.ImageNotFoundException;
