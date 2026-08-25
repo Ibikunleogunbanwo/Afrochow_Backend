@@ -1,10 +1,11 @@
 package com.afrochow.order.service;
 
 import com.afrochow.address.dto.AddressResponseDto;
+import com.afrochow.address.mapper.AddressMapper;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.common.exceptions.DeliveryOutOfRangeException;
-import com.afrochow.common.util.GeoDistanceUtil;
+import com.afrochow.common.util.GeoDistanceUtils;
 import com.afrochow.common.enums.OrderStatus;
 import com.afrochow.common.enums.VendorStatus;
 import com.afrochow.common.enums.PaymentMethod;
@@ -67,6 +68,7 @@ public class OrderService {
     private final VendorProfileRepository vendorProfileRepository;
     private final UserRepository userRepository;
     private final AddressRepository addressRepository;
+    private final AddressMapper addressMapper;
     private final ProductRepository productRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentService paymentService;
@@ -88,6 +90,7 @@ public class OrderService {
             CustomerProfileRepository customerProfileRepository,
             VendorProfileRepository vendorProfileRepository,
             AddressRepository addressRepository,
+            AddressMapper addressMapper,
             ProductRepository productRepository,
             PaymentRepository paymentRepository,
             PaymentService paymentService,
@@ -98,6 +101,7 @@ public class OrderService {
         this.customerProfileRepository = customerProfileRepository;
         this.vendorProfileRepository   = vendorProfileRepository;
         this.addressRepository         = addressRepository;
+        this.addressMapper          = addressMapper;
         this.productRepository         = productRepository;
         this.paymentRepository         = paymentRepository;
         this.userRepository            = userRepository;
@@ -198,7 +202,7 @@ public class OrderService {
             if (Boolean.TRUE.equals(vendor.getOffersDelivery()) && vendor.getMaxDeliveryDistanceKm() != null) {
                 Address vendorAddress = vendor.getAddress();
                 Double distanceKm = (vendorAddress != null)
-                        ? GeoDistanceUtil.distanceKm(
+                        ? GeoDistanceUtils.distanceKm(
                                 vendorAddress.getLatitude(), vendorAddress.getLongitude(),
                                 deliveryAddress.getLatitude(), deliveryAddress.getLongitude())
                         : null;
@@ -611,7 +615,7 @@ public class OrderService {
     /**
      * Computes when this order is expected to be ready/out for delivery, at the
      * moment the vendor accepts it. Feeds {@link Order#fulfillmentDeadline}, which
-     * {@link OrderFulfillmentOverdueScheduler} uses to catch orders the vendor
+     * {@link OrderFulfillmentOverdueJob} uses to catch orders the vendor
      * never moves forward on.
      *
      * ADVANCE_ORDER items already carry an explicit customer-chosen time
@@ -733,7 +737,7 @@ public class OrderService {
     }
 
     /**
-     * Called by {@link com.afrochow.order.service.FulfillmentSafetyNetScheduler}
+     * Called by {@link com.afrochow.order.service.FulfillmentSafetyNetJob}
      * when an order is still OUT_FOR_DELIVERY or READY_FOR_PICKUP past the 2-hour
      * grace period. Marks the order as DELIVERED and captures payment.
      * The scheduler acts as the system actor — no vendor principal required.
@@ -757,7 +761,7 @@ public class OrderService {
     }
 
     /**
-     * Called by {@link com.afrochow.order.service.FulfillmentSafetyNetScheduler}
+     * Called by {@link com.afrochow.order.service.FulfillmentSafetyNetJob}
      * to recover DELIVERED orders whose payment pipeline did not complete.
      *
      * Two sub-cases handled:
@@ -788,7 +792,7 @@ public class OrderService {
     }
 
     /**
-     * Called by {@link OrderFulfillmentOverdueScheduler}'s first pass, when a
+     * Called by {@link OrderFulfillmentOverdueJob}'s first pass, when a
      * CONFIRMED/PREPARING order is found past its fulfillmentDeadline for the first
      * time. Does NOT cancel or refund anything — just marks the order as flagged and
      * notifies the vendor + admins, giving the vendor a chance to act before the
@@ -812,7 +816,7 @@ public class OrderService {
     }
 
     /**
-     * Called by {@link OrderFulfillmentOverdueScheduler}'s second pass, when an order
+     * Called by {@link OrderFulfillmentOverdueJob}'s second pass, when an order
      * flagged overdue is still unresolved (still CONFIRMED/PREPARING) a further grace
      * period after being flagged. Issues a real refund (payment was already captured
      * at accept time) and cancels the order, same as a vendor calling
@@ -1224,19 +1228,7 @@ public class OrderService {
     }
 
     private AddressResponseDto toAddressResponseDto(Address address) {
-        if (address == null) return null;
-        return AddressResponseDto.builder()
-                .publicAddressId(address.getPublicAddressId())
-                .addressLine(address.getAddressLine())
-                .city(address.getCity())
-                .province(address.getProvince())
-                .postalCode(address.getPostalCode())
-                .country(address.getCountry())
-                .formattedAddress(address.getFormattedAddress())
-                .createdAt(address.getCreatedAt())
-                .updatedAt(address.getUpdatedAt())
-                .defaultAddress(address.getDefaultAddress())
-                .build();
+        return addressMapper.toResponseDto(address);
     }
 
     private PaymentResponseDto toPaymentResponseDto(Payment payment) {

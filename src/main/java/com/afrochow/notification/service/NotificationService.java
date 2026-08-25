@@ -1,6 +1,6 @@
 package com.afrochow.notification.service;
 
-import com.afrochow.email.EmailService;
+import com.afrochow.email.service.EmailService;
 import com.afrochow.notification.dto.BroadcastLogDto;
 import com.afrochow.notification.dto.BroadcastNotificationRequestDto;
 import com.afrochow.notification.dto.NotificationDto;
@@ -115,7 +115,7 @@ public class NotificationService {
 
     // ========== ORDER LIFECYCLE NOTIFICATIONS ==========
 
-    // Entry points are now called directly by OutboxPoller after it reads
+    // Entry points are now called directly by OutboxJob after it reads
     // the committed outbox row — no Spring events needed.
 
     /**
@@ -358,7 +358,7 @@ public class NotificationService {
                             + "any authorization hold on your card will be released within 5–7 business days.";
                 }
                 case "SYSTEM_OVERDUE" -> {
-                    // Distinct from plain "SYSTEM": this fires from OrderFulfillmentOverdueScheduler,
+                    // Distinct from plain "SYSTEM": this fires from OrderFulfillmentOverdueJob,
                     // after the vendor had already accepted the order (payment was CAPTURED, not just
                     // authorised), so this must say "refunded", not "hold released".
                     title   = "Order Automatically Cancelled and Refunded";
@@ -505,7 +505,7 @@ public class NotificationService {
      * Producer side — called directly from the admin controller. Just writes a
      * BROADCAST_SENT outbox event in the same transaction as the request and
      * returns; the actual fan-out happens in {@link #processBroadcast} once
-     * OutboxPoller publishes the event to Kafka and NotificationEventConsumer
+     * OutboxJob publishes the event to Kafka and NotificationEventConsumer
      * picks it back up. This is the same producer/consumer split every other
      * notification-triggering event in the app already uses — broadcasts used
      * to be the one exception (a plain @Async method with no retry and no
@@ -528,7 +528,7 @@ public class NotificationService {
      * target audience, in batches, then records the BroadcastLog entry that
      * powers the admin History tab. If this throws, the Kafka message is not
      * acknowledged and the event is retried like any other outbox event
-     * (up to 3 attempts before OutboxPoller marks it FAILED) — unlike the old
+     * (up to 3 attempts before OutboxJob marks it FAILED) — unlike the old
      * @Async version, a mid-batch failure here is neither silent nor terminal.
      */
     @Transactional
@@ -823,7 +823,7 @@ public class NotificationService {
      *
      * This is a heads-up, not a cancellation — the vendor still has time to act (mark
      * it ready, or call "unable to fulfil" if they genuinely can't complete it) before
-     * {@link com.afrochow.order.service.OrderFulfillmentOverdueScheduler}'s second pass
+     * {@link com.afrochow.order.service.OrderFulfillmentOverdueJob}'s second pass
      * auto-cancels and refunds it.
      *
      * Channels: In-App only (operational alert, not customer-facing).

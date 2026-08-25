@@ -3,10 +3,10 @@ import com.afrochow.admin.dto.AdminProfileRequestDto;
 import com.afrochow.admin.dto.AdminProfileResponseDto;
 import com.afrochow.auth.dto.*;
 import com.afrochow.customer.dto.CustomerProfileRequestDto;
-import com.afrochow.security.Utils.CookieConstants;
+import com.afrochow.security.util.CookieConstants;
 import com.afrochow.security.dto.TokenRefreshResponseDto;
 import com.afrochow.auth.service.AuthenticationService;
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.dto.UserCustomerSummaryDto;
 import com.afrochow.user.model.User;
@@ -59,12 +59,12 @@ public class AuthController {
 
     @PostMapping("/google")
     @Operation(summary = "Google Login", description = "Authenticate with a Google ID token. Creates a customer account on first login.")
-    public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(
-            @Valid @RequestBody com.afrochow.auth.dto.GoogleAuthRequest request,
+    public ResponseEntity<ApiResponse<LoginResponseDto>> googleLogin(
+            @Valid @RequestBody com.afrochow.auth.dto.GoogleAuthRequestDto request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        LoginResponse response = googleAuthService.authenticateWithGoogle(
+        LoginResponseDto response = googleAuthService.authenticateWithGoogle(
                 request.getCode(), request.getContext(), httpRequest, httpResponse);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -85,11 +85,11 @@ public class AuthController {
      */
     @PostMapping("/register/customer")
     @Operation(summary = "Register Customer", description = "Register a new customer account. Email verification required before login.")
-    public ResponseEntity<ApiResponse<RegistrationResponse>> registerCustomer(
+    public ResponseEntity<ApiResponse<RegistrationResponseDto>> registerCustomer(
             @Valid @RequestBody CustomerProfileRequestDto request,
             HttpServletRequest httpRequest
     ) {
-        RegistrationResponse userResponse = authenticationService.registerCustomer(request, httpRequest);
+        RegistrationResponseDto userResponse = authenticationService.registerCustomer(request, httpRequest);
 
         return ResponseEntity.ok(
                 ApiResponse.success("Customer registered successfully. Please check your email to verify your account.", userResponse)
@@ -112,11 +112,11 @@ public class AuthController {
             summary = "Register Vendor",
             description = "Register a new vendor/restaurant account. Address is required. Email verification required before login."
     )
-    public ResponseEntity<ApiResponse<RegistrationResponse>> registerVendor(
+    public ResponseEntity<ApiResponse<RegistrationResponseDto>> registerVendor(
             @Valid @RequestBody VendorProfileRequestDto request,
             HttpServletRequest httpRequest
     ) {
-        RegistrationResponse vendorResponse = authenticationService.registerVendor(request, httpRequest);
+        RegistrationResponseDto vendorResponse = authenticationService.registerVendor(request, httpRequest);
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -192,12 +192,12 @@ public class AuthController {
             summary = "Login",
             description = "Authenticate user with email/username and password"
     )
-    public ResponseEntity<ApiResponse<LoginResponse>> login(
-            @Valid @RequestBody LoginRequest loginRequest,
+    public ResponseEntity<ApiResponse<LoginResponseDto>> login(
+            @Valid @RequestBody LoginRequestDto loginRequest,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        LoginResponse user = authenticationService.login(
+        LoginResponseDto user = authenticationService.login(
                 loginRequest,
                 httpRequest,
                 httpResponse
@@ -458,6 +458,20 @@ public class AuthController {
         authenticationService.resendVerificationEmail(dto.getEmail());
         return ResponseEntity.ok(
                 ApiResponse.success("Verification email sent successfully")
+        );
+    }
+
+    @PostMapping("/change-verification-email")
+    @Operation(
+            summary = "Change pending verification email",
+            description = "Update the email for an unverified account and send a new verification code"
+    )
+    public ResponseEntity<ApiResponse<Void>> changeVerificationEmail(
+            @Valid @RequestBody ChangeVerificationEmailDto dto
+    ) {
+        authenticationService.changeVerificationEmail(dto.getCurrentEmail(), dto.getNewEmail());
+        return ResponseEntity.ok(
+                ApiResponse.success("Verification email updated and sent successfully")
         );
     }
 

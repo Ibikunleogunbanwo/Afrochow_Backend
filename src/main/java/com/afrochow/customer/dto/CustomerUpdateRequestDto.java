@@ -2,6 +2,7 @@ package com.afrochow.customer.dto;
 
 import com.afrochow.common.enums.PaymentMethod;
 import com.afrochow.common.validation.CanadianPhone;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,10 +26,18 @@ import lombok.NoArgsConstructor;
 public class CustomerUpdateRequestDto {
 
     private String profileImageUrl;
+
+    @Size(max = 100, message = "First name must not exceed 100 characters")
     private String firstName;
+
+    @Size(max = 100, message = "Last name must not exceed 100 characters")
     private String lastName;
+
     @CanadianPhone
     private String phone;
+
+    @Size(max = 500, message = "Delivery instructions must not exceed 500 characters")
     private String defaultDeliveryInstructions;
+
     private PaymentMethod paymentMethod;
 }

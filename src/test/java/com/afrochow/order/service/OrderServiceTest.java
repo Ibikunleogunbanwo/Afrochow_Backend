@@ -1,5 +1,6 @@
 package com.afrochow.order.service;
 
+import com.afrochow.address.mapper.AddressMapper;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.common.enums.OrderStatus;
@@ -60,6 +61,7 @@ class OrderServiceTest {
     @Mock private VendorProfileRepository vendorProfileRepository;
     @Mock private UserRepository userRepository;
     @Mock private AddressRepository addressRepository;
+    @Mock private AddressMapper addressMapper;
     @Mock private ProductRepository productRepository;
     @Mock private PaymentRepository paymentRepository;
     @Mock private PaymentService paymentService;
@@ -163,7 +165,7 @@ class OrderServiceTest {
     // ========== createOrder ==========
 
     @Test
-    void createOrder_pickupSuccess_authorizesPaymentAndFiresOrderPlacedEvents() {
+    void createOrder_pickupSuccess_authorizesPaymentAndWritesOutboxEvents() {
         when(customerProfileRepository.findByUser_UserId(1L)).thenReturn(Optional.of(customer));
         when(vendorProfileRepository.findByUser_PublicUserId("VEN123")).thenReturn(Optional.of(vendor));
         when(productRepository.findByPublicProductId("PROD-1")).thenReturn(Optional.of(product));

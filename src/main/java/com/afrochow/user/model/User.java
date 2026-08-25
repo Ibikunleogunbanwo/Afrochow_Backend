@@ -8,7 +8,7 @@ import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.notification.model.Notification;
 import com.afrochow.promotion.model.PromotionUsage;
 import com.afrochow.review.model.Review;
-import com.afrochow.security.model.EmailVerificationToken;
+import com.afrochow.email.model.EmailVerificationToken;
 import com.afrochow.security.model.PasswordResetToken;
 import com.afrochow.security.model.RefreshToken;
 import com.afrochow.vendor.model.VendorProfile;

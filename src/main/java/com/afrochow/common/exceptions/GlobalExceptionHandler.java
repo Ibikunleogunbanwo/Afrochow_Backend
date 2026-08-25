@@ -1,8 +1,8 @@
 package com.afrochow.common.exceptions;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.common.exceptions.TokenRefreshException;
-import com.afrochow.vendor.dto.ValidationErrorDto;
+import com.afrochow.common.dto.ValidationErrorDto;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.UnsupportedJwtException;
@@ -82,11 +82,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidTokenException(
-            JwtExpiredTokenException ex, WebRequest request) {
+            InvalidTokenException ex, WebRequest request) {
 
-        logger.warn("Invalid password reset token: {}", ex.getMessage());
+        logger.warn("Invalid token: {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.UNAUTHORIZED,
-                "Your Token has expired. Please request another token.", request);
+                "Your token is invalid or has expired. Please request another one.", request);
     }
 
 

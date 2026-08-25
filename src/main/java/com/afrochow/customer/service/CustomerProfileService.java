@@ -1,18 +1,19 @@
 package com.afrochow.customer.service;
 
 import com.afrochow.address.dto.AddressResponseDto;
+import com.afrochow.address.mapper.AddressMapper;
 import com.afrochow.address.model.Address;
 import com.afrochow.address.dto.AddressRequestDto;
 import com.afrochow.customer.dto.CompleteProfileRequestDto;
-import com.afrochow.customer.dto.CustomerPasswordUpdate;
+import com.afrochow.customer.dto.CustomerPasswordUpdateDto;
 import com.afrochow.customer.dto.CustomerUpdateRequestDto;
 import com.afrochow.customer.dto.CustomerProfileResponseDto;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.customer.repository.CustomerProfileRepository;
 import com.afrochow.common.validation.PhoneUtils;
-import com.afrochow.image.ImageUploadService;
+import com.afrochow.image.service.ImageUploadService;
 import com.afrochow.image.service.ImageCleanupService;
-import com.afrochow.security.Services.PasswordPolicyService;
+import com.afrochow.security.service.PasswordPolicyService;
 import com.afrochow.security.model.CustomUserDetails;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
@@ -38,6 +39,7 @@ public class CustomerProfileService {
 
     private final CustomerProfileRepository customerProfileRepository;
     private final UserRepository userRepository;
+    private final AddressMapper addressMapper;
     private final PasswordEncoder passwordEncoder;
     private final ImageUploadService imageUploadService;
     private final ImageCleanupService imageCleanupService;
@@ -171,7 +173,7 @@ public class CustomerProfileService {
     /*  UPDATE PASSWORD                                           */
     /* ---------------------------------------------------------- */
     @Transactional
-    public void updatePassword(String publicUserId, CustomerPasswordUpdate dto) {
+    public void updatePassword(String publicUserId, CustomerPasswordUpdateDto dto) {
         User user = userRepository.findByPublicUserId(publicUserId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
 
@@ -376,22 +378,7 @@ public class CustomerProfileService {
 
 
     private AddressResponseDto toAddressResponseDto(Address address) {
-        if (address == null) {
-            return null;
-        }
-
-        return AddressResponseDto.builder()
-                .publicAddressId(address.getPublicAddressId())
-                .addressLine(address.getAddressLine())
-                .city(address.getCity())
-                .province(address.getProvince())
-                .postalCode(address.getPostalCode())
-                .country(address.getCountry())
-                .defaultAddress(address.getDefaultAddress())
-                .formattedAddress(address.getFormattedAddress())
-                .createdAt(address.getCreatedAt())
-                .updatedAt(address.getUpdatedAt())
-                .build();
+        return addressMapper.toResponseDto(address);
     }
 
 

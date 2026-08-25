@@ -1,7 +1,7 @@
 package com.afrochow.vendor.dto;
 
 import com.afrochow.address.dto.AddressRequestDto;
-import com.afrochow.auth.dto.BaseRegistrationRequest;
+import com.afrochow.auth.dto.BaseRegistrationRequestDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -15,7 +15,7 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class VendorProfileRequestDto extends BaseRegistrationRequest {
+public class VendorProfileRequestDto extends BaseRegistrationRequestDto {
 
     // ========== REQUIRED USERNAME (FOR BASE CLASS) ==========
     @Schema(description = "Username (optional - auto-generated if not provided)")

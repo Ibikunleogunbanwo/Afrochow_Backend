@@ -1,5 +1,6 @@
 package com.afrochow.admin.dto;
 import com.afrochow.common.enums.AdminAccessLevel;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,6 +21,7 @@ import lombok.NoArgsConstructor;
 public class AdminProfileUpdateRequestDto {
 
 
+    @Size(max = 100, message = "Department must not exceed 100 characters")
     private String department;
 
     private AdminAccessLevel accessLevel;

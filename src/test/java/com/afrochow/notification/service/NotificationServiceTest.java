@@ -4,7 +4,7 @@ import com.afrochow.common.enums.NotificationType;
 import com.afrochow.common.enums.RelatedEntityType;
 import com.afrochow.common.enums.Role;
 import com.afrochow.customer.model.CustomerProfile;
-import com.afrochow.email.EmailService;
+import com.afrochow.email.service.EmailService;
 import com.afrochow.notification.dto.BroadcastNotificationRequestDto;
 import com.afrochow.notification.dto.NotificationDto;
 import com.afrochow.notification.model.Notification;

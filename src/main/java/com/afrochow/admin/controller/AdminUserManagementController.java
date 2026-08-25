@@ -1,6 +1,6 @@
 package com.afrochow.admin.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.common.enums.OrderStatus;
 import com.afrochow.customer.model.CustomerProfile;
 import com.afrochow.order.repository.OrderRepository;
@@ -8,7 +8,7 @@ import com.afrochow.user.model.User;
 import com.afrochow.common.enums.Role;
 import com.afrochow.common.enums.UserStatus;
 import com.afrochow.common.enums.VendorStatus;
-import com.afrochow.security.Services.LoginAttemptService;
+import com.afrochow.security.service.LoginAttemptService;
 import com.afrochow.user.repository.UserRepository;
 import com.afrochow.user.repository.specification.UserFilterSpecifications;
 import io.swagger.v3.oas.annotations.Operation;

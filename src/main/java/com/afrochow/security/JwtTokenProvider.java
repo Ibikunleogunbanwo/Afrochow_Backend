@@ -1,6 +1,6 @@
 package com.afrochow.security;
 import com.afrochow.user.model.User;
-import com.afrochow.security.Utils.JwtUtil;
+import com.afrochow.security.util.JwtUtils;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -15,7 +15,7 @@ import java.util.Date;
 import java.util.Map;
 
 /**
- * Spring-aware JWT provider that delegates all crypto work to JwtUtil.
+ * Spring-aware JWT provider that delegates all crypto work to JwtUtils.
  */
 @Component
 public class JwtTokenProvider {
@@ -49,11 +49,11 @@ public class JwtTokenProvider {
     @PostConstruct
     public void init() {
         validateJwtSecret();
-        this.signingKey = JwtUtil.hs512KeyFrom(jwtSecret);
+        this.signingKey = JwtUtils.hs512KeyFrom(jwtSecret);
 
         if (encryptionEnabled) {
             byte[] aesBytes = Base64.getDecoder().decode(encryptionKeyBase64.trim());
-            this.encryptionKey = JwtUtil.aes256KeyFrom(aesBytes);
+            this.encryptionKey = JwtUtils.aes256KeyFrom(aesBytes);
             logger.info("JWT provider started with AES-256-GCM encryption");
         } else {
             logger.warn("JWT provider started WITHOUT encryption");
@@ -74,15 +74,15 @@ public class JwtTokenProvider {
                 CLAIM_ROLE, user.getRole().name()
         );
 
-        String jwt = JwtUtil.buildToken(claims, user.getUsername(), issuedAt, expiration, signingKey);
-        return encryptionEnabled ? JwtUtil.encrypt(jwt, encryptionKey) : jwt;
+        String jwt = JwtUtils.buildToken(claims, user.getUsername(), issuedAt, expiration, signingKey);
+        return encryptionEnabled ? JwtUtils.encrypt(jwt, encryptionKey) : jwt;
     }
 
     /* ---------- Token parsing ---------- */
     public Claims readToken(String token) {
-        String jwt = encryptionEnabled ? JwtUtil.decrypt(token, encryptionKey) : token;
+        String jwt = encryptionEnabled ? JwtUtils.decrypt(token, encryptionKey) : token;
         try {
-            return JwtUtil.parseToken(jwt, signingKey);
+            return JwtUtils.parseToken(jwt, signingKey);
         } catch (ExpiredJwtException e) {
             throw new JwtException("Token expired", e);
         } catch (JwtException | IllegalArgumentException e) {

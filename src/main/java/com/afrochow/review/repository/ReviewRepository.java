@@ -3,6 +3,7 @@ import com.afrochow.review.model.Review;
 import com.afrochow.user.model.User;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.product.model.Product;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,14 +22,22 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     List<Review> findByVendor(VendorProfile vendor);
 
+    // Public review-list endpoints map every row through toResponseDto, which reads
+// the reviewer's name, vendor name, product name, and order id — all lazy
+// associations. EntityGraph loads them in one query instead of 1+4N.
+    @EntityGraph(attributePaths = {"user", "vendor", "product", "order"})
     List<Review> findByVendorAndIsVisible(VendorProfile vendor, Boolean isVisible);
+
+    @EntityGraph(attributePaths = {"user", "vendor", "product", "order"})
+    List<Review> findByProductAndIsVisible(Product product, Boolean isVisible);
+
+    @EntityGraph(attributePaths = {"user", "vendor", "product", "order"})
+    List<Review> findByVendorAndRatingGreaterThanEqual(VendorProfile vendor, Integer rating);
 
     List<Review> findByVendorOrderByCreatedAtDesc(VendorProfile vendor);
 
 
     List<Review> findByProduct(Product product);
-
-    List<Review> findByProductAndIsVisible(Product product, Boolean isVisible);
 
     List<Review> findByProductOrderByCreatedAtDesc(Product product);
 
@@ -36,8 +45,6 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     List<Review> findByRating(Integer rating);
 
     List<Review> findByRatingGreaterThanEqual(Integer rating);
-
-    List<Review> findByVendorAndRatingGreaterThanEqual(VendorProfile vendor, Integer rating);
 
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.vendor = :vendor AND r.isVisible = true")

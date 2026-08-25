@@ -21,7 +21,7 @@ import java.util.Set;
 
 /**
  * Consumes domain events published by the transactional outbox and performs the
- * notification side effects that previously lived inside OutboxPoller.
+ * notification side effects that previously lived inside OutboxJob.
  */
 @Slf4j
 @Component

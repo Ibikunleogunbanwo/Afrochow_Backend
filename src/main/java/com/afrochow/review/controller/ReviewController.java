@@ -1,7 +1,7 @@
 package com.afrochow.review.controller;
 
-import com.afrochow.common.ApiResponse;
-import com.afrochow.common.ResponseBuilder;
+import com.afrochow.common.response.ApiResponse;
+import com.afrochow.common.response.ResponseBuilder;
 import com.afrochow.review.dto.ReviewRequestDto;
 import com.afrochow.review.dto.ReviewResponseDto;
 import com.afrochow.review.service.ReviewService;

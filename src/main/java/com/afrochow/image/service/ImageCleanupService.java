@@ -1,6 +1,6 @@
 package com.afrochow.image.service;
 
-import com.afrochow.image.ImageUploadService;
+import com.afrochow.image.service.ImageUploadService;
 import com.afrochow.image.model.ImageCleanupTask;
 import com.afrochow.image.repository.ImageCleanupTaskRepository;
 import lombok.RequiredArgsConstructor;

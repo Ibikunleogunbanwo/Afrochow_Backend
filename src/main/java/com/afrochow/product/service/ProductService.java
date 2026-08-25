@@ -8,7 +8,7 @@ import com.afrochow.product.dto.ProductResponseDto;
 import com.afrochow.product.dto.ProductSummaryResponseDto;
 import com.afrochow.category.model.Category;
 import com.afrochow.product.model.Product;
-import com.afrochow.image.ImageUploadService;
+import com.afrochow.image.service.ImageUploadService;
 import com.afrochow.image.service.ImageCleanupService;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;

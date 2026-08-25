@@ -7,6 +7,7 @@ import com.afrochow.common.enums.OrderStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -49,6 +50,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // Customer queries
     List<Order> findByCustomer(CustomerProfile customer);
 
+    // Fetches orderLines + vendor.user in the same query — the customer/vendor
+    // order-list endpoints map every row through toSummaryResponseDto, which
+    // touches those associations; without this each list was 1+N queries.
+    @EntityGraph(attributePaths = {"orderLines", "vendor.user"})
     List<Order> findByCustomerOrderByOrderTimeDesc(CustomerProfile customer);
 
     List<Order> findByCustomerAndStatus(CustomerProfile customer, OrderStatus status);
@@ -59,8 +64,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // Vendor queries
     List<Order> findByVendor(VendorProfile vendor);
 
+    @EntityGraph(attributePaths = {"orderLines", "vendor.user"})
     List<Order> findByVendorOrderByOrderTimeDesc(VendorProfile vendor);
 
+    @EntityGraph(attributePaths = {"orderLines", "vendor.user"})
     List<Order> findByVendorAndStatus(VendorProfile vendor, OrderStatus status);
 
     // Status queries
@@ -88,9 +95,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.status NOT IN ('DELIVERED', 'CANCELLED', 'REFUNDED') ORDER BY o.orderTime DESC")
     List<Order> findActiveOrders();
 
+    @EntityGraph(attributePaths = {"orderLines", "vendor.user"})
     @Query("SELECT o FROM Order o WHERE o.customer = :customer AND o.status NOT IN ('DELIVERED', 'CANCELLED', 'REFUNDED') ORDER BY o.orderTime DESC")
     List<Order> findActiveOrdersByCustomer(@Param("customer") CustomerProfile customer);
 
+    @EntityGraph(attributePaths = {"orderLines", "vendor.user"})
     @Query("SELECT o FROM Order o WHERE o.vendor = :vendor AND o.status NOT IN ('DELIVERED', 'CANCELLED', 'REFUNDED') ORDER BY o.orderTime DESC")
     List<Order> findActiveOrdersByVendor(@Param("vendor") VendorProfile vendor);
 
@@ -110,6 +119,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.orderTime >= :startOfDay AND o.orderTime < :endOfDay ORDER BY o.orderTime DESC")
     List<Order> findTodayOrders(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
 
+    @EntityGraph(attributePaths = {"orderLines", "vendor.user"})
     @Query("SELECT o FROM Order o WHERE o.vendor = :vendor AND o.orderTime >= :startOfDay AND o.orderTime < :endOfDay ORDER BY o.orderTime DESC")
     List<Order> findTodayOrdersByVendor(@Param("vendor") VendorProfile vendor,
                                          @Param("startOfDay") LocalDateTime startOfDay,
