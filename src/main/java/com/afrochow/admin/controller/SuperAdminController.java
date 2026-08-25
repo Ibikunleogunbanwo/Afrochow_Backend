@@ -1,5 +1,5 @@
 package com.afrochow.admin.controller;
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.common.enums.Role;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;

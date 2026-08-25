@@ -1,6 +1,6 @@
 package com.afrochow.promotion.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.promotion.dto.PromotionPreviewRequestDto;
 import com.afrochow.promotion.dto.PromotionPreviewResponseDto;
 import com.afrochow.promotion.dto.PromotionRequestDto;

@@ -1,6 +1,6 @@
 package com.afrochow.favorite.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.common.enums.FavoriteType;
 import com.afrochow.favorite.dto.FavoriteRequestDto;
 import com.afrochow.favorite.dto.FavoriteResponseDto;

@@ -2,7 +2,7 @@ package com.afrochow.security;
 
 import com.afrochow.common.exceptions.JwtAuthenticationException;
 import com.afrochow.common.exceptions.JwtExpiredTokenException;
-import com.afrochow.security.Services.CustomUserDetailsService;
+import com.afrochow.security.service.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -23,47 +23,14 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Objects;
 
-import static com.afrochow.security.Utils.CookieConstants.ACCESS_TOKEN_COOKIE;
+import static com.afrochow.security.util.CookieConstants.ACCESS_TOKEN_COOKIE;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-
-    private static final List<String> PUBLIC_PATHS = List.of(
-            "/api/auth/login",
-            "/api/auth/register/customer",
-            "/api/auth/register/vendor",
-            "/api/auth/refresh",
-            "/api/public/",
-            "/api/images",                   // DELETE /api/images?imageUrl=...
-            "/api/images/",                  // GET /api/images/category/filename
-            "/swagger-ui/",
-            "/v3/api-docs",
-            "/error",
-            "/auth/login",
-            "/auth/register/customer",
-            "/auth/register/vendor",
-            "/auth/refresh",
-            "/auth/logout",
-            "/auth/forgot-password",
-            "/auth/reset-password",
-            "/auth/verify-email",
-            "/auth/resend-verification",
-            "/public/",
-            "/images",
-            "/images/",
-            "/stats/**"
-            // NOTE: Promotion paths are intentionally NOT listed here.
-            // The JWT filter must run for all /promotions/** requests so that
-            // vendor/admin/authenticated rules in SecurityConfig can evaluate
-            // the caller's role. For truly public promotion endpoints, SecurityConfig
-            // already grants permitAll() — but only after the filter populates the
-            // security context (or leaves it anonymous, which is fine for permitAll).
-    );
 
     private final JwtTokenProvider tokenProvider;
     private final CustomUserDetailsService userDetailsService;
@@ -191,31 +158,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return auth != null &&
                 auth.isAuthenticated() &&
                 !(auth instanceof AnonymousAuthenticationToken);
-    }
-
-    /**
-     * Skip JWT processing entirely for public paths.
-     *
-     * <p>Matching convention for {@link #PUBLIC_PATHS}:
-     * <ul>
-     *   <li>Entries that end with {@code "/"} are treated as <b>prefix</b> matches
-     *       — e.g. {@code "/api/images/"} covers {@code /api/images/foo/bar.png}.</li>
-     *   <li>Entries without a trailing slash are treated as <b>exact</b> matches
-     *       — this prevents accidental shadowing such as {@code "/auth/logout"}
-     *       swallowing requests to {@code /auth/logout-all}, which is now an
-     *       authenticated endpoint and must reach the filter to populate the
-     *       SecurityContext from the JWT cookie.</li>
-     * </ul>
-     */
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getServletPath();
-        boolean isPublic = PUBLIC_PATHS.stream().anyMatch(entry ->
-                entry.endsWith("/") ? path.startsWith(entry) : path.equals(entry));
-        if (isPublic) {
-            logger.debug("Skipping JWT filter for public path: {}", path);
-        }
-        return isPublic;
     }
 
     private void handleExpiredToken(JwtExpiredTokenException e) {

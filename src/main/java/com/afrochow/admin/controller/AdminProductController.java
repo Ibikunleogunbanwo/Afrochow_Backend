@@ -1,6 +1,6 @@
 package com.afrochow.admin.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.favorite.repository.FavoriteRepository;
 import com.afrochow.product.model.Product;
 import com.afrochow.product.repository.ProductRepository;

@@ -1,8 +1,11 @@
 package com.afrochow.user.mapper;
 
+import com.afrochow.auth.dto.LoginResponseDto;
 import com.afrochow.common.enums.AuthProvider;
+import com.afrochow.common.enums.Role;
 import com.afrochow.user.dto.UserResponseDto;
 import com.afrochow.user.model.User;
+import com.afrochow.vendor.model.VendorProfile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,6 +34,29 @@ public class UserMapper {
                 .isProfileComplete(hasText(user.getPhone()))
                 .authProvider(resolveAuthProvider(user))
                 .build();
+    }
+
+    /**
+     * Shared login/auth response mapping (used by both email and Google auth flows).
+     */
+    public LoginResponseDto toLoginResponse(User user) {
+        LoginResponseDto.LoginResponseDtoBuilder builder = LoginResponseDto.builder()
+                .publicUserId(user.getPublicUserId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .role(user.getRole().name())
+                .isProfileComplete(hasText(user.getPhone()))
+                .authProvider(resolveAuthProvider(user));
+
+        // Attach vendor-specific status so the frontend can show appropriate
+        // banners for pending-approval or deactivated vendor accounts.
+        if (user.getRole() == Role.VENDOR && user.getVendorProfile() != null) {
+            VendorProfile vendorProfile = user.getVendorProfile();
+            builder.vendorIsActive(vendorProfile.getIsActive())
+                   .vendorIsVerified(vendorProfile.getIsVerified());
+        }
+
+        return builder.build();
     }
 
     private boolean hasText(String value) {

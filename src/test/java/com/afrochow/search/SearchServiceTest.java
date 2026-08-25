@@ -1,11 +1,13 @@
 package com.afrochow.search;
+import com.afrochow.search.service.SearchService;
+import com.afrochow.search.service.VendorGeoIndexService;
 
 import com.afrochow.address.model.Address;
 import com.afrochow.product.dto.ProductResponseDto;
 import com.afrochow.product.model.Product;
 import com.afrochow.product.repository.ProductRepository;
 import com.afrochow.user.model.User;
-import com.afrochow.vendor.VendorMapper;
+import com.afrochow.vendor.mapper.VendorMapper;
 import com.afrochow.vendor.model.VendorProfile;
 import com.afrochow.vendor.repository.VendorProfileRepository;
 import org.junit.jupiter.api.Test;

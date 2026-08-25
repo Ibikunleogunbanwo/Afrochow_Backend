@@ -1,7 +1,7 @@
 package com.afrochow.customer.dto;
 
 import com.afrochow.address.dto.AddressRequestDto;
-import com.afrochow.auth.dto.BaseRegistrationRequest;
+import com.afrochow.auth.dto.BaseRegistrationRequestDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -12,7 +12,7 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CustomerProfileRequestDto extends BaseRegistrationRequest {
+public class CustomerProfileRequestDto extends BaseRegistrationRequestDto {
 
 
     // ========== REQUIRED USERNAME (FOR BASE CLASS) ==========
@@ -32,5 +32,5 @@ public class CustomerProfileRequestDto extends BaseRegistrationRequest {
     @NotNull(message = "Address is required")
     private AddressRequestDto address;
 
-    // Cross-field validation handled in BaseRegistrationRequest#isPasswordMatching()
+    // Cross-field validation handled in BaseRegistrationRequestDto#isPasswordMatching()
 }

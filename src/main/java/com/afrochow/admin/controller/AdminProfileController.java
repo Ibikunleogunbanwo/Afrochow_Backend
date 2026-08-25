@@ -3,7 +3,7 @@ package com.afrochow.admin.controller;
 import com.afrochow.admin.dto.AdminProfileUpdateRequestDto;
 import com.afrochow.admin.dto.AdminProfileResponseDto;
 import com.afrochow.admin.service.AdminProfileService;
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.security.model.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

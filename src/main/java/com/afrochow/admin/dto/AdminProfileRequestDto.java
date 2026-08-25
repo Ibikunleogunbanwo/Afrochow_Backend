@@ -1,6 +1,6 @@
 package com.afrochow.admin.dto;
 
-import com.afrochow.auth.dto.BaseRegistrationRequest;
+import com.afrochow.auth.dto.BaseRegistrationRequestDto;
 import com.afrochow.common.enums.Department;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
@@ -22,7 +22,7 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AdminProfileRequestDto extends BaseRegistrationRequest {
+public class AdminProfileRequestDto extends BaseRegistrationRequestDto {
 
     // ========== ADMIN INFORMATION ==========
 

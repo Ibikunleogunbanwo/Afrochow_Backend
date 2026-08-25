@@ -148,7 +148,7 @@ public class Order {
      *   - ADVANCE_ORDER items: copied straight from requestedFulfillmentTime.
      *   - SAME_DAY items: confirmedAt + the longest preparationTimeMinutes
      *     across the order's line items.
-     * Null until the order is accepted. Drives {@link com.afrochow.order.service.OrderFulfillmentOverdueScheduler}.
+     * Null until the order is accepted. Drives {@link com.afrochow.order.service.OrderFulfillmentOverdueJob}.
      */
     private LocalDateTime fulfillmentDeadline;
 

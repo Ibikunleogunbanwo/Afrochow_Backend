@@ -1,89 +1,77 @@
-# Afrochow Backend
+# AfroChow Commerce API Platform
 
-![Java](https://img.shields.io/badge/Java-21-1f2937?style=for-the-badge)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.x-6db33f?style=for-the-badge)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=for-the-badge)
-![Kafka](https://img.shields.io/badge/Apache%20Kafka-Events-111827?style=for-the-badge)
-![MySQL](https://img.shields.io/badge/MySQL-8.4-4479a1?style=for-the-badge)
+AfroChow Commerce API Platform is the Spring Boot backend behind AfroChow, a Canadian marketplace for African restaurants, food vendors, customers, and marketplace operators.
 
-Afrochow Backend is the Spring Boot API behind the Afrochow marketplace. It powers authentication, customer and vendor workflows, stores, menus, orders, payments, notifications, address geocoding, file uploads, and event-driven background processing.
+The API owns the commercial backbone of the product: authentication, customer and vendor workflows, stores, menus, carts, orders, payments, vendor payouts, notifications, geocoding, image uploads, metrics, backups, and event processing. It is built as a production ready service that can run on a VPS through Docker Compose, Cloudflare, Nginx, MySQL, Kafka, Redis, and scheduled S3 database backups.
 
-Production is containerized with Docker Compose and sits behind Cloudflare and Nginx, with MySQL, Kafka, Redis, and scheduled S3 database backups.
+## What This Backend Powers
 
-## Table Of Contents
+| Domain | Capability |
+| --- | --- |
+| Customers | Account flows, vendor discovery, checkout, orders, payment status, address data, and notifications. |
+| Vendors | Store onboarding, menu management, order handling, earnings, Stripe Connect onboarding, and profile management. |
+| Admins | Vendor approval, customer and vendor management, platform metrics, and operational oversight. |
+| Platform operations | Kafka domain events, Redis runtime support, metrics, Docker deployment, and scheduled S3 backups. |
 
-- [Architecture](#architecture)
-- [Core Services](#core-services)
-- [Backend Capabilities](#backend-capabilities)
-- [Event Pipeline](#event-pipeline)
-- [Local Development](#local-development)
-- [API Documentation](#api-documentation)
-- [Testing](#testing)
-- [Production Shape](#production-shape)
-- [CI/CD](#cicd)
-- [Security Notes](#security-notes)
-- [License](#license)
+## Business Summary
 
-## Architecture
+AfroChow is built around marketplace reliability:
+
+- Customers should be able to discover vendors before signing in.
+- Vendors need a practical dashboard for menus, orders, payout setup, and earnings.
+- Payment and notification workflows should be reliable even when outside providers slow down.
+- Admins need enough visibility to approve vendors and protect marketplace quality.
+- The system should run affordably on an MVP VPS while keeping a path open for future worker separation.
+
+## Platform Capabilities
+
+| Area | Implementation |
+| --- | --- |
+| Authentication | JWT based account flows with login rate limiting and account lockout after repeated failures. |
+| Commerce | Customer, vendor, store, menu, product, order, payment, and payout APIs. |
+| Payments | Stripe checkout and Stripe Connect workflows. |
+| Media | Cloudinary backed image upload workflows. |
+| Messaging | Notification creation and delivery workflows through event processing. |
+| Location | Address geocoding and fulfillment support. |
+| Events | Transactional outbox publishing, Kafka consumers, retries, and dead letter topics. |
+| Runtime support | Redis cache and geospatial support. |
+| Operations | Prometheus metrics endpoint, Docker deployment, and scheduled database backups. |
+
+## System Design
 
 ```mermaid
 flowchart LR
-    browser["Web / Mobile Clients"]
-    cf["Cloudflare"]
-    nginx["Nginx Origin Proxy"]
-    app["Spring Boot API<br/>(produces + consumes Kafka events in-process)"]
-    mysql["MySQL 8.4"]
-    kafka["Kafka Broker"]
-    redis["Redis"]
-    backup["db-backup Container"]
-    s3["S3 Backups"]
+    client["Web and Mobile Clients"]
+    cf["Cloudflare<br/>DNS + TLS + Proxy"]
+    nginx["Nginx<br/>Origin Proxy"]
+    api["Spring Boot API<br/>Commerce Rules"]
+    mysql["MySQL 8.4<br/>system of record"]
+    redis["Redis<br/>cache and geospatial support"]
+    kafka["Kafka<br/>domain events"]
+    outbox["Transactional Outbox<br/>reliable publishing"]
+    stripe["Stripe<br/>payments and Connect"]
+    cloudinary["Cloudinary<br/>media"]
+    backup["Backup Container<br/>scheduled dump"]
+    s3["S3<br/>database backups"]
 
-    browser --> cf
+    client --> cf
     cf --> nginx
-    nginx --> app
-    app --> mysql
-    app --> redis
-    app <--> kafka
+    nginx --> api
+    api --> mysql
+    api --> redis
+    api --> stripe
+    api --> cloudinary
+    api --> outbox
+    outbox --> kafka
     mysql --> backup
     backup --> s3
 ```
 
-Only the HTTP(S) edge is public. Internal services such as MySQL, Kafka, Redis, the backup container, and Kafka UI are kept behind the Docker network, localhost bindings, or SSH tunnels.
-
-**Note on the `app` node:** there is a single Spring Boot deployable — one `app` container runs the HTTP API, the outbox poller, and all Kafka consumer groups in the same JVM. There is currently no separate worker service; the earlier version of this diagram implied one and was misleading. Kafka's per-consumer-group offset tracking already isolates the workloads logically, so splitting a consumer group into its own deployable later is a config change, not a rewrite — but as of today it's all one process.
-
-## Core Services
-
-| Service | Role |
-| --- | --- |
-| `app` | Spring Boot API |
-| `nginx` | Public reverse proxy and TLS origin |
-| `mysql` | Primary relational database |
-| `kafka` | Domain event broker |
-| `kafka-init` | Topic creation job |
-| `redis` | Cache and geospatial store support |
-| `db-backup` | Scheduled MySQL dump and S3 upload worker |
-| `kafka-ui` | Private Kafka inspection UI |
-
-## Backend Capabilities
-
-- JWT-based authentication and account flows, with login rate limiting and account lockout after repeated failures (OWASP ASVS V2.2.1)
-- Customer, vendor, store, menu, product, and order APIs
-- Image uploads via Cloudinary
-- Stripe-backed payment workflows
-- Notification creation and delivery workflows
-- Address geocoding and fulfillment support
-- Transactional outbox event publishing
-- Kafka consumers with idempotency checks
-- Redis-backed runtime support
-- Distributed scheduler locking (ShedLock) so scheduled jobs stay safe if the app ever scales to multiple instances
-- Prometheus-format metrics at `/actuator/prometheus` (JWT-authenticated, same as other non-public actuator endpoints) — not yet scraped by a running Prometheus/Grafana stack, but curlable for manual debugging today
-- Dockerized production deployment
-- Scheduled database backups
+Only HTTP(S) is public. MySQL, Kafka, Redis, backup jobs, and Kafka UI should stay private behind Docker networking, localhost bindings, firewall rules, or SSH tunnels.
 
 ## Event Pipeline
 
-Afrochow uses a transactional outbox pattern for background work. Application code writes domain events to the database, a poller publishes them to Kafka, and independent consumer groups process their own workloads.
+AfroChow uses the transactional outbox pattern for background work. Application code writes business data and domain events to MySQL in one transaction. A poller publishes pending events to Kafka. Consumer groups then process their own workloads independently.
 
 ```mermaid
 sequenceDiagram
@@ -102,7 +90,7 @@ sequenceDiagram
     Consumers-->>DLQ: Send failed record after retries
 ```
 
-Current event stream conventions:
+Current event streams:
 
 ```text
 afrochow.domain-events
@@ -118,9 +106,20 @@ afrochow-address-geocoding-service
 afrochow-payment-transfer-service
 ```
 
-One Kafka topic can serve multiple consumer groups safely. Each group tracks its own offsets and receives its own logical copy of each event.
+Today the HTTP API, outbox poller, and Kafka consumer groups run inside one Spring Boot deployable. Kafka offset isolation means each group can later move into its own service without changing the event contract.
 
-All three consumer groups currently run in-process inside the same `app` deployable as the API — there is no separate worker service today. The offset isolation above means a group can be pulled out into its own service later without changing the event contract.
+## Core Services
+
+| Service | Role |
+| --- | --- |
+| `app` | Spring Boot API and in process consumers. |
+| `nginx` | Public reverse proxy and TLS origin. |
+| `mysql` | Primary relational database. |
+| `kafka` | Domain event broker. |
+| `kafka-init` | Topic creation job. |
+| `redis` | Cache and geospatial support. |
+| `db-backup` | Scheduled MySQL dump and S3 upload worker. |
+| `kafka-ui` | Private Kafka inspection UI. |
 
 ## Local Development
 
@@ -137,7 +136,7 @@ Start local infrastructure:
 docker compose -f docker-compose.prod.yml up -d kafka kafka-init redis
 ```
 
-The Maven build enforces Java 21 exactly (`maven-enforcer-plugin`). On macOS, point `JAVA_HOME` at a JDK 21 install before running Maven:
+Point `JAVA_HOME` at a JDK 21 install on macOS:
 
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)
@@ -149,36 +148,33 @@ Compile the backend:
 ./mvnw -q -DskipTests compile
 ```
 
-Run the app with your local Spring profile and environment values:
+Run the app:
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Local `.env` and production `.env.prod` files must stay private. Use `.env.prod.example` as the shape reference for required variables.
-
-### Local Developer Console (BootUI)
-
-In the `dev` profile (or whenever `spring-boot-devtools` is on the classpath), [BootUI](https://www.julien-dubois.com/boot-ui/) is available at `http://localhost:8080/api/bootui` — a local-only console for health, metrics, JVM/DB pool/cache inspection, log tail, and Spring/Hibernate/security advisors. It's loopback-only and force-disables itself outside `dev`/`local` profiles, so it never activates in production.
+Local `.env` and production `.env.prod` files must stay private. Use `.env.prod.example` as the reference for required production values.
 
 ## API Documentation
 
-The API is self-documented with [springdoc-openapi](https://springdoc.org/). The app is mounted under `/api` (`server.servlet.context-path=/api`), so with the app running locally:
+The API uses springdoc OpenAPI. The app is mounted under `/api`.
 
-- Swagger UI: `http://localhost:8080/api/swagger-ui.html`
-- Raw OpenAPI spec: `http://localhost:8080/api/v3/api-docs`
+```text
+Swagger UI:       http://localhost:8080/api/swagger-ui.html
+Raw OpenAPI:      http://localhost:8080/api/v3/api-docs
+Local BootUI:     http://localhost:8080/api/bootui
+```
 
-Swagger UI is protected in non-local environments (see `SwaggerAuthConfig`). To export the spec to a file for sharing or client-generation purposes:
+Swagger UI is protected outside local environments. BootUI is available only in local or dev profiles and is intended for health, metrics, JVM, database pool, cache, log, and advisor inspection.
+
+Export the OpenAPI spec:
 
 ```bash
 ./scripts/export-openapi.sh
 ```
 
-This starts the app against local infrastructure, pulls the spec from `/api/v3/api-docs`, and writes it to `openapi.json` in the repo root.
-
 ## Testing
-
-The service ships with unit and Spring MVC slice tests across controllers, services, and security components (`AbstractControllerTest` / `ControllerSliceTest` provide shared test scaffolding). H2 backs repository-adjacent tests so the suite runs without external infrastructure.
 
 Run the full suite:
 
@@ -186,45 +182,47 @@ Run the full suite:
 ./mvnw test
 ```
 
-`maven-enforcer-plugin` pins builds to Java 21, and `dependency-check-maven` runs an OWASP vulnerability scan against dependencies as part of the build.
+The backend includes unit and Spring MVC slice tests across controllers, services, and security components. H2 supports repository adjacent tests so most of the suite can run without external infrastructure.
+
+The Maven build enforces Java 21, and the dependency check plugin runs OWASP vulnerability scanning against dependencies.
 
 ## Production Shape
 
 Production runs through Docker Compose with these major pieces:
 
-- Cloudflare for public DNS, proxying, and edge TLS
-- Nginx as the origin reverse proxy
-- Spring Boot app container (also runs the outbox poller and all Kafka consumer groups — see [Event Pipeline](#event-pipeline))
-- MySQL, Kafka, Redis, and backup containers
-- Private Kafka UI over SSH tunnel only
-- Scheduled MySQL backups to S3
+- Cloudflare for DNS, proxying, and edge TLS.
+- Nginx as the origin reverse proxy.
+- Spring Boot app container, which also runs the outbox poller and Kafka consumer groups today.
+- MySQL, Kafka, Redis, and backup containers.
+- Private Kafka UI over SSH tunnel only.
+- Scheduled MySQL backups to S3.
 
 Useful production files:
 
 | Path | Purpose |
 | --- | --- |
-| `docker-compose.prod.yml` | Production container topology |
-| `Dockerfile` | Spring Boot app image |
-| `deploy/nginx/` | Nginx origin proxy config |
-| `deploy/backup/` | Database backup image and scripts |
-| `.env.prod.example` | Example production environment contract |
+| `docker-compose.prod.yml` | Production container topology. |
+| `Dockerfile` | Spring Boot app image. |
+| `deploy/nginx/` | Nginx origin proxy config. |
+| `deploy/backup/` | Database backup image and scripts. |
+| `.env.prod.example` | Example production environment contract. |
 
 Deployment details, credentials, certificates, server IPs, and operational runbooks are intentionally kept outside the public README.
 
-## CI/CD
+## CI CD
 
 Production deploys are handled by GitHub Actions through `.github/workflows/deploy-production.yml`.
 
-The workflow runs when `main` is pushed, and can also be started manually from the GitHub Actions tab. It compiles the application, connects to the VPS over SSH, pulls `origin/main` into `/opt/afrochow`, rebuilds the Docker Compose stack, and verifies the API health endpoint.
+The workflow runs when `main` is pushed and can also be started manually from GitHub Actions. It compiles the application, connects to the VPS over SSH, pulls `origin/main` into `/opt/afrochow`, rebuilds the Docker Compose stack, and verifies the API health endpoint.
 
 Required repository secrets:
 
 | Secret | Purpose |
 | --- | --- |
-| `VPS_HOST` | Production VPS hostname or IP |
-| `VPS_SSH_KEY` | Private SSH key allowed to deploy on the VPS |
-| `VPS_USER` | SSH user, usually `root` |
-| `VPS_PORT` | SSH port, optional when using `22` |
+| `VPS_HOST` | Production VPS hostname or IP. |
+| `VPS_SSH_KEY` | Private SSH key allowed to deploy on the VPS. |
+| `VPS_USER` | SSH user, usually `root`. |
+| `VPS_PORT` | SSH port, optional when using `22`. |
 
 The VPS keeps private runtime files outside Git, including `.env.prod` and Cloudflare origin certificates.
 
@@ -244,8 +242,19 @@ database dumps
 uploaded user files
 ```
 
-The repository keeps deployable infrastructure code, but excludes private runtime artifacts such as real environment files, cert keys, uploaded files, and backup dumps.
+The repository keeps deployable infrastructure code, but excludes private runtime artifacts such as real environment files, certificate keys, uploaded files, and backup dumps.
+
+## Recruiter Notes
+
+AfroChow Commerce API Platform demonstrates production backend depth:
+
+- Commerce domain modeling across customers, vendors, stores, menus, orders, payments, payouts, and admin operations.
+- Event based architecture using Kafka and the transactional outbox pattern.
+- Payment integration with Stripe and vendor payout onboarding through Stripe Connect.
+- Runtime and operations awareness across Cloudflare, Nginx, Docker, MySQL, Redis, Kafka, Prometheus metrics, and S3 backups.
+- Security and reliability concerns including JWT auth, login rate limiting, account lockout, private runtime secrets, retry topics, and dead letter queues.
+- A practical path to scale from one Spring Boot deployable to separate worker services later.
 
 ## License
 
-Proprietary. All rights reserved — this code is not licensed for reuse, redistribution, or derivative works without written permission.
+Proprietary. All rights reserved. This code is not licensed for reuse, redistribution, or derivative works without written permission.

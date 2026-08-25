@@ -83,7 +83,7 @@ class JwtTokenProviderTest {
         assertThat(provider.isValidToken(token)).isTrue();
     }
 
-    // NOTE: JwtUtil.decrypt() runs OUTSIDE readToken()'s try/catch and wraps every
+    // NOTE: JwtUtils.decrypt() runs OUTSIDE readToken()'s try/catch and wraps every
     // failure (bad base64, bad GCM tag) in a plain SecurityException — which
     // isValidToken()'s catch clause (JwtException | IllegalArgumentException)
     // does NOT catch. So with encryption enabled, garbage/tampered ciphertext makes

@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * DTOs pull in large nested object graphs (business profile, address, admin
  * permissions) that add little beyond what registerCustomer's success case
  * and each endpoint's validation-failure case already prove about the
- * shared BaseRegistrationRequest wiring.
+ * shared BaseRegistrationRequestDto wiring.
  */
 @ControllerSliceTest(AuthController.class)
 class AuthControllerTest extends AbstractControllerTest {
@@ -70,10 +70,10 @@ class AuthControllerTest extends AbstractControllerTest {
 
     @Test
     void googleLogin_returns200() throws Exception {
-        GoogleAuthRequest request = new GoogleAuthRequest();
+        GoogleAuthRequestDto request = new GoogleAuthRequestDto();
         request.setCode("google-auth-code");
 
-        LoginResponse response = LoginResponse.builder()
+        LoginResponseDto response = LoginResponseDto.builder()
                 .publicUserId("user-1").username(USERNAME).email("ada@afrochow.com").role("CUSTOMER").build();
         when(googleAuthService.authenticateWithGoogle(eq("google-auth-code"), isNull(),
                 any(HttpServletRequest.class), any(HttpServletResponse.class))).thenReturn(response);
@@ -87,7 +87,7 @@ class AuthControllerTest extends AbstractControllerTest {
 
     @Test
     void registerCustomer_valid_returns200() throws Exception {
-        RegistrationResponse response = RegistrationResponse.builder()
+        RegistrationResponseDto response = RegistrationResponseDto.builder()
                 .message("Registered").email("ada@afrochow.com").publicUserId("user-1")
                 .emailVerified(false).nextStep("VERIFY_EMAIL").build();
         when(authenticationService.registerCustomer(any(CustomerProfileRequestDto.class), any(HttpServletRequest.class)))
@@ -132,10 +132,10 @@ class AuthControllerTest extends AbstractControllerTest {
 
     @Test
     void login_returns200() throws Exception {
-        LoginRequest request = LoginRequest.builder().identifier("ada@afrochow.com").password("Passw0rd!").build();
-        LoginResponse response = LoginResponse.builder()
+        LoginRequestDto request = LoginRequestDto.builder().identifier("ada@afrochow.com").password("Passw0rd!").build();
+        LoginResponseDto response = LoginResponseDto.builder()
                 .publicUserId("user-1").username(USERNAME).email("ada@afrochow.com").role("CUSTOMER").build();
-        when(authenticationService.login(any(LoginRequest.class), any(HttpServletRequest.class), any(HttpServletResponse.class)))
+        when(authenticationService.login(any(LoginRequestDto.class), any(HttpServletRequest.class), any(HttpServletResponse.class)))
                 .thenReturn(response);
 
         mockMvc.perform(post("/auth/login")
@@ -316,5 +316,34 @@ class AuthControllerTest extends AbstractControllerTest {
                 .andExpect(jsonPath("$.message").value("Verification email sent successfully"));
 
         verify(authenticationService).resendVerificationEmail("ada@afrochow.com");
+    }
+
+    @Test
+    void changeVerificationEmail_returns200() throws Exception {
+        ChangeVerificationEmailDto dto = new ChangeVerificationEmailDto();
+        dto.setCurrentEmail("wrong@afrochow.com");
+        dto.setNewEmail("correct@afrochow.com");
+
+        mockMvc.perform(post("/auth/change-verification-email")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Verification email updated and sent successfully"));
+
+        verify(authenticationService).changeVerificationEmail("wrong@afrochow.com", "correct@afrochow.com");
+    }
+
+    @Test
+    void changeVerificationEmail_invalidNewEmail_returns400() throws Exception {
+        ChangeVerificationEmailDto dto = new ChangeVerificationEmailDto();
+        dto.setCurrentEmail("wrong@afrochow.com");
+        dto.setNewEmail("not-an-email");
+
+        mockMvc.perform(post("/auth/change-verification-email")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isBadRequest());
+
+        verify(authenticationService, never()).changeVerificationEmail(any(), any());
     }
 }

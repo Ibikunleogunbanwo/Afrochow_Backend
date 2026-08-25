@@ -1,6 +1,8 @@
 package com.afrochow.search;
+import com.afrochow.search.controller.SearchController;
+import com.afrochow.search.service.SearchService;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.common.enums.ScheduleType;
 import com.afrochow.product.dto.ProductResponseDto;
 import com.afrochow.testsupport.AbstractControllerTest;

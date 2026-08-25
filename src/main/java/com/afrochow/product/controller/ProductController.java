@@ -1,7 +1,7 @@
 package com.afrochow.product.controller;
 
-import com.afrochow.common.ApiResponse;
-import com.afrochow.common.ResponseBuilder;
+import com.afrochow.common.response.ApiResponse;
+import com.afrochow.common.response.ResponseBuilder;
 import com.afrochow.product.dto.ProductRequestDto;
 import com.afrochow.product.dto.ProductUpdateRequestDto;
 import com.afrochow.product.dto.ProductResponseDto;

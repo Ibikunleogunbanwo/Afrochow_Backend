@@ -1,7 +1,7 @@
 package com.afrochow.security;
 
-import com.afrochow.security.Utils.SecurityUtils;
-import com.afrochow.common.ApiResponse;
+import com.afrochow.security.util.SecurityUtils;
+import com.afrochow.common.response.ApiResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;

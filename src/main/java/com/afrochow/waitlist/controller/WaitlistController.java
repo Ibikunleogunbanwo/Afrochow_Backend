@@ -1,6 +1,6 @@
 package com.afrochow.waitlist.controller;
 
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.waitlist.dto.WaitlistRequestDto;
 import com.afrochow.waitlist.dto.WaitlistResponseDto;
 import com.afrochow.waitlist.service.WaitlistService;

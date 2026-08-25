@@ -2,7 +2,7 @@ package com.afrochow.admin.controller;
 
 import com.afrochow.common.enums.Role;
 import com.afrochow.order.repository.OrderRepository;
-import com.afrochow.security.Services.LoginAttemptService;
+import com.afrochow.security.service.LoginAttemptService;
 import com.afrochow.testsupport.AbstractControllerTest;
 import com.afrochow.testsupport.ControllerSliceTest;
 import com.afrochow.user.model.User;

@@ -3,7 +3,7 @@ package com.afrochow.address.controller;
 import com.afrochow.address.dto.AddressRequestDto;
 import com.afrochow.address.dto.AddressResponseDto;
 import com.afrochow.address.service.AddressService;
-import com.afrochow.common.ApiResponse;
+import com.afrochow.common.response.ApiResponse;
 import com.afrochow.security.model.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

@@ -1,4 +1,5 @@
 package com.afrochow.auth;
+import com.afrochow.auth.controller.TestController;
 
 import com.afrochow.testsupport.AbstractControllerTest;
 import com.afrochow.testsupport.ControllerSliceTest;

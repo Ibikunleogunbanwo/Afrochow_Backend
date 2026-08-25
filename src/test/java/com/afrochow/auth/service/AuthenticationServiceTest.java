@@ -5,9 +5,9 @@ import com.afrochow.address.model.Address;
 import com.afrochow.address.repository.AddressRepository;
 import com.afrochow.admin.repository.AdminProfileRepository;
 import com.afrochow.auth.dto.ForgotPasswordRequestDto;
-import com.afrochow.auth.dto.LoginRequest;
-import com.afrochow.auth.dto.LoginResponse;
-import com.afrochow.auth.dto.RegistrationResponse;
+import com.afrochow.auth.dto.LoginRequestDto;
+import com.afrochow.auth.dto.LoginResponseDto;
+import com.afrochow.auth.dto.RegistrationResponseDto;
 import com.afrochow.auth.dto.ResetPasswordRequestDto;
 import com.afrochow.common.enums.AuthProvider;
 import com.afrochow.common.enums.Province;
@@ -21,21 +21,22 @@ import com.afrochow.common.exceptions.GoogleOnlyAccountException;
 import com.afrochow.common.exceptions.InvalidCredentialsException;
 import com.afrochow.common.exceptions.InvalidTokenException;
 import com.afrochow.customer.dto.CustomerProfileRequestDto;
-import com.afrochow.email.EmailVerificationTokenRepository;
+import com.afrochow.email.repository.EmailVerificationTokenRepository;
 import com.afrochow.outbox.service.OutboxEventService;
 import com.afrochow.security.JwtTokenProvider;
-import com.afrochow.security.Services.LoginAttemptService;
-import com.afrochow.security.Services.PasswordPolicyService;
-import com.afrochow.security.Services.RateLimitService;
-import com.afrochow.security.Services.RefreshTokenService;
-import com.afrochow.security.Services.SecurityEventService;
-import com.afrochow.security.Utils.GeocodingService;
+import com.afrochow.security.service.LoginAttemptService;
+import com.afrochow.security.service.PasswordPolicyService;
+import com.afrochow.security.service.RateLimitService;
+import com.afrochow.security.service.RefreshTokenService;
+import com.afrochow.security.service.SecurityEventService;
+import com.afrochow.security.service.GeocodingService;
 import com.afrochow.security.dto.TokenRefreshResponseDto;
 import com.afrochow.security.model.CustomUserDetails;
-import com.afrochow.security.model.EmailVerificationToken;
+import com.afrochow.email.model.EmailVerificationToken;
 import com.afrochow.security.model.PasswordResetToken;
 import com.afrochow.security.model.RefreshToken;
 import com.afrochow.security.repository.PasswordResetTokenRepository;
+import com.afrochow.user.mapper.UserMapper;
 import com.afrochow.user.model.User;
 import com.afrochow.user.repository.UserRepository;
 import com.afrochow.vendor.model.VendorProfile;
@@ -83,6 +84,7 @@ class AuthenticationServiceTest {
     @Mock private RateLimitService rateLimitService;
     @Mock private PasswordPolicyService passwordPolicyService;
     @Mock private UserRepository userRepository;
+    @Mock private UserMapper userMapper;
     @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
     @Mock private VendorProfileRepository vendorProfileRepository;
     @Mock private AdminProfileRepository adminProfileRepository;
@@ -142,9 +144,11 @@ class AuthenticationServiceTest {
         when(jwtTokenProvider.createToken(user)).thenReturn("raw-access-token");
         when(jwtTokenProvider.getAccessTokenExpirationSeconds()).thenReturn(900L);
         when(refreshTokenService.getRefreshTokenExpirationSeconds()).thenReturn(604800L);
+        when(userMapper.toLoginResponse(any(User.class)))
+                .thenReturn(LoginResponseDto.builder().publicUserId("CUS123").role("CUSTOMER").build());
 
-        LoginRequest request = LoginRequest.builder().identifier("customer@example.com").password("Secret123!").build();
-        LoginResponse response = authenticationService.login(request, httpRequest, httpResponse);
+        LoginRequestDto request = LoginRequestDto.builder().identifier("customer@example.com").password("Secret123!").build();
+        LoginResponseDto response = authenticationService.login(request, httpRequest, httpResponse);
 
         assertThat(response.getPublicUserId()).isEqualTo("CUS123");
         assertThat(response.getRole()).isEqualTo("CUSTOMER");
@@ -160,7 +164,7 @@ class AuthenticationServiceTest {
         when(loginAttemptService.isAccountLocked("customer@example.com")).thenReturn(false);
         when(authenticationManager.authenticate(any())).thenReturn(successfulAuth);
 
-        LoginRequest request = LoginRequest.builder().identifier("customer@example.com").password("Secret123!").build();
+        LoginRequestDto request = LoginRequestDto.builder().identifier("customer@example.com").password("Secret123!").build();
 
         assertThatThrownBy(() -> authenticationService.login(request, httpRequest, httpResponse))
                 .isInstanceOf(EmailNotVerifiedException.class);
@@ -174,7 +178,7 @@ class AuthenticationServiceTest {
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(user));
         when(loginAttemptService.isAccountLocked("customer@example.com")).thenReturn(false);
 
-        LoginRequest request = LoginRequest.builder().identifier("customer@example.com").password("whatever").build();
+        LoginRequestDto request = LoginRequestDto.builder().identifier("customer@example.com").password("whatever").build();
 
         assertThatThrownBy(() -> authenticationService.login(request, httpRequest, httpResponse))
                 .isInstanceOf(GoogleOnlyAccountException.class);
@@ -186,7 +190,7 @@ class AuthenticationServiceTest {
         when(loginAttemptService.isAccountLocked("unknown@example.com")).thenReturn(true);
         when(loginAttemptService.getRemainingLockoutSeconds("unknown@example.com")).thenReturn(120L);
 
-        LoginRequest request = LoginRequest.builder().identifier("unknown@example.com").password("whatever").build();
+        LoginRequestDto request = LoginRequestDto.builder().identifier("unknown@example.com").password("whatever").build();
 
         assertThatThrownBy(() -> authenticationService.login(request, httpRequest, httpResponse))
                 .isInstanceOf(AccountLockedException.class)
@@ -201,7 +205,7 @@ class AuthenticationServiceTest {
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("bad creds"));
         when(loginAttemptService.getAttemptCount("customer@example.com")).thenReturn(3);
 
-        LoginRequest request = LoginRequest.builder().identifier("customer@example.com").password("wrong").build();
+        LoginRequestDto request = LoginRequestDto.builder().identifier("customer@example.com").password("wrong").build();
 
         assertThatThrownBy(() -> authenticationService.login(request, httpRequest, httpResponse))
                 .isInstanceOf(BadCredentialsException.class)
@@ -216,7 +220,7 @@ class AuthenticationServiceTest {
     private CustomerProfileRequestDto customerRegistrationRequest() {
         // Plain @Builder (as opposed to @SuperBuilder) only generates builder methods
         // for fields declared directly on CustomerProfileRequestDto, not the ones it
-        // inherits from BaseRegistrationRequest (email, password, firstName, etc.) —
+        // inherits from BaseRegistrationRequestDto (email, password, firstName, etc.) —
         // so those have to be set via the inherited @Data setters instead.
         CustomerProfileRequestDto request = new CustomerProfileRequestDto();
         request.setEmail("new@example.com");
@@ -253,7 +257,7 @@ class AuthenticationServiceTest {
             return u;
         });
 
-        RegistrationResponse response = authenticationService.registerCustomer(customerRegistrationRequest(), httpRequest);
+        RegistrationResponseDto response = authenticationService.registerCustomer(customerRegistrationRequest(), httpRequest);
 
         assertThat(response.getEmail()).isEqualTo("new@example.com");
         assertThat(response.getEmailVerified()).isFalse();
@@ -482,12 +486,56 @@ class AuthenticationServiceTest {
         verify(outboxEventService).emailVerificationSent(eq("CUS123"), eq("customer@example.com"), eq("Ade"), anyString());
     }
 
+    // ========== changeVerificationEmail ==========
+
+    @Test
+    void changeVerificationEmail_unverifiedUser_updatesEmailAndSendsNewToken() {
+        user.setEmailVerified(false);
+        when(userRepository.findByEmail("wrong@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.existsByEmail("correct@example.com")).thenReturn(false);
+
+        authenticationService.changeVerificationEmail(" wrong@example.com ", " Correct@Example.com ");
+
+        assertThat(user.getEmail()).isEqualTo("correct@example.com");
+        verify(userRepository).save(user);
+        verify(emailVerificationTokenRepository, org.mockito.Mockito.times(2)).revokeAllUserTokens(1L);
+        verify(emailVerificationTokenRepository).save(any(EmailVerificationToken.class));
+        verify(outboxEventService).emailVerificationSent(eq("CUS123"), eq("correct@example.com"), eq("Ade"), anyString());
+        verify(rateLimitService).resetLimit("email-verify", "wrong@example.com");
+        verify(rateLimitService).resetLimit("email-verify", "correct@example.com");
+    }
+
+    @Test
+    void changeVerificationEmail_verifiedUser_throwsIllegalState() {
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authenticationService.changeVerificationEmail("customer@example.com", "new@example.com"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already verified");
+
+        verify(userRepository, never()).save(any());
+        verify(emailVerificationTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void changeVerificationEmail_newEmailAlreadyExists_throwsEmailAlreadyExists() {
+        user.setEmailVerified(false);
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.existsByEmail("taken@example.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> authenticationService.changeVerificationEmail("customer@example.com", "taken@example.com"))
+                .isInstanceOf(EmailAlreadyExistsException.class);
+
+        verify(userRepository, never()).save(any());
+        verify(emailVerificationTokenRepository, never()).save(any());
+    }
+
     // ========== logout ==========
 
     @Test
     void logout_revokesRefreshTokenFromCookieAndClearsAuthCookies() {
         jakarta.servlet.http.Cookie refreshCookie = new jakarta.servlet.http.Cookie(
-                com.afrochow.security.Utils.CookieConstants.REFRESH_TOKEN_COOKIE, "raw-refresh-token");
+                com.afrochow.security.util.CookieConstants.REFRESH_TOKEN_COOKIE, "raw-refresh-token");
         when(httpRequest.getCookies()).thenReturn(new jakarta.servlet.http.Cookie[]{refreshCookie});
 
         authenticationService.logout(httpRequest, httpResponse);
