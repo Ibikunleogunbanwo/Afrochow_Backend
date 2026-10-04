@@ -1,0 +1,140 @@
+{
+  "audience": "vendor",
+  "title": "Help & Support",
+  "description": "Everything you need to run your store on Afrochow.",
+  "sourcePath": "/vendor/help",
+  "categories": [
+    {
+      "id": "gettingStarted",
+      "label": "Getting Started",
+      "faqs": [
+        {
+          "question": "How do I complete my vendor profile?",
+          "answer": "Go to Profile in your dashboard sidebar. Fill in your store name, description, product type, address, and upload a logo and cover photo. A complete profile helps customers find and trust your store. Don't forget to set your operating hours so customers see accurate open/closed status."
+        },
+        {
+          "question": "How do I get my store approved and listed publicly?",
+          "answer": "Once you register and complete your profile, your store is submitted for review. The Afrochow team typically reviews new stores within 1–2 business days. You'll receive an email when your store is approved and live. If you haven't heard back after 2 days, contact support@afrochow.ca."
+        },
+        {
+          "question": "How do I set my operating hours?",
+          "answer": "In your vendor dashboard, go to Profile and find the 'Operating Hours' section. Toggle each day on or off and set your open and close times. This is used to show customers whether your store is currently open."
+        },
+        {
+          "question": "Can I temporarily pause or close my store?",
+          "answer": "You can mark yourself as closed on specific days by toggling the day off in your Operating Hours settings. For longer breaks, contact support@afrochow.ca and we can temporarily hide your listing."
+        }
+      ]
+    },
+    {
+      "id": "menu",
+      "label": "Menu & Products",
+      "faqs": [
+        {
+          "question": "How do I add a new product to my menu?",
+          "answer": "Go to Products in the sidebar and click 'Add Product'. Fill in the product name, description, price, and category. Upload a clear photo of the dish, listings with photos get significantly more clicks. You can also tag items as Vegan, Vegetarian, Gluten-Free, or Spicy to help customers filter."
+        },
+        {
+          "question": "How do I edit or remove a product?",
+          "answer": "In the Products section, find the item you want to change. Click the edit (pencil) icon to update details, or the delete icon to remove it. Changes take effect immediately."
+        },
+        {
+          "question": "What are the dietary tags (Vegan, Vegetarian, etc.)?",
+          "answer": "When adding or editing a product, you can mark it with dietary badges: 🌱 Vegan, 🥬 Vegetarian, 🌾 Gluten-Free, and 🌶️ Spicy. These tags appear on your product cards and help customers with dietary preferences find your dishes faster."
+        },
+        {
+          "question": "Can I set a product as temporarily unavailable?",
+          "answer": "Yes, when editing a product, toggle the availability switch to mark it as unavailable. It will be hidden from customers until you turn it back on. This is useful when you run out of an ingredient."
+        },
+        {
+          "question": "How many products can I add?",
+          "answer": "There is no hard limit on the number of products. However, we recommend keeping your menu focused and well-organised with clear categories, as a shorter focused menu often converts better than a very long one."
+        }
+      ]
+    },
+    {
+      "id": "orders",
+      "label": "Managing Orders",
+      "faqs": [
+        {
+          "question": "How do I receive and manage orders?",
+          "answer": "New orders appear in the Orders section of your dashboard and will show a 'New Order' badge. Accept or reject an order promptly, customers are notified in real time. Once accepted, update the order status as you progress: Preparing → Ready → Out for Delivery → Delivered."
+        },
+        {
+          "question": "What happens if I don't respond to an order?",
+          "answer": "Orders left without a response for too long may be automatically cancelled and the customer refunded. We recommend checking your dashboard regularly and enabling browser notifications so you don't miss new orders."
+        },
+        {
+          "question": "How do I update an order's status?",
+          "answer": "Open the order from your Orders page and use the action buttons to move it through the workflow: Accept → Preparing → Ready for Pickup → Out for Delivery → Delivered. Keep status updates timely so customers stay informed."
+        },
+        {
+          "question": "Can I cancel an accepted order?",
+          "answer": "In exceptional circumstances you may need to cancel after accepting. Use the reject/cancel option on the order detail page and add a reason. Frequent cancellations after acceptance negatively affect your store rating."
+        },
+        {
+          "question": "A customer claims their order was wrong or missing items. What do I do?",
+          "answer": "Contact the customer through the order detail page and try to resolve it directly. If a refund is warranted, email support@afrochow.ca with the order ID and details. We'll review and process any applicable refund."
+        }
+      ]
+    },
+    {
+      "id": "earnings",
+      "label": "Earnings & Payouts",
+      "faqs": [
+        {
+          "question": "How do I view my earnings?",
+          "answer": "Go to View Earnings in the sidebar. You'll see revenue totals, order counts, and a breakdown by time period. You can filter by today, yesterday, last 7 days, last 30 days, or a custom date range."
+        },
+        {
+          "question": "When do I get paid?",
+          "answer": "Payouts are processed on a scheduled basis. Contact support@afrochow.ca for details about your specific payout schedule and bank account setup."
+        },
+        {
+          "question": "What fees does Afrochow charge?",
+          "answer": "Afrochow charges a platform commission on each order. The exact rate is outlined in your vendor agreement. You can see your net earnings after commission in the Earnings section."
+        },
+        {
+          "question": "How do I update my payout bank details?",
+          "answer": "Contact support@afrochow.ca to update your banking or payout information. For security, bank account changes are handled directly by our team."
+        }
+      ]
+    },
+    {
+      "id": "promotions",
+      "label": "Promotions",
+      "faqs": [
+        {
+          "question": "How do I create a promotion or discount?",
+          "answer": "Go to Promotions in the sidebar. Click 'Create Promotion' and set the discount type (percentage or fixed amount), the applicable products or order minimum, and the active date range. Active promotions are shown to customers browsing your store."
+        },
+        {
+          "question": "Can I offer a discount on specific products?",
+          "answer": "Yes, when creating a promotion, you can choose to apply it to your entire menu or restrict it to specific products or categories."
+        },
+        {
+          "question": "How do I track promotion performance?",
+          "answer": "Check the Promotions section to see how many times each promo has been used. For deeper analytics, use the Reports section which breaks down revenue by promotion."
+        }
+      ]
+    },
+    {
+      "id": "reviews",
+      "label": "Reviews",
+      "faqs": [
+        {
+          "question": "Where can I see my customer reviews?",
+          "answer": "Go to Reviews in the sidebar. You'll see all customer ratings and written feedback, sorted by most recent. Your overall star rating is also shown on your public store profile."
+        },
+        {
+          "question": "Can I respond to reviews?",
+          "answer": "Customer review visibility is currently read-only in the dashboard. The ability to respond publicly to reviews is coming in a future update. In the meantime, you can address recurring feedback by improving your menu or service."
+        },
+        {
+          "question": "What should I do about an unfair or fake review?",
+          "answer": "If you believe a review violates our policies (e.g. fake, offensive, or from someone who didn't order from you), email support@afrochow.ca with the review details and we'll investigate."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "slug": "privacy",
+  "title": "Privacy Policy",
+  "description": "Learn how Afrochow collects, uses, and protects your personal information.",
+  "lastUpdated": "March 2025",
+  "sourcePath": "/privacy",
+  "intro": "Welcome to Afrochow. We are committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform, available at www.afrochow.ca and our mobile application. Please read this policy carefully.",
+  "sections": [
+    {
+      "id": "information-we-collect",
+      "heading": "1. Information We Collect",
+      "blocks": [
+        { "type": "paragraph", "text": "**Account Information:** When you register, we collect your name, email address, phone number, and password." },
+        { "type": "paragraph", "text": "**Order Information:** We collect your delivery address, order history, payment method type (we do not store full card details), and special delivery instructions." },
+        { "type": "paragraph", "text": "**Profile Information:** Any profile photo, preferences, or other details you voluntarily provide." },
+        { "type": "paragraph", "text": "**Usage Data:** We automatically collect information about how you interact with our platform, including pages visited, features used, device type, browser, and IP address." },
+        { "type": "paragraph", "text": "**Location Data:** With your permission, we collect your location to show nearby restaurants and calculate delivery estimates." }
+      ]
+    },
+    {
+      "id": "how-we-use-your-information",
+      "heading": "2. How We Use Your Information",
+      "blocks": [
+        { "type": "paragraph", "text": "We use the information we collect to:" },
+        { "type": "list", "items": [
+          "Process and deliver your food orders",
+          "Create and manage your account",
+          "Send order confirmations, updates, and receipts",
+          "Provide customer support",
+          "Improve our platform and develop new features",
+          "Send promotional communications (you may opt out at any time)",
+          "Comply with legal obligations",
+          "Detect and prevent fraud or abuse"
+        ] }
+      ]
+    },
+    {
+      "id": "sharing-your-information",
+      "heading": "3. Sharing Your Information",
+      "blocks": [
+        { "type": "paragraph", "text": "We do not sell your personal information. We may share your information with:" },
+        { "type": "paragraph", "text": "**Restaurant Partners:** Your name, delivery address, phone number, and order details are shared with the restaurant fulfilling your order." },
+        { "type": "paragraph", "text": "**Payment Processors:** We use trusted third-party payment processors. Your payment data is handled by them under their own privacy policies." },
+        { "type": "paragraph", "text": "**Service Providers:** We may share data with vendors who assist us in operating the platform (e.g., cloud hosting, email delivery, analytics), bound by confidentiality agreements." },
+        { "type": "paragraph", "text": "**Legal Requirements:** We may disclose your information if required by law or to protect the rights and safety of Afrochow, our users, or others." }
+      ]
+    },
+    {
+      "id": "data-retention",
+      "heading": "4. Data Retention",
+      "blocks": [
+        { "type": "paragraph", "text": "We retain your personal information for as long as your account is active or as needed to provide you with our services. You may request deletion of your account and associated data at any time by contacting us at [support@afrochow.ca](mailto:support@afrochow.ca)." },
+        { "type": "paragraph", "text": "Certain information may be retained for longer periods where required by law or for legitimate business purposes such as fraud prevention and dispute resolution." }
+      ]
+    },
+    {
+      "id": "cookies-and-tracking",
+      "heading": "5. Cookies and Tracking",
+      "blocks": [
+        { "type": "paragraph", "text": "We use cookies and similar tracking technologies to enhance your experience on our platform. These include essential cookies required for the platform to function, as well as analytics cookies that help us understand how users interact with our service." },
+        { "type": "paragraph", "text": "You can manage your cookie preferences through your browser settings. For more details, please review our [Cookie Policy](/cookies)." }
+      ]
+    },
+    {
+      "id": "security",
+      "heading": "6. Security",
+      "blocks": [
+        { "type": "paragraph", "text": "We implement strong security measures including encryption in transit (HTTPS), hashed passwords, and access controls to protect your personal information. However, no method of transmission over the internet is 100% secure, and we cannot guarantee absolute security." }
+      ]
+    },
+    {
+      "id": "your-rights",
+      "heading": "7. Your Rights (Canadian Residents)",
+      "blocks": [
+        { "type": "paragraph", "text": "Under Canada's Personal Information Protection and Electronic Documents Act (PIPEDA) and applicable provincial privacy laws, you have the right to:" },
+        { "type": "list", "items": [
+          "Access the personal information we hold about you",
+          "Request correction of inaccurate information",
+          "Withdraw consent for non-essential uses",
+          "Request deletion of your account and data",
+          "File a complaint with the Office of the Privacy Commissioner of Canada"
+        ] },
+        { "type": "paragraph", "text": "To exercise any of these rights, contact us at [support@afrochow.ca](mailto:support@afrochow.ca)." }
+      ]
+    },
+    {
+      "id": "childrens-privacy",
+      "heading": "8. Children's Privacy",
+      "blocks": [
+        { "type": "paragraph", "text": "Afrochow is not directed to individuals under the age of 18. We do not knowingly collect personal information from minors. If you believe a minor has provided us with personal information, please contact us and we will delete it promptly." }
+      ]
+    },
+    {
+      "id": "changes",
+      "heading": "9. Changes to This Policy",
+      "blocks": [
+        { "type": "paragraph", "text": "We may update this Privacy Policy from time to time. When we do, we will revise the \"Last updated\" date at the top of this page. For significant changes, we may notify you by email or through a notice on our platform. We encourage you to review this policy periodically." }
+      ]
+    },
+    {
+      "id": "contact",
+      "heading": "10. Contact Us",
+      "blocks": [
+        { "type": "paragraph", "text": "If you have questions or concerns about this Privacy Policy or our data practices, please contact us:" },
+        { "type": "contact", "label": "Afrochow Privacy Team", "email": "support@afrochow.ca" }
+      ]
+    }
+  ]
+}

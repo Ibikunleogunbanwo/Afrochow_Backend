@@ -1,0 +1,109 @@
+{
+  "slug": "terms",
+  "title": "Terms of Service",
+  "description": "Read the Terms of Service governing your use of the Afrochow platform.",
+  "lastUpdated": "March 2025",
+  "sourcePath": "/terms",
+  "intro": "These Terms of Service (\"Terms\") govern your access to and use of the Afrochow platform, including the website at www.afrochow.ca and any associated mobile applications (collectively, the \"Platform\"). By creating an account or placing an order, you agree to be bound by these Terms. If you do not agree, please do not use our Platform.",
+  "sections": [
+    {
+      "id": "about-afrochow",
+      "heading": "1. About Afrochow",
+      "blocks": [
+        { "type": "paragraph", "text": "Afrochow is an online food ordering marketplace that connects customers with independent African cuisine restaurants and vendors across Canada. We facilitate the ordering process but are not the restaurant or food preparer. Individual restaurant partners are solely responsible for the food they prepare and deliver." }
+      ]
+    },
+    {
+      "id": "eligibility",
+      "heading": "2. Eligibility",
+      "blocks": [
+        { "type": "paragraph", "text": "You must be at least 18 years of age to create an account and use the Platform. By using Afrochow, you represent and warrant that you meet this requirement." },
+        { "type": "paragraph", "text": "You are responsible for maintaining the confidentiality of your account credentials. You agree to notify us immediately at [support@afrochow.ca](mailto:support@afrochow.ca) if you suspect unauthorized access to your account." }
+      ]
+    },
+    {
+      "id": "orders-and-payments",
+      "heading": "3. Orders and Payments",
+      "blocks": [
+        { "type": "paragraph", "text": "**Placing Orders:** When you place an order through Afrochow, you are making a purchase offer to the restaurant partner. Orders are confirmed once you receive an order confirmation notification." },
+        { "type": "paragraph", "text": "**Pricing:** All prices displayed on the Platform are in Canadian dollars (CAD) and include applicable taxes unless stated otherwise. Prices are set by restaurant partners and may change without notice." },
+        { "type": "paragraph", "text": "**Payment:** Your card may be authorized when you place an order, and the charge is captured when the restaurant accepts it. We accept major credit and debit cards through our secure payment processor. By submitting payment information, you authorize us to charge the applicable amount." },
+        { "type": "paragraph", "text": "**Cancellations & Refunds:** Once an order is accepted by a restaurant, cancellation may not be possible. Refund eligibility is determined on a case-by-case basis. Please contact our support team within 24 hours for order issues." }
+      ]
+    },
+    {
+      "id": "vendor-partners",
+      "heading": "4. Vendor / Restaurant Partners",
+      "blocks": [
+        { "type": "paragraph", "text": "Restaurant partners listed on Afrochow are independent businesses. Afrochow does not prepare, package, or deliver food. We are not responsible for the quality, safety, or accuracy of food prepared by restaurant partners." },
+        { "type": "paragraph", "text": "Restaurant partners must comply with all applicable food safety regulations and health codes in their jurisdiction. Concerns about food safety should be reported to us and to your local public health authority." },
+        { "type": "paragraph", "text": "If you are a vendor interested in joining Afrochow, your use of the Platform is also governed by the Vendor Agreement accepted during registration." }
+      ]
+    },
+    {
+      "id": "prohibited-conduct",
+      "heading": "5. Prohibited Conduct",
+      "blocks": [
+        { "type": "paragraph", "text": "When using Afrochow, you agree not to:" },
+        { "type": "list", "items": [
+          "Provide false or misleading information during registration or checkout",
+          "Use the Platform for any unlawful purpose",
+          "Attempt to gain unauthorized access to any part of the Platform",
+          "Post fraudulent reviews or manipulate ratings",
+          "Interfere with or disrupt the operation of the Platform",
+          "Use automated tools to scrape, crawl, or extract data from the Platform",
+          "Impersonate any person or entity"
+        ] },
+        { "type": "paragraph", "text": "Violation of these prohibitions may result in immediate suspension or termination of your account." }
+      ]
+    },
+    {
+      "id": "intellectual-property",
+      "heading": "6. Intellectual Property",
+      "blocks": [
+        { "type": "paragraph", "text": "All content on the Afrochow Platform, including text, graphics, logos, images, and software, is the property of Afrochow or its content suppliers and is protected by applicable Canadian and international intellectual property laws." },
+        { "type": "paragraph", "text": "You may not copy, reproduce, distribute, or create derivative works from any content on the Platform without our express written permission." }
+      ]
+    },
+    {
+      "id": "user-generated-content",
+      "heading": "7. User-Generated Content",
+      "blocks": [
+        { "type": "paragraph", "text": "By submitting reviews, photos, or other content to the Platform, you grant Afrochow a non-exclusive, royalty-free, worldwide license to use, display, and distribute that content in connection with operating our Platform." },
+        { "type": "paragraph", "text": "You are solely responsible for any content you submit. You warrant that your content does not infringe any third-party rights and does not contain false, defamatory, or harmful material." }
+      ]
+    },
+    {
+      "id": "disclaimers",
+      "heading": "8. Disclaimers and Limitation of Liability",
+      "blocks": [
+        { "type": "paragraph", "text": "THE PLATFORM IS PROVIDED \"AS IS\" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED. TO THE FULLEST EXTENT PERMITTED BY LAW, AFROCHOW DISCLAIMS ALL WARRANTIES, INCLUDING FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT." },
+        { "type": "paragraph", "text": "AFROCHOW SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES ARISING FROM YOUR USE OF THE PLATFORM, INCLUDING BUT NOT LIMITED TO FOOD QUALITY ISSUES, DELIVERY DELAYS, OR DATA LOSS." },
+        { "type": "paragraph", "text": "Our total liability to you for any claim arising from these Terms or your use of the Platform shall not exceed the amount you paid for the order giving rise to the claim." }
+      ]
+    },
+    {
+      "id": "governing-law",
+      "heading": "9. Governing Law",
+      "blocks": [
+        { "type": "paragraph", "text": "These Terms are governed by and construed in accordance with the laws of the Province of Ontario and the federal laws of Canada applicable therein, without regard to conflict of law principles." },
+        { "type": "paragraph", "text": "Any disputes arising under these Terms shall be subject to the exclusive jurisdiction of the courts located in Ontario, Canada." }
+      ]
+    },
+    {
+      "id": "changes",
+      "heading": "10. Changes to These Terms",
+      "blocks": [
+        { "type": "paragraph", "text": "We reserve the right to modify these Terms at any time. We will notify you of significant changes by updating the \"Last updated\" date and, where appropriate, by sending an email notification. Your continued use of the Platform after changes are posted constitutes your acceptance of the updated Terms." }
+      ]
+    },
+    {
+      "id": "contact",
+      "heading": "11. Contact Us",
+      "blocks": [
+        { "type": "paragraph", "text": "If you have questions about these Terms, please contact us:" },
+        { "type": "contact", "label": "Afrochow Support", "email": "support@afrochow.ca" }
+      ]
+    }
+  ]
+}

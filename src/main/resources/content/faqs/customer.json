@@ -1,0 +1,122 @@
+{
+  "audience": "customer",
+  "title": "Help & Support",
+  "description": "Everything you need to know about ordering, delivery, payments, and managing your Afrochow account.",
+  "sourcePath": "/help",
+  "categories": [
+    {
+      "id": "ordering",
+      "label": "Placing Orders",
+      "faqs": [
+        {
+          "question": "How do I place an order?",
+          "answer": "Browse restaurants or search for a dish on the homepage. Select a restaurant, add items to your cart, and proceed to checkout. You'll confirm your delivery address and payment method before placing the order."
+        },
+        {
+          "question": "Can I order from multiple restaurants at once?",
+          "answer": "Each order is tied to a single restaurant. If you'd like food from multiple places, you'll need to place separate orders."
+        },
+        {
+          "question": "How do I schedule an order for later?",
+          "answer": "At checkout, you can choose a future delivery time if the restaurant supports scheduled orders. Look for the 'Schedule for later' option on the checkout page."
+        },
+        {
+          "question": "Can I add special instructions for my order?",
+          "answer": "Yes, you can add notes for individual items (e.g. 'no onions') or a general note for the restaurant when you review your cart before checkout."
+        }
+      ]
+    },
+    {
+      "id": "delivery",
+      "label": "Delivery & Pickup",
+      "faqs": [
+        {
+          "question": "How long does delivery take?",
+          "answer": "Estimated delivery times are shown on each restaurant's page and depend on their current workload and your distance. Most deliveries arrive in 30 to 60 minutes."
+        },
+        {
+          "question": "What is the delivery fee?",
+          "answer": "Delivery fees vary by restaurant and your distance from them. The exact fee is shown in your cart before you confirm the order."
+        },
+        {
+          "question": "Can I pick up my order instead of having it delivered?",
+          "answer": "Many restaurants on Afrochow offer store pickup. If available, you'll see a 'Store pickup available' badge on the restaurant card. Choose 'Pickup' at checkout to collect your order in person."
+        },
+        {
+          "question": "My order is taking longer than expected. What should I do?",
+          "answer": "Check your order status on the Orders page. If the delay is significant, use the contact option on the order detail page to reach the restaurant directly."
+        }
+      ]
+    },
+    {
+      "id": "payment",
+      "label": "Payments & Refunds",
+      "faqs": [
+        {
+          "question": "What payment methods are accepted?",
+          "answer": "Afrochow accepts major credit and debit cards (Visa, Mastercard, Amex). Payment is processed securely at checkout."
+        },
+        {
+          "question": "When am I charged for my order?",
+          "answer": "Your card is charged when you confirm and place the order. You won't be charged until the order is submitted."
+        },
+        {
+          "question": "Can I get a refund?",
+          "answer": "If there's an issue with your order (wrong items, missing items, or a quality problem), contact us through the Help & Support link on the order detail page. Refunds are reviewed case by case and typically processed within 3 to 5 business days."
+        },
+        {
+          "question": "Is my payment information secure?",
+          "answer": "Yes. Afrochow does not store your full card details. All payments are handled through secure encrypted payment providers."
+        }
+      ]
+    },
+    {
+      "id": "account",
+      "label": "Your Account",
+      "faqs": [
+        {
+          "question": "How do I create an account?",
+          "answer": "Click 'Sign Up' in the top navigation. Enter your name, email address, and a password. You'll receive a verification email, click the link to activate your account."
+        },
+        {
+          "question": "I forgot my password. How do I reset it?",
+          "answer": "On the sign in page, click 'Forgot password?'. Enter your email address and we'll send you a reset link valid for 30 minutes."
+        },
+        {
+          "question": "How do I update my profile or delivery address?",
+          "answer": "Go to your Account Settings (click your avatar in the top right corner, then 'Settings'). You can update your name, email, phone number, and saved addresses there."
+        },
+        {
+          "question": "Can I delete my account?",
+          "answer": "To request account deletion, email us at support@afrochow.ca with the subject 'Account Deletion Request'. We'll process your request within 7 business days."
+        }
+      ]
+    },
+    {
+      "id": "vendors",
+      "label": "Vendor Info",
+      "faqs": [
+        {
+          "question": "How do I join Afrochow as a vendor?",
+          "answer": "Click 'Join Afrochow' in the navigation bar and complete the vendor registration form. Once reviewed and approved, you'll get access to your vendor dashboard to set up your menu and start receiving orders."
+        },
+        {
+          "question": "How do I manage my menu?",
+          "answer": "From your vendor dashboard, go to the Menu section. You can add, edit, or remove products, set prices, upload photos, and mark items with dietary tags (Vegan, Vegetarian, Gluten Free, Spicy)."
+        },
+        {
+          "question": "How do I update my operating hours?",
+          "answer": "In your vendor dashboard, go to Profile and scroll to the 'Operating Hours' section. Set your open/close times for each day of the week, or mark days as closed."
+        },
+        {
+          "question": "How and when do I get paid?",
+          "answer": "Earnings are tracked in your vendor dashboard under the Earnings section. Payouts are processed on a regular schedule; contact support@afrochow.ca for details about your specific payout arrangement."
+        },
+        {
+          "question": "How do I respond to reviews?",
+          "answer": "Customer reviews are visible in the Reviews section of your vendor dashboard. You can view ratings and written feedback to help improve your service."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,135 @@
+{
+  "audience": "admin",
+  "title": "Help & Documentation",
+  "description": "Everything you need to manage the Afrochow platform",
+  "sourcePath": "/admin/help",
+  "categories": [
+    {
+      "id": "vendor-management",
+      "label": "Vendor Management",
+      "href": "/admin/vendors",
+      "faqs": [
+        {
+          "question": "How do I approve a vendor?",
+          "answer": "Go to Vendors → find the vendor row → click Verify. The vendor will immediately appear as verified and can start receiving orders."
+        },
+        {
+          "question": "What's the difference between Verify and Activate?",
+          "answer": "Verify confirms the vendor's business documents are legitimate. Activate/Suspend controls whether the vendor can receive new orders. A vendor can be verified but still suspended."
+        },
+        {
+          "question": "Can I undo a verification?",
+          "answer": "Yes, click Revoke on any verified vendor to remove their verified status without deleting their account."
+        }
+      ]
+    },
+    {
+      "id": "user-management",
+      "label": "User Management",
+      "href": "/admin/users",
+      "faqs": [
+        {
+          "question": "Who can change user roles?",
+          "answer": "Only SUPERADMIN accounts can change roles or delete users. Regular ADMIN accounts can activate/suspend non-admin users."
+        },
+        {
+          "question": "Can I delete a SUPERADMIN?",
+          "answer": "No. SUPERADMIN accounts are fully protected, they cannot be modified, suspended, or deleted through the dashboard."
+        },
+        {
+          "question": "How do I promote an admin to SUPERADMIN?",
+          "answer": "On the Users page, find an ADMIN-role user and click Promote (only visible to SUPERADMIN accounts). This calls /superadmin/users/{id}/promote."
+        }
+      ]
+    },
+    {
+      "id": "orders",
+      "label": "Orders",
+      "href": "/admin/orders",
+      "faqs": [
+        {
+          "question": "What order statuses are there?",
+          "answer": "PENDING → CONFIRMED → PREPARING → READY → DELIVERING → DELIVERED. Orders can also be CANCELLED at any stage."
+        },
+        {
+          "question": "Can admins cancel orders?",
+          "answer": "Order status management is handled by vendors and the delivery system. Admin order view is read-only for monitoring."
+        }
+      ]
+    },
+    {
+      "id": "reviews",
+      "label": "Reviews",
+      "href": "/admin/reviews",
+      "faqs": [
+        {
+          "question": "What's the difference between Hide and Delete?",
+          "answer": "Hide removes the review from public view but keeps it in the system, so it can be restored. Delete permanently removes it."
+        },
+        {
+          "question": "Can vendors see hidden reviews?",
+          "answer": "No. Hidden reviews are only visible in the admin dashboard under the Hidden filter."
+        }
+      ]
+    },
+    {
+      "id": "promotions",
+      "label": "Promotions",
+      "href": "/admin/promotions",
+      "faqs": [
+        {
+          "question": "How do I create a promo code?",
+          "answer": "Go to Promotions → New Promotion → fill in the code, discount %, and optional expiry/usage limit."
+        },
+        {
+          "question": "Can I update an active promotion?",
+          "answer": "Yes, click Edit on any promotion to update its details. Changes take effect immediately."
+        },
+        {
+          "question": "What does Deactivate do?",
+          "answer": "Deactivating a promotion prevents it from being used at checkout. It does not delete historical usage data."
+        }
+      ]
+    },
+    {
+      "id": "analytics",
+      "label": "Analytics",
+      "href": "/admin/analytics",
+      "faqs": [
+        {
+          "question": "What does the Platform Overview show?",
+          "answer": "Total revenue, order counts, active vendors, average order value, and new user signups over time."
+        },
+        {
+          "question": "How often is analytics data updated?",
+          "answer": "Analytics are computed in real time from the database. Data is current as of when you load the page."
+        }
+      ]
+    },
+    {
+      "id": "broadcast-notifications",
+      "label": "Broadcast Notifications",
+      "href": "/admin/broadcast",
+      "faqs": [
+        {
+          "question": "Who receives a broadcast?",
+          "answer": "Choose All Users, Customers only, Vendors only, or Admins only before sending. Broadcasts cannot be undone."
+        }
+      ]
+    },
+    {
+      "id": "permissions-and-roles",
+      "label": "Permissions & Roles",
+      "faqs": [
+        {
+          "question": "What can ADMIN do vs SUPERADMIN?",
+          "answer": "ADMIN: verify/suspend vendors, activate/suspend customers & vendors, moderate reviews, manage promotions, view analytics. SUPERADMIN: everything ADMIN can do, plus change user roles, delete users, promote/demote admins."
+        },
+        {
+          "question": "Why am I getting \"You don't have permission\"?",
+          "answer": "Some backend controllers still use @PreAuthorize(\"hasRole('ADMIN')\") which blocks SUPERADMIN. The fix is to update those to @PreAuthorize(\"hasAnyRole('ADMIN', 'SUPERADMIN')\")."
+        }
+      ]
+    }
+  ]
+}
